@@ -1,16 +1,20 @@
-"""SQLAlchemy models. Tables arrive in T-001b; only the declarative base exists now."""
+"""SQLAlchemy models for the nine Phase 1 tables."""
 
-from sqlalchemy import MetaData
-from sqlalchemy.orm import DeclarativeBase
+from app.models.base import NAMING_CONVENTION, Base
+from app.models.billing import Invoice, Payment
+from app.models.people import Customer, User
+from app.models.work import Job, JobReport, Quote, ReportChecklistItem, ReportPhoto
 
-NAMING_CONVENTION = {
-    "ix": "ix_%(column_0_label)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s",
-}
-
-
-class Base(DeclarativeBase):
-    metadata = MetaData(naming_convention=NAMING_CONVENTION)
+__all__ = [
+    "NAMING_CONVENTION",
+    "Base",
+    "Customer",
+    "Invoice",
+    "Job",
+    "JobReport",
+    "Payment",
+    "Quote",
+    "ReportChecklistItem",
+    "ReportPhoto",
+    "User",
+]

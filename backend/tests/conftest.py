@@ -49,7 +49,9 @@ def ensure_database(url: str) -> None:
 def migrated_database() -> None:
     ensure_database(TEST_DATABASE_URL)
     command.upgrade(alembic_config(TEST_DATABASE_URL), "head")
-    # Seeding joins in T-001b: `python -m app.seed` is a no-op today.
+    from app.seed.__main__ import main as seed
+
+    seed()  # SEED_ANCHOR_DATE=2026-10-15, set above
 
 
 @pytest.fixture(scope="session")

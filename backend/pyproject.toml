@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings==2.16.2",
     "psycopg[binary]==3.3.8",
     "tzdata==2026.6",
+    "argon2-cffi==25.1.0",
 ]
 
 [dependency-groups]
@@ -45,7 +46,9 @@ extend-exclude = ["migrations/versions"]
 select = ["E", "F", "I", "B", "UP", "SIM", "S"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S105", "S106", "S314"]
+"app/seed/**" = ["S311"]
+"app/seed/catalogue.py" = ["E501", "E741"]
 
 [tool.mypy]
 python_version = "3.13"

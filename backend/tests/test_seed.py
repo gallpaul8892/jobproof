@@ -1,12 +1,189 @@
-import json
+"""Scenarios 3 and 4 against the real database (seeded once by the session fixture)."""
+
+import dataclasses
+import os
+from collections import Counter
+from collections.abc import Iterator
+from datetime import date
+from typing import Any
 
 import pytest
+from argon2 import PasswordHasher
+from sqlalchemy import Engine, create_engine, text
 
+from app.models import Base
 from app.seed.__main__ import main
+from app.seed.dataset import build_dataset
+from app.seed.loader import load
+from app.services.billing import InvoiceStatus
+from tests.conftest import TEST_DATABASE_URL
+from tests.dataset_checks import invoice_statuses
+
+ANCHOR = date.fromisoformat(os.environ["SEED_ANCHOR_DATE"])
 
 
-def test_seed_is_a_noop_that_says_so(capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.fixture(scope="module")
+def engine() -> Iterator[Engine]:
+    engine = create_engine(TEST_DATABASE_URL)
+    yield engine
+    engine.dispose()
+
+
+def _scalar(engine: Engine, sql: str) -> Any:
+    with engine.connect() as connection:
+        return connection.execute(text(sql)).scalar()
+
+
+def _snapshot(engine: Engine) -> dict[str, list[tuple[Any, ...]]]:
+    snapshot = {}
+    with engine.connect() as connection:
+        for name, table in Base.metadata.tables.items():
+            columns = ", ".join(c.name for c in table.columns)
+            rows = connection.execute(text(f"SELECT {columns} FROM {name} ORDER BY id"))  # noqa: S608
+            snapshot[name] = [tuple(row) for row in rows]
+    return snapshot
+
+
+def test_seed_loads_the_specified_volumes(engine: Engine) -> None:
+    counts = {
+        table: _scalar(engine, f"SELECT count(*) FROM {table}")  # noqa: S608
+        for table in Base.metadata.tables
+    }
+    assert counts["users"] == 7
+    assert _scalar(engine, "SELECT count(*) FROM users WHERE role = 'manager'") == 1
+    assert _scalar(engine, "SELECT count(*) FROM users WHERE role = 'painter'") == 6
+    with engine.connect() as connection:
+        hashed = {
+            r[0]
+            for r in connection.execute(
+                text("SELECT email FROM users WHERE password_hash IS NOT NULL")
+            )
+        }
+    assert hashed == {"manager@jobproof.test", "painter@jobproof.test"}
+    assert counts["customers"] == 12
+    with engine.connect() as connection:
+        types = dict(
+            connection.execute(
+                text("SELECT customer_type::text, count(*) FROM customers GROUP BY 1")
+            ).all()
+        )
+    assert types == {"homeowner": 8, "landlord": 2, "business": 2}
+    assert counts["jobs"] == 60 and counts["job_reports"] == 60
+    assert (
+        _scalar(engine, "SELECT count(*) FROM job_reports WHERE review_status = 'awaiting_review'")
+        == 9
+    )
+    assert (
+        _scalar(
+            engine,
+            "SELECT min(n) FROM "
+            "(SELECT count(*) n FROM report_checklist_items GROUP BY report_id) x",
+        )
+        >= 5
+    )
+    assert (
+        _scalar(
+            engine,
+            "SELECT max(n) FROM "
+            "(SELECT count(*) n FROM report_checklist_items GROUP BY report_id) x",
+        )
+        <= 8
+    )
+    per_report = Counter(
+        dict(
+            tuple(r)
+            for r in _rows(
+                engine, "SELECT report_id, count(*) FROM report_photos GROUP BY report_id"
+            )
+        ).values()
+    )
+    assert sum(per_report.values()) == 59
+    assert all(4 <= n <= 10 for n in per_report)
+    assert counts["quotes"] == 24
+    assert _scalar(engine, "SELECT count(*) FROM payments WHERE kind = 'deposit'") == 14
+    assert counts["invoices"] == 52
+
+
+def _rows(engine: Engine, sql: str) -> list[Any]:
+    with engine.connect() as connection:
+        return list(connection.execute(text(sql)).all())
+
+
+def test_database_invoice_statuses_match_the_dataset(engine: Engine) -> None:
+    expected = Counter(invoice_statuses(build_dataset(ANCHOR), ANCHOR).values())
+    assert expected == {
+        InvoiceStatus.draft: 6,
+        InvoiceStatus.sent: 7,
+        InvoiceStatus.part_paid: 2,
+        InvoiceStatus.overdue: 6,
+        InvoiceStatus.paid: 30,
+        InvoiceStatus.void: 1,
+    }
+    rows = _rows(
+        engine,
+        """
+        SELECT CASE
+                 WHEN i.state = 'void' THEN 'void'
+                 WHEN i.state = 'draft' THEN 'draft'
+                 WHEN i.total_pence - COALESCE(p.paid, 0) <= 0 THEN 'paid'
+                 WHEN i.due_date < :today THEN 'overdue'
+                 WHEN COALESCE(p.paid, 0) > 0 THEN 'part_paid'
+                 ELSE 'sent' END AS status, count(*)
+        FROM invoices i
+        LEFT JOIN (SELECT invoice_id, sum(amount_pence) paid FROM payments
+                   WHERE invoice_id IS NOT NULL GROUP BY invoice_id) p ON p.invoice_id = i.id
+        GROUP BY 1
+        """.replace(":today", f"DATE '{ANCHOR.isoformat()}'"),
+    )
+    assert {InvoiceStatus(status): n for status, n in rows} == expected
+    assert (
+        _scalar(
+            engine,
+            "SELECT count(*) FROM jobs j "
+            "WHERE NOT EXISTS (SELECT 1 FROM invoices i WHERE i.job_id = j.id)",
+        )
+        == 8
+    )
+
+
+def test_seeded_password_hashes_verify(engine: Engine) -> None:
+    hasher = PasswordHasher()
+    for email, password in (
+        ("manager@jobproof.test", "Manager123!"),
+        ("painter@jobproof.test", "Painter123!"),
+    ):
+        stored = _scalar(engine, f"SELECT password_hash FROM users WHERE email = '{email}'")  # noqa: S608
+        assert stored.startswith("$argon2id$")
+        assert hasher.verify(stored, password)
+    with pytest.raises(Exception, match="not match|Verif"):
+        hasher.verify(
+            _scalar(
+                engine, "SELECT password_hash FROM users WHERE email = 'manager@jobproof.test'"
+            ),
+            "wrong",
+        )
+
+
+def test_seed_is_idempotent(engine: Engine) -> None:
+    before = _snapshot(engine)
     main()
-    line = json.loads(capsys.readouterr().out.strip())
-    assert line["msg"] == "nothing to seed"
-    assert line["logger"] == "jobproof.seed"
+    main()
+    after = _snapshot(engine)
+    assert after == before
+    assert sum(len(rows) for rows in before.values()) > 700
+
+
+def test_database_rows_equal_the_dataset(engine: Engine) -> None:
+    dataset = build_dataset(ANCHOR)
+    snapshot = _snapshot(engine)
+    for name, rows in dataset.tables():
+        expected = sorted(dataclasses.astuple(row)[0] for row in rows)  # type: ignore[call-overload]
+        assert sorted(r[0] for r in snapshot[name]) == expected, name
+
+
+def test_loader_replaces_existing_data(engine: Engine) -> None:
+    other = build_dataset(date(2026, 11, 1))
+    load(engine, other)
+    assert _scalar(engine, "SELECT max(completed_on) FROM jobs") <= date(2026, 11, 1)
+    load(engine, build_dataset(ANCHOR))  # restore for the other tests
+    assert _scalar(engine, "SELECT count(*) FROM jobs") == 60
