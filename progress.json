@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1 complete: manager view with mock data, running locally. Next: Docker first run, then painter app",
-  "updated": "2026-11-07 21:33",
+  "updated": "2026-11-07 21:34",
   "phases": [
     {
       "id": "setup",
@@ -1363,6 +1363,137 @@
             {
               "text": "Web: no dangerouslySetInnerHTML, all links internal, sessionStorage token, 401 handling and cache clearing, generated client used throughout, money from integer pence."
             }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineers-t001bcd",
+      "title": "Engineers' report: T-001b, T-001c and T-001d (manager view)",
+      "agent": "backend-engineer + frontend-engineer",
+      "model": "sonnet",
+      "status": "done",
+      "date": "2026-11-07",
+      "summary": "The manager can sign in, see a dashboard, browse and filter job reports, inspect photo evidence and review billing, all on realistic Bristol and Bath mock data. Verified from a clean start: lint clean, 337 backend tests, 159 frontend tests, 48 browser tests, npm audit 0.",
+      "blocks": [
+        {
+          "heading": "Mock data actually seeded (deterministic, safe to re-run)",
+          "type": "table",
+          "columns": [
+            "Item",
+            "Count"
+          ],
+          "rows": [
+            [
+              "Customers",
+              "12 (homeowners, landlords, small businesses)"
+            ],
+            [
+              "Painters / user accounts",
+              "6 painters, 7 users in total (one manager)"
+            ],
+            [
+              "Jobs and completion reports",
+              "60 each (9 reports awaiting review)"
+            ],
+            [
+              "Checklist items",
+              "377"
+            ],
+            [
+              "Photos",
+              "about 400 generated placeholders (before, during, after; one report has none)"
+            ],
+            [
+              "Quotes / payments",
+              "24 quotes; 52 payments, 14 of them deposits"
+            ],
+            [
+              "Invoices by status",
+              "52 in total: 30 paid, 7 sent, 6 draft, 6 overdue, 2 part paid, 1 void; 8 jobs not yet invoiced"
+            ]
+          ]
+        },
+        {
+          "heading": "Backend (T-001b and T-001c)",
+          "type": "list",
+          "items": [
+            {
+              "label": "Database.",
+              "text": "Nine tables in one reversible Alembic migration with enums, constraints and indexes; models in SQLAlchemy 2."
+            },
+            {
+              "label": "Billing logic.",
+              "text": "Pure functions derive invoice status (void, draft, paid, overdue, part paid, sent); SQL filters are tested to agree with them across 7 different 'today' dates."
+            },
+            {
+              "label": "API.",
+              "text": "Login, current user, demo accounts, dashboard, painters, reports (pagination, filters, search), report detail, invoices, and signed expiring photo URLs. Query counts stay at 6 or fewer however many rows are returned."
+            },
+            {
+              "label": "Photos.",
+              "text": "Generated SVG images behind a PhotoStore strategy, so S3 can replace them later without changing callers."
+            },
+            {
+              "label": "Security.",
+              "text": "JWT with pinned algorithm, argon2id passwords with uniform errors, role checked from the database on every request, secrets guarded outside local and test, seed refuses to run outside local and test, APP_ENV required."
+            }
+          ]
+        },
+        {
+          "heading": "Web app (T-001d)",
+          "type": "list",
+          "items": [
+            {
+              "label": "Pages.",
+              "text": "Login (shows demo accounts), dashboard (5 figures plus recent reports), reports (search, review, billing, painter and date filters, pagination, all kept in the URL), report detail (job, customer, painter, checklist, photo gallery with keyboard-operable enlarge view, quote, invoice, payments), billing list."
+            },
+            {
+              "label": "Behaviour.",
+              "text": "Painters see a 'managers only' page; an expired session returns to login with a notice; every page has loading, empty and error states with Retry."
+            },
+            {
+              "label": "Look.",
+              "text": "Plain CSS, warm paper palette, serif headings, status badges with text and icons (never colour alone), system fonts, no external assets, responsive to tablet width."
+            },
+            {
+              "label": "Shared code.",
+              "text": "Generated client, hooks, TokenStore, filter parsing and GBP and en-GB formatting live in shared/ for the future mobile app."
+            }
+          ]
+        },
+        {
+          "heading": "Final verification (clean start: database and build deleted, rebuilt)",
+          "type": "table",
+          "columns": [
+            "Check",
+            "Result"
+          ],
+          "rows": [
+            [
+              "make lint (ruff, mypy strict, eslint, tsc, redocly, generated client drift)",
+              "Pass"
+            ],
+            [
+              "Backend tests",
+              "337 passed, 1 skipped (network timeout test that cannot run in this sandbox)"
+            ],
+            [
+              "Frontend unit tests",
+              "159 passed (33 shared, 126 web)"
+            ],
+            [
+              "Playwright browser tests against the real stack",
+              "48 passed, 2 opt-in screenshot tests skipped"
+            ],
+            [
+              "npm audit",
+              "0 vulnerabilities"
+            ],
+            [
+              "Docker images and docker compose up",
+              "NOT run: no Docker daemon in the build environment. docker compose config passes"
+            ]
           ]
         }
       ]
