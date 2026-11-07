@@ -80,7 +80,9 @@ export function BillingPage() {
                       <tr>
                         <th scope="col">Invoice no.</th>
                         <th scope="col">Customer</th>
-                        <th scope="col">Job ref</th>
+                        <th scope="col" className="col-wide">
+                          Job ref
+                        </th>
                         <th scope="col" className="num">
                           Amount
                         </th>
@@ -97,16 +99,19 @@ export function BillingPage() {
                     <tbody>
                       {data.items.map((inv) => (
                         <tr key={inv.id} data-testid="invoice-row">
-                          <td className="strong nowrap">{inv.number}</td>
+                          <td className="nowrap">
+                            <span className="strong">{inv.number}</span>
+                            <span className="stack-only">{inv.job_reference}</span>
+                          </td>
                           <td>{inv.customer.name}</td>
-                          <td className="nowrap">{inv.job_reference}</td>
+                          <td className="nowrap col-wide">{inv.job_reference}</td>
                           <td className="num">{formatPence(inv.total_pence)}</td>
                           <td className="num">{formatPence(inv.paid_pence)}</td>
                           <td className="nowrap">{inv.due_date ? formatDate(inv.due_date) : "-"}</td>
                           <td>
                             <BillingBadge status={inv.status} />
                           </td>
-                          <td>
+                          <td className="nowrap">
                             {inv.report_id ? (
                               <Link to={`/reports/${inv.report_id}`}>
                                 View report<span className="sr-only"> for {inv.job_reference}</span>

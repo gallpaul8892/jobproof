@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 21:00",
+  "updated": "2026-11-07 21:21",
   "phases": [
     {
       "id": "setup",
@@ -46,21 +46,21 @@
           "title": "Data model, migrations and seed data",
           "owner": "backend-engineer",
           "status": "review",
-          "note": "Review round 1: CHANGES REQUESTED (seed guard, 3 majors total with T-001c)"
+          "note": "Round 1 fixes verified by reviewer (Job A)"
         },
         {
           "id": "T-001c",
           "title": "Manager auth and read APIs",
           "owner": "backend-engineer",
           "status": "review",
-          "note": "Review round 1: CHANGES REQUESTED (secret guard, NUL-byte 500s)"
+          "note": "Round 1 fixes verified by reviewer (Job A); one minor follow-up"
         },
         {
           "id": "T-001d",
           "title": "Manager web UI and e2e tests",
           "owner": "frontend+test",
           "status": "in_progress",
-          "note": "Frontend engineer building manager UI + e2e (parallel with review)"
+          "note": "Review round 1: 2 MAJOR (redirect check bypass, billing table clipped at 768px), 7 minor. Fixing"
         }
       ]
     },
@@ -124,13 +124,13 @@
       "name": "backend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": "T-001b/c review fixes done, 304 tests"
+      "note": "APP_ENV required, 336 tests"
     },
     {
       "name": "frontend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": "T-001d built"
+      "note": "T-001d review fixes done"
     },
     {
       "name": "test-engineer",
@@ -142,7 +142,7 @@
       "name": "code-reviewer",
       "model": "opus",
       "status": "idle",
-      "note": "T-001b/c round 1 done: CHANGES REQUESTED"
+      "note": "T-001d round 1 done: CHANGES REQUESTED"
     },
     {
       "name": "dependency-checker",
@@ -241,6 +241,21 @@
       "time": "2026-11-07 20:49",
       "who": "backend-engineer",
       "msg": "Review fixes: prod secret guard, seed env guard, NUL input -> 422; 304 backend tests pass. Re-check batched into the T-001d review"
+    },
+    {
+      "time": "2026-11-07 21:02",
+      "who": "frontend-engineer",
+      "msg": "T-001d done: manager UI, 41 e2e passing, nginx carry-overs fixed, 12 screenshots reviewed"
+    },
+    {
+      "time": "2026-11-07 21:09",
+      "who": "code-reviewer",
+      "msg": "T-001d: CHANGES REQUESTED. 2 MAJOR (login redirect bypass with tab/newline, billing/reports table clipped at 768px), 7 minor. Backend fixes from round 1 verified"
+    },
+    {
+      "time": "2026-11-07 21:12",
+      "who": "backend-engineer",
+      "msg": "APP_ENV now required (no default); dev-secret check hardened; 336 backend tests pass"
     }
   ],
   "reports": [

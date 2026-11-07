@@ -5,10 +5,10 @@ import { useLogout, type User } from "@jobproof/shared";
 export function BrandMark() {
   return (
     <span className="brand-mark" aria-hidden="true">
-      <i style={{ background: "#e9b44c" }} />
-      <i style={{ background: "#c8603a" }} />
-      <i style={{ background: "#5f8f8b" }} />
-      <i style={{ background: "#f4f1ea" }} />
+      <i />
+      <i />
+      <i />
+      <i />
     </span>
   );
 }

@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router";
 import { ApiError, type ReportPhoto } from "@jobproof/shared";
 import { describe, expect, it } from "vitest";
 import { PhotoGallery } from "./PhotoGallery";
+import { useThrottledRefetch } from "./useThrottledRefetch";
 import { QueryBoundary } from "./QueryBoundary";
 import { BillingBadge, Pagination, resultLine } from "./ui";
 
@@ -119,5 +120,60 @@ describe("PhotoGallery", () => {
     expect(screen.getByTestId("lightbox-position").textContent).toBe("3 of 3");
     await userEvent.click(screen.getByRole("button", { name: "Next photo" }));
     expect(screen.getByTestId("lightbox-position").textContent).toBe("1 of 3");
+  });
+});
+
+describe("expired photo URLs", () => {
+  it("calls onImageError when a thumbnail fails to load, and shows a fallback", () => {
+    const calls: number[] = [];
+    render(<PhotoGallery photos={photos} onImageError={() => calls.push(1)} />);
+    const img = document.querySelector("img.photo-img")!;
+    fireEvent.error(img);
+    expect(calls).toHaveLength(1);
+    expect(screen.getAllByText("Photo unavailable")).toHaveLength(1);
+  });
+
+  it("retries an image when fresh URLs arrive", () => {
+    const { rerender } = render(<PhotoGallery photos={photos} />);
+    fireEvent.error(document.querySelector("img.photo-img")!);
+    expect(screen.getAllByText("Photo unavailable")).toHaveLength(1);
+    rerender(
+      <PhotoGallery photos={photos.map((p) => ({ ...p, thumb_url: `${p.thumb_url}?fresh=1` }))} />,
+    );
+    expect(screen.queryByText("Photo unavailable")).toBeNull();
+    expect(document.querySelectorAll("img.photo-img")).toHaveLength(3);
+  });
+});
+
+describe("expired photo URLs, identical URLs after refetch", () => {
+  it("retries failed images when the version changes even if the URLs are the same", () => {
+    const { rerender } = render(<PhotoGallery photos={photos} version={1} />);
+    fireEvent.error(document.querySelector("img.photo-img")!);
+    expect(screen.getAllByText("Photo unavailable")).toHaveLength(1);
+    rerender(<PhotoGallery photos={photos} version={2} />);
+    expect(screen.queryByText("Photo unavailable")).toBeNull();
+  });
+});
+
+describe("useThrottledRefetch", () => {
+  it("refetches once, then not again within the interval, so there is no loop", () => {
+    let clock = 1_000_000;
+    let refetches = 0;
+    function Probe() {
+      const refresh = useThrottledRefetch(() => (refetches += 1), 60_000, () => clock);
+      return <button onClick={refresh}>go</button>;
+    }
+    render(<Probe />);
+    const button = screen.getByRole("button", { name: "go" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(refetches).toBe(1);
+    clock += 59_000;
+    fireEvent.click(button);
+    expect(refetches).toBe(1);
+    clock += 2_000;
+    fireEvent.click(button);
+    expect(refetches).toBe(2);
   });
 });

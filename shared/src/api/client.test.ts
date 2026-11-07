@@ -106,4 +106,40 @@ describe("api client adapter", () => {
     await callApi(() => getMe()).catch(() => undefined);
     expect(calls).toBe(1);
   });
+
+  it("aborts the request when the caller's signal aborts", async () => {
+    let seen: AbortSignal | undefined;
+    configureApiClient({
+      baseUrl: "http://api.test",
+      fetch: (input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          seen = init?.signal ?? undefined;
+          seen?.addEventListener("abort", () => reject(seen?.reason));
+          void input;
+        }),
+    });
+    const controller = new AbortController();
+    const pending = callApi(() => getMe({ signal: controller.signal })).catch((e: unknown) => e);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen?.aborted).toBe(false);
+    controller.abort();
+    const err = await pending;
+    expect(seen?.aborted).toBe(true);
+    expect(err).toBeInstanceOf(ApiError);
+  });
+
+  it("still times out when the caller supplies a signal", async () => {
+    let seen: AbortSignal | undefined;
+    configureApiClient({
+      baseUrl: "http://api.test",
+      fetch: async (_input, init) => {
+        seen = init?.signal ?? undefined;
+        return jsonResponse({ id: "1", email: "a", full_name: "A", role: "manager" }, 200);
+      },
+    });
+    await callApi(() => getMe({ signal: new AbortController().signal }));
+    expect(seen).toBeDefined();
+    expect(typeof AbortSignal.any).toBe("function");
+    expect(seen?.aborted).toBe(false);
+  });
 });

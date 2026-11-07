@@ -7,6 +7,7 @@
   --muted: #566170;
   --line: #ddd7ca;
   --line-strong: #b9b2a2;
+  --control-border: #857e6e; /* 4:1 on the surface colour (WCAG 1.4.11 needs 3:1) */
   --brand: #17495e;
   --brand-dark: #0f3444;
   --accent: #a94b1d;
@@ -81,6 +82,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .brand-mark { display: inline-grid; grid-template-columns: repeat(2, 12px); gap: 2px; padding: 3px; background: #0d141c; border-radius: 4px; }
 .brand-dark .brand-mark { background: var(--header); }
 .brand-mark i { width: 12px; height: 12px; border-radius: 2px; display: block; }
+.brand-mark i:nth-child(1) { background: #e9b44c; }
+.brand-mark i:nth-child(2) { background: #c8603a; }
+.brand-mark i:nth-child(3) { background: #5f8f8b; }
+.brand-mark i:nth-child(4) { background: #f4f1ea; }
 
 .mainnav { display: flex; gap: var(--s1); flex: 1; }
 .mainnav a {
@@ -110,7 +115,7 @@ h3 { font-size: var(--t-sm); text-transform: uppercase; letter-spacing: 0.06em; 
   font: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; text-decoration: none;
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
   padding: var(--s2) var(--s4); min-height: 2.5rem; border-radius: var(--radius);
-  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+  border: 1px solid var(--control-border); background: var(--surface); color: var(--ink);
 }
 .btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--ink); color: var(--ink); }
 .btn:disabled { color: #7a8190; cursor: not-allowed; background: var(--surface-2); border-color: var(--line); }
@@ -125,7 +130,7 @@ h3 { font-size: var(--t-sm); text-transform: uppercase; letter-spacing: 0.06em; 
 .field label { font-size: var(--t-sm); font-weight: 600; }
 input, select {
   font: inherit; color: var(--ink); background: #fff; min-height: 2.5rem;
-  padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); max-width: 100%;
+  padding: var(--s2) var(--s3); border: 1px solid var(--control-border); border-radius: var(--radius); max-width: 100%;
 }
 input:hover, select:hover { border-color: var(--ink); }
 input:focus-visible, select:focus-visible { outline-offset: 0; }
@@ -162,8 +167,23 @@ input:focus-visible, select:focus-visible { outline-offset: 0; }
 .stat-link .stat-hint { color: var(--brand); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---- tables ---- */
-.table-wrap { position: relative; overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
-.panel .table-wrap { border-color: var(--line); }
+.table-wrap {
+  position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius);
+  background-color: var(--surface);
+  /* scroll shadows: the shadow at an edge shows only while there is more to scroll to */
+  background-image:
+    linear-gradient(to right, var(--surface), var(--surface)),
+    linear-gradient(to left, var(--surface), var(--surface)),
+    linear-gradient(to right, rgba(29, 39, 51, 0.28), rgba(29, 39, 51, 0)),
+    linear-gradient(to left, rgba(29, 39, 51, 0.28), rgba(29, 39, 51, 0));
+  background-position: left center, right center, left center, right center;
+  background-size: 24px 100%, 24px 100%, 14px 100%, 14px 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+.table-wrap[data-scrollable="true"] { border-color: var(--control-border); }
+.scroll-hint { margin: 0 0 var(--s2); font-size: var(--t-xs); color: var(--muted); }
+.stack-only { display: none; }
 .table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
 .table th {
   text-align: left; font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
@@ -269,6 +289,12 @@ input:focus-visible, select:focus-visible { outline-offset: 0; }
 .lightbox-caption { margin: var(--s3) 0 var(--s1); font-weight: 600; }
 
 /* ---- responsive ---- */
+@media (max-width: 900px) {
+  .col-wide { display: none; }
+  .stack-only { display: block; font-size: var(--t-xs); color: var(--muted); font-weight: 400; }
+  .table th, .table td { padding: var(--s2); }
+  .table .truncate { max-width: 11rem; }
+}
 @media (max-width: 860px) {
   .detail-grid, .billing-grid { grid-template-columns: minmax(0, 1fr); }
   .topbar-inner { gap: var(--s3); }

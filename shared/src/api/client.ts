@@ -32,7 +32,12 @@ export function configureApiClient(options: ApiClientOptions): void {
   activeTokenStore = options.tokenStore;
   const baseFetch = options.fetch ?? ((input, init) => fetch(input, init));
   const timeoutFetch: typeof fetch = async (input, init) => {
-    const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    // Cancel on the caller's signal (TanStack Query aborts replaced requests) or on timeout.
+    const signal = AbortSignal.any(
+      [init?.signal, input instanceof Request ? input.signal : undefined, AbortSignal.timeout(REQUEST_TIMEOUT_MS)].filter(
+        (s): s is AbortSignal => s != null,
+      ),
+    );
     try {
       return await baseFetch(input, { ...init, signal });
     } catch (cause) {

@@ -15,6 +15,7 @@ import {
   type ReportDetail,
 } from "@jobproof/shared";
 import { ApiError } from "@jobproof/shared";
+import { useThrottledRefetch } from "../components/useThrottledRefetch";
 import { PhotoGallery } from "../components/PhotoGallery";
 import { QueryBoundary } from "../components/QueryBoundary";
 import { BillingBadge, PageHeader, ReviewBadge, TableWrap, useDocumentTitle } from "../components/ui";
@@ -37,7 +38,7 @@ function Section({ title, id, children, wide }: { title: string; id: string; chi
   );
 }
 
-function Detail({ r }: { r: ReportDetail }) {
+function Detail({ r, onImageError, version }: { r: ReportDetail; onImageError: () => void; version: number }) {
   const { job, customer, quote, invoice } = r;
   return (
     <div className="detail-grid">
@@ -119,7 +120,7 @@ function Detail({ r }: { r: ReportDetail }) {
       </Section>
 
       <Section title="Photos" id="photos" wide>
-        <PhotoGallery photos={r.photos} />
+        <PhotoGallery photos={r.photos} onImageError={onImageError} version={version} />
       </Section>
 
       <Section title="Billing" id="billing" wide>
@@ -208,6 +209,8 @@ export function ReportDetailPage() {
   const listSearch = (location.state as { listSearch?: string } | null)?.listSearch ?? "";
   const query = useReport(reportId);
   const data = query.data;
+  // Signed photo URLs expire; a failed image refetches the report once a minute at most.
+  const refreshPhotoUrls = useThrottledRefetch(query.refetch);
   useDocumentTitle(data ? data.job.reference : "Report");
 
   const notFound = query.error instanceof ApiError && (query.error.status === 404 || query.error.status === 422);
@@ -246,7 +249,7 @@ export function ReportDetailPage() {
         }
       />
       <QueryBoundary query={query} what="this report" skeletonRows={6}>
-        {(r) => <Detail r={r} />}
+        {(r) => <Detail r={r} onImageError={refreshPhotoUrls} version={query.dataUpdatedAt} />}
       </QueryBoundary>
     </>
   );

@@ -218,4 +218,36 @@ test.describe("7. View evidence for a report", () => {
     await expect(page).toHaveURL(/\/reports\?review_status=reviewed&page=2$/);
     await expect(page.getByTestId("result-count")).toContainText(`of ${expected.total} reports`);
   });
+
+  test("expired photo URLs: a failed image refetches the report once and the photos load", async ({ page, request }) => {
+    const api = await ManagerApi.create(request);
+    const item = (await api.allReports()).find((r) => r.photo_count >= 3)!;
+    await signInViaApi(page);
+    let reportRequests = 0;
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === `/api/v1/manager/reports/${item.id}`) reportRequests += 1;
+    });
+    let photoFailures = 0;
+    await page.route(/\/api\/v1\/photos\//, (route) => {
+      if (photoFailures < item.photo_count) {
+        photoFailures += 1;
+        return route.fulfill({
+          status: 403,
+          contentType: "application/problem+json",
+          body: JSON.stringify({ type: "about:blank", title: "Forbidden", status: 403, code: "invalid_signature", request_id: "e2e" }),
+        });
+      }
+      return route.continue();
+    });
+    await page.goto(`/reports/${item.id}`);
+    // every thumbnail failed once, the report was refetched, and the fresh URLs now load
+    await expect.poll(() => reportRequests).toBe(2);
+    await expect
+      .poll(() =>
+        page.locator(".photo-img").evaluateAll((els) => els.length > 0 && els.every((e) => e instanceof HTMLImageElement && e.complete && e.naturalWidth > 0)),
+      )
+      .toBe(true);
+    await page.waitForTimeout(1000);
+    expect(reportRequests, "no refetch loop").toBe(2);
+  });
 });

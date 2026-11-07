@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   billingStatusLabel,
   reviewStatusLabel,
@@ -65,12 +65,43 @@ export function PageHeader({
   );
 }
 
-/** Horizontally scrollable table container that is reachable by keyboard. */
+/**
+ * Horizontally scrollable table container that is reachable by keyboard. When the table is
+ * wider than the container it shows edge shadows (CSS) and a text hint, so the scroll is visible.
+ */
 export function TableWrap({ label, children }: { label: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const check = () => setScrollable(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="table-wrap" role="region" aria-label={label} tabIndex={0}>
-      {children}
-    </div>
+    <>
+      {scrollable && (
+        <p className="scroll-hint" data-testid="scroll-hint">
+          This table is wider than the screen. Scroll sideways to see every column.
+        </p>
+      )}
+      <div
+        ref={ref}
+        className="table-wrap"
+        data-scrollable={scrollable ? "true" : "false"}
+        role="region"
+        aria-label={label}
+        tabIndex={0}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 

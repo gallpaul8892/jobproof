@@ -181,8 +181,12 @@ export function ReportsPage() {
                         <th scope="col">Job ref</th>
                         <th scope="col">Customer</th>
                         <th scope="col">Site address</th>
-                        <th scope="col">Painter</th>
-                        <th scope="col">Completed</th>
+                        <th scope="col" className="col-wide">
+                          Painter
+                        </th>
+                        <th scope="col" className="col-wide">
+                          Completed
+                        </th>
                         <th scope="col" className="num">
                           Photos
                         </th>
@@ -201,13 +205,17 @@ export function ReportsPage() {
                             >
                               {r.job_reference}
                             </Link>
+                            <span className="stack-only">{formatDate(r.completed_on)}</span>
                           </td>
-                          <td>{r.customer.name}</td>
-                          <td className="truncate" title={formatAddressShort(r.site_address)}>
+                          <td>
+                            {r.customer.name}
+                            <span className="stack-only">{r.painter.name}</span>
+                          </td>
+                          <td className="truncate col-address" title={formatAddressShort(r.site_address)}>
                             {formatAddressShort(r.site_address)}
                           </td>
-                          <td>{r.painter.name}</td>
-                          <td className="nowrap">{formatDate(r.completed_on)}</td>
+                          <td className="col-wide">{r.painter.name}</td>
+                          <td className="nowrap col-wide">{formatDate(r.completed_on)}</td>
                           <td className="num">{r.photo_count}</td>
                           <td>
                             <ReviewBadge status={r.review_status} />

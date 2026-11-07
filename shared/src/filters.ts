@@ -63,6 +63,9 @@ function parseDate(value: string | null): string | undefined {
 function parseQuery(value: string | null): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed || trimmed.length > MAX_SEARCH_LENGTH) return undefined;
+  // Control characters (NUL, tab, newline...) are rejected by the API with a 422.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return undefined;
   return trimmed;
 }
 

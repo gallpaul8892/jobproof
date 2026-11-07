@@ -77,9 +77,26 @@ const bad: [string, string][] = [
   ["non-numeric port", "http://localhost:80a0"],
   ["port too long", "http://localhost:123456"],
   ["two ports", "http://localhost:80:90"],
-  ["origin of 254 characters", `http://${longHost(254 - "http://".length)}`],
+  ["host of 254 characters", `http://${longHost(254)}`],
+  ["host of 254 characters with a port", `https://${longHost(254)}:8443`],
   ["origin of 10000 characters", `http://${longHost(10_000 - "http://".length)}`],
   ["very long single label", `http://${"a".repeat(5000)}`],
+  ["label of 64 characters", `http://${"a".repeat(64)}.example.com`],
+  ["last label of 64 characters", `http://api.${"b".repeat(64)}`],
+  ["port 0", "http://localhost:0"],
+  ["port 00", "http://localhost:00"],
+  ["port with leading zeros", "http://localhost:00080"],
+  ["port with one leading zero", "http://localhost:080"],
+  ["port 65536", "http://localhost:65536"],
+  ["port 99999", "http://localhost:99999"],
+  ["port 100000", "http://localhost:100000"],
+  ["IPv4 octets over 255", "http://999.999.999.999"],
+  ["IPv4 with 256", "http://256.1.1.1"],
+  ["IPv4 with three parts", "http://1.2.3"],
+  ["IPv4 with five parts", "http://1.2.3.4.5"],
+  ["IPv4 with leading zeros", "http://01.2.3.4"],
+  ["all-numeric single label", "http://12345"],
+  ["numeric host with trailing dot", "http://1.2.3.4."],
 ];
 
 describe("40-jobproof-config.sh", () => {
@@ -99,7 +116,14 @@ describe("40-jobproof-config.sh", () => {
     ["https://1-2.example.com:65535", "https://1-2.example.com:65535"],
     ["http://127.0.0.1:8000", "http://127.0.0.1:8000"],
     ["https://xn--caf-dma.example.com", "https://xn--caf-dma.example.com"],
-    [`http://${longHost(253 - "http://".length)}`, `http://${longHost(253 - "http://".length)}`],
+    [`http://${longHost(253)}`, `http://${longHost(253)}`],
+    [`https://${longHost(253)}:65535`, `https://${longHost(253)}:65535`],
+    [`http://${"a".repeat(63)}.example.com`, `http://${"a".repeat(63)}.example.com`],
+    ["http://255.255.255.255", "http://255.255.255.255"],
+    ["http://0.0.0.0:9", "http://0.0.0.0:9"],
+    ["http://10.0.0.1:1", "http://10.0.0.1:1"],
+    ["http://1.2.3.4a", "http://1.2.3.4a"],
+    ["http://1.2.3.com", "http://1.2.3.com"],
   ])("accepts %s", (value, origin) => {
     const r = run(value);
     expect(r.status).toBe(0);

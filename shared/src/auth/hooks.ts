@@ -22,7 +22,7 @@ export function useLogin() {
 export function useMe(enabled = true) {
   return useQuery({
     queryKey: queryKeys.me,
-    queryFn: () => callApi(() => getMe()),
+    queryFn: ({ signal }) => callApi(() => getMe({ signal })),
     enabled,
     retry: false,
     staleTime: 5 * 60_000,

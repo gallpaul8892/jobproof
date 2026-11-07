@@ -14,9 +14,10 @@ export const PAINTER = { email: "painter@jobproof.test", password: "Painter123!"
  */
 export const test = base.extend<{ origins: string[] }>({
   origins: [
-    async ({ page }, use) => {
+    async ({ context }, use) => {
       const seen = new Set<string>();
-      page.on("request", (request) => {
+      // context-level, so popups, new pages and service workers are covered too
+      context.on("request", (request) => {
         const url = new URL(request.url());
         if (url.protocol === "http:" || url.protocol === "https:") seen.add(url.origin);
       });

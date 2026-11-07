@@ -25,6 +25,21 @@ test.describe("1. Sign in as manager", () => {
     await expect(page).toHaveURL(/\/login\?from=%2Freports$/);
   });
 
+  test("a crafted from= value cannot redirect off-site or crash the app", async ({ page }) => {
+    for (const from of ["/%09/example.com", "/%0A/example.com", "/%0D/example.com", "/%09%5Cexample.com", "//example.com", "/%5Cexample.com"]) {
+      await page.goto(`/login?from=${from}`);
+      await page.getByLabel("Email").fill(MANAGER.email);
+      await page.getByLabel("Password").fill(MANAGER.password);
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await expect(page).toHaveURL(/localhost:8080\/$/);
+      await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Something went wrong" })).toHaveCount(0);
+      await expect(page.getByTestId("user-name")).toHaveText(MANAGER.name);
+      await page.getByRole("button", { name: "Sign out" }).click();
+      await expect(page).toHaveURL(/\/login$/);
+    }
+  });
+
   test("a signed-in manager visiting /login is sent to the dashboard", async ({ page }) => {
     await signInViaApi(page);
     await page.goto("/login");

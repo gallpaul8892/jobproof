@@ -3,7 +3,17 @@ import { formatDateTime, photoStageLabel, type PhotoStage, type ReportPhoto } fr
 
 const STAGES: PhotoStage[] = ["before", "during", "after"];
 
-function PhotoImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+function PhotoImage({
+  src,
+  alt,
+  className,
+  onFailed,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  onFailed?: () => void;
+}) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
@@ -12,7 +22,10 @@ function PhotoImage({ src, alt, className }: { src: string; alt: string; classNa
       </span>
     );
   }
-  return <img src={src} alt={alt} className={className} onError={() => setFailed(true)} />;
+  return <img src={src} alt={alt} className={className} onError={() => {
+        setFailed(true);
+        onFailed?.();
+      }} />;
 }
 
 function Lightbox({
@@ -20,7 +33,11 @@ function Lightbox({
   index,
   onIndex,
   onClose,
+  onImageError,
+  version,
 }: {
+  onImageError?: () => void;
+  version: number;
   photos: ReportPhoto[];
   index: number | null;
   onIndex: (i: number) => void;
@@ -97,7 +114,13 @@ function Lightbox({
             >
               <span aria-hidden="true">‹</span>
             </button>
-            <PhotoImage key={photo.id} src={photo.url} alt={photo.caption} className="lightbox-img" />
+            <PhotoImage
+              key={`${photo.url}:${version}`}
+              src={photo.url}
+              alt={photo.caption}
+              className="lightbox-img"
+              onFailed={onImageError}
+            />
             <button
               type="button"
               className="btn lightbox-nav"
@@ -118,7 +141,20 @@ function Lightbox({
   );
 }
 
-export function PhotoGallery({ photos }: { photos: ReportPhoto[] }) {
+/**
+ * `onImageError` runs when an image fails to load (typically an expired signed URL); the caller
+ * refetches the report so fresh URLs arrive. Images are keyed by URL so they retry on new URLs.
+ */
+export function PhotoGallery({
+  photos,
+  onImageError,
+  version = 0,
+}: {
+  photos: ReportPhoto[];
+  onImageError?: () => void;
+  /** Changes when the report is refetched, so images that failed are tried again. */
+  version?: number;
+}) {
   const [index, setIndex] = useState<number | null>(null);
   const opener = useRef<number | null>(null);
   const thumbs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -164,7 +200,7 @@ export function PhotoGallery({ photos }: { photos: ReportPhoto[] }) {
                       setIndex(i);
                     }}
                   >
-                    <PhotoImage src={p.thumb_url} alt="" className="photo-img" />
+                    <PhotoImage key={`${p.thumb_url}:${version}`} src={p.thumb_url} alt="" className="photo-img" onFailed={onImageError} />
                     <span className="photo-caption">{p.caption}</span>
                     <span className="photo-time">{formatDateTime(p.taken_at)}</span>
                   </button>
@@ -174,7 +210,7 @@ export function PhotoGallery({ photos }: { photos: ReportPhoto[] }) {
           </div>
         );
       })}
-      <Lightbox photos={photos} index={index} onIndex={setIndex} onClose={close} />
+      <Lightbox photos={photos} index={index} onIndex={setIndex} onClose={close} onImageError={onImageError} version={version} />
     </>
   );
 }

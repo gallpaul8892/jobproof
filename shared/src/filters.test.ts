@@ -47,6 +47,13 @@ describe("report filters", () => {
     });
   });
 
+  it("drops a search containing control characters", () => {
+    for (const q of ["%00", "a%00b", "a%09x", "x%0Ay", "%1F", "%7F"]) {
+      expect(parse(`q=${q}`)).toEqual({ page: 1 });
+    }
+    expect(parse("q=caf%C3%A9")).toEqual({ page: 1, q: "café" });
+  });
+
   it("trims the search text", () => {
     expect(parse("q=%20smith%20")).toEqual({ page: 1, q: "smith" });
   });
