@@ -14,18 +14,8 @@ OPENAPI_PATH = Path(__file__).resolve().parents[2] / "api" / "openapi.yaml"
 _BASE_URI = "urn:jobproof:openapi"
 _HTTP_METHODS = {"get", "put", "post", "delete", "patch", "head", "options"}
 
-# (METHOD, path) of operations in the contract that are not built yet. Must be empty after T-001c.
-NOT_YET_IMPLEMENTED: set[tuple[str, str]] = {
-    ("POST", "/api/v1/auth/login"),
-    ("GET", "/api/v1/auth/me"),
-    ("GET", "/api/v1/auth/demo-accounts"),
-    ("GET", "/api/v1/manager/dashboard"),
-    ("GET", "/api/v1/manager/painters"),
-    ("GET", "/api/v1/manager/reports"),
-    ("GET", "/api/v1/manager/reports/{report_id}"),
-    ("GET", "/api/v1/manager/invoices"),
-    ("GET", "/api/v1/photos/{photo_id}/image"),
-}
+# (METHOD, path) of operations in the contract that are not built yet. Empty since T-001c.
+NOT_YET_IMPLEMENTED: set[tuple[str, str]] = set()
 
 
 @lru_cache

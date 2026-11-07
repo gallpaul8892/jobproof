@@ -60,3 +60,117 @@ def client() -> Iterator[TestClient]:
 
     with TestClient(create_app()) as test_client:
         yield test_client
+
+
+# ---- API test helpers -------------------------------------------------------------------------
+import datetime as dt  # noqa: E402
+import uuid  # noqa: E402
+from typing import Any  # noqa: E402
+
+import jwt  # noqa: E402
+from argon2 import PasswordHasher  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from app.config import get_settings  # noqa: E402
+from app.models import User  # noqa: E402
+from app.models.enums import UserRole  # noqa: E402
+from app.seed.dataset import Dataset, build_dataset  # noqa: E402
+
+ANCHOR = dt.date.fromisoformat(os.environ["SEED_ANCHOR_DATE"])
+FIXED_NOW = dt.datetime.fromisoformat(os.environ["FIXED_NOW"])
+MANAGER_LOGIN = ("manager@jobproof.test", "Manager123!")
+PAINTER_LOGIN = ("painter@jobproof.test", "Painter123!")
+
+
+@pytest.fixture(scope="session")
+def ds() -> Dataset:
+    """The expected data, built independently of the database."""
+    return build_dataset(ANCHOR)
+
+
+def login_token(client: TestClient, email: str, password: str) -> str:
+    response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.text
+    return str(response.json()["access_token"])
+
+
+def bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="session")
+def manager_headers(client: TestClient) -> dict[str, str]:
+    return bearer(login_token(client, *MANAGER_LOGIN))
+
+
+@pytest.fixture(scope="session")
+def painter_headers(client: TestClient) -> dict[str, str]:
+    return bearer(login_token(client, *PAINTER_LOGIN))
+
+
+def make_token(
+    user_id: uuid.UUID | str,
+    *,
+    role: str = "manager",
+    secret: str | None = None,
+    issued_offset: int = 0,
+    ttl: int = 1800,
+    audience: str = "jobproof-api",
+    issuer: str = "jobproof",
+    drop: tuple[str, ...] = (),
+) -> str:
+    """A token as the API would issue it, with any claim bent out of shape for a test."""
+    issued = int(FIXED_NOW.timestamp()) + issued_offset
+    claims: dict[str, Any] = {
+        "sub": str(user_id),
+        "role": role,
+        "iat": issued,
+        "exp": issued + ttl,
+        "iss": issuer,
+        "aud": audience,
+    }
+    for name in drop:
+        claims.pop(name)
+    return jwt.encode(claims, secret or get_settings().jwt_secret, algorithm="HS256")
+
+
+@pytest.fixture(scope="session")
+def db_engine() -> Iterator[Any]:
+    engine = create_engine(TEST_DATABASE_URL)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def temp_user(db_engine: Any) -> Iterator[Any]:
+    """Factory for throwaway users (committed, so the API sees them), removed afterwards."""
+    created: list[uuid.UUID] = []
+
+    def create(
+        *,
+        role: UserRole = UserRole.manager,
+        active: bool = True,
+        password: str | None = "Temp123!",  # noqa: S107
+    ) -> User:
+        user_id = uuid.uuid4()
+        user = User(
+            id=user_id,
+            email=f"temp-{user_id}@jobproof.test",
+            full_name="Temp User",
+            role=role,
+            password_hash=PasswordHasher().hash(password) if password else None,
+            is_active=active,
+        )
+        with Session(db_engine) as session:
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            session.expunge(user)
+        created.append(user_id)
+        return user
+
+    yield create
+    with Session(db_engine) as session:
+        for user_id in created:
+            session.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+        session.commit()

@@ -32,8 +32,18 @@ MANAGER_PASSWORD = "Manager123!"  # noqa: S105 - published demo credential
 PAINTER_QUOTAS = [10, 11, 9, 12, 8, 10]
 
 DEMO_ACCOUNTS: list[dict[str, str]] = [
-    {"role": "manager", "email": MANAGER[1], "password": MANAGER_PASSWORD},
-    {"role": "painter", "email": PAINTERS[0][1], "password": PAINTERS[0][3] or ""},
+    {
+        "role": "manager",
+        "email": MANAGER[1],
+        "password": MANAGER_PASSWORD,
+        "full_name": MANAGER[0],
+    },
+    {
+        "role": "painter",
+        "email": PAINTERS[0][1],
+        "password": PAINTERS[0][3] or "",
+        "full_name": PAINTERS[0][0],
+    },
 ]
 
 

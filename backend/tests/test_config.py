@@ -35,3 +35,43 @@ def test_production_refuses_demo_accounts_and_fixed_now() -> None:
         Settings(**BASE, app_env="production", demo_accounts_enabled=False, fixed_now=None).app_env
         == "production"
     )
+
+
+def _without_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.delenv("PHOTO_URL_SECRET", raising=False)
+
+
+@pytest.mark.parametrize("env", ["local", "test"])
+def test_dev_secret_defaults_exist_only_in_local_and_test(
+    monkeypatch: pytest.MonkeyPatch, env: str
+) -> None:
+    _without_secrets(monkeypatch)
+    settings = Settings(database_url=BASE["database_url"], app_env=env)  # type: ignore[arg-type]
+    assert len(settings.jwt_secret) >= 32 and len(settings.photo_url_secret) >= 32
+    assert settings.jwt_secret != settings.photo_url_secret
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize("missing", ["jwt_secret", "photo_url_secret"])
+def test_real_environments_refuse_to_start_without_explicit_secrets(
+    monkeypatch: pytest.MonkeyPatch, env: str, missing: str
+) -> None:
+    _without_secrets(monkeypatch)
+    values = {k: v for k, v in BASE.items() if k != missing}
+    with pytest.raises(ValidationError, match=missing.upper()):
+        Settings(**values, app_env=env)  # type: ignore[arg-type]
+
+
+def test_secrets_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DEMO_ACCOUNTS_ENABLED", "false")
+    monkeypatch.delenv("FIXED_NOW", raising=False)
+    monkeypatch.setenv("DATABASE_URL", BASE["database_url"])
+    monkeypatch.setenv("JWT_SECRET", "e" * 40)
+    monkeypatch.setenv("PHOTO_URL_SECRET", "f" * 40)
+    settings = Settings()  # type: ignore[call-arg]
+    assert settings.jwt_secret == "e" * 40 and settings.photo_url_secret == "f" * 40
+    monkeypatch.setenv("JWT_SECRET", "")  # an empty value counts as unset
+    with pytest.raises(ValidationError, match="JWT_SECRET"):
+        Settings()  # type: ignore[call-arg]

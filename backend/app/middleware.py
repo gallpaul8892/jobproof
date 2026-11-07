@@ -51,13 +51,14 @@ class RequestContextMiddleware:
                 response = problem_response(500, "internal_error", instance=scope["path"])
                 await response(scope, receive, send_with_request_id)
         finally:
-            access_logger.info(
-                "request",
-                extra={
-                    "method": scope["method"],
-                    "path": scope["path"],
-                    "status": status_code,
-                    "duration_ms": round((time.perf_counter() - started_at) * 1000, 1),
-                },
-            )
+            extra: dict[str, object] = {
+                "method": scope["method"],
+                "path": scope["path"],
+                "status": status_code,
+                "duration_ms": round((time.perf_counter() - started_at) * 1000, 1),
+            }
+            user_id = scope.get("jobproof_user_id")  # set by the current_user dependency
+            if user_id:
+                extra["user_id"] = user_id
+            access_logger.info("request", extra=extra)
             request_id_var.reset(token)

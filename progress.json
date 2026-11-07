@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 14:19",
+  "updated": "2026-11-07 14:34",
   "phases": [
     {
       "id": "setup",
@@ -45,21 +45,22 @@
           "id": "T-001b",
           "title": "Data model, migrations and seed data",
           "owner": "backend-engineer",
-          "status": "done",
-          "note": "Built and verified: 9 tables, seed (60 jobs, 52 invoices), 84 backend tests. Review batched with T-001c"
+          "status": "review",
+          "note": "In Opus review with T-001c"
         },
         {
           "id": "T-001c",
           "title": "Manager auth and read APIs",
           "owner": "backend-engineer",
-          "status": "in_progress",
-          "note": "Backend engineer: login, role checks, dashboard, reports, billing"
+          "status": "review",
+          "note": "Built: 9 operations, 273 backend tests pass, verified by curl. In Opus review with T-001b"
         },
         {
           "id": "T-001d",
           "title": "Manager web UI and e2e tests",
           "owner": "frontend+test",
-          "status": "todo"
+          "status": "in_progress",
+          "note": "Frontend engineer building manager UI + e2e (parallel with review)"
         }
       ]
     },
@@ -122,14 +123,14 @@
     {
       "name": "backend-engineer",
       "model": "sonnet",
-      "status": "working",
-      "note": "T-001c: auth and manager read API"
+      "status": "idle",
+      "note": "T-001c done"
     },
     {
       "name": "frontend-engineer",
       "model": "sonnet",
-      "status": "idle",
-      "note": "T-001a review fixes done"
+      "status": "working",
+      "note": "T-001d: manager web UI, e2e prep, carry-over fixes"
     },
     {
       "name": "test-engineer",
@@ -140,8 +141,8 @@
     {
       "name": "code-reviewer",
       "model": "opus",
-      "status": "idle",
-      "note": "T-001a approved"
+      "status": "working",
+      "note": "Reviewing T-001b + T-001c (opus)"
     },
     {
       "name": "dependency-checker",
@@ -220,6 +221,11 @@
       "time": "2026-11-07 14:19",
       "who": "backend-engineer",
       "msg": "T-001b done: migration 0001, 9 tables, deterministic seed, billing functions, SVG photo store; pytest 84 passed"
+    },
+    {
+      "time": "2026-11-07 14:34",
+      "who": "backend-engineer",
+      "msg": "T-001c done: login, role checks, dashboard, reports, invoices, signed photos; 273 tests pass"
     }
   ],
   "reports": [

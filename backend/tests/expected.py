@@ -1,0 +1,156 @@
+"""Expected API values computed from `build_dataset()` in plain Python.
+
+Independent of the SQL services on purpose: these are what the endpoints must agree with.
+"""
+
+import calendar
+import datetime as dt
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Any
+
+from app.models.enums import InvoiceState, PaymentKind, ReviewStatus
+from app.seed.dataset import (
+    CustomerRow,
+    Dataset,
+    InvoiceRow,
+    JobRow,
+    ReportRow,
+    UserRow,
+    month_start,
+)
+from app.services.billing import (
+    BillingStatus,
+    InvoiceStatus,
+    balance_pence,
+    billing_status,
+    invoice_status,
+)
+from tests.dataset_checks import paid_by_invoice
+
+
+@dataclass(frozen=True)
+class ExpectedReport:
+    report: ReportRow
+    job: JobRow
+    customer: CustomerRow
+    painter: UserRow
+    photo_count: int
+    billing: BillingStatus
+
+
+def invoice_statuses_at(ds: Dataset, today: dt.date) -> dict[Any, InvoiceStatus]:
+    paid = paid_by_invoice(ds)
+    return {
+        inv.id: invoice_status(inv.state, inv.total_pence, paid[inv.id], inv.due_date, today)
+        for inv in ds.invoices
+    }
+
+
+def expected_reports(ds: Dataset, today: dt.date) -> list[ExpectedReport]:
+    """Every report in the API's fixed order: completed_on, submitted_at, job reference, desc."""
+    jobs = {j.id: j for j in ds.jobs}
+    customers = {c.id: c for c in ds.customers}
+    users = {u.id: u for u in ds.users}
+    statuses = invoice_statuses_at(ds, today)
+    by_job: dict[Any, list[tuple[InvoiceState, InvoiceStatus]]] = defaultdict(list)
+    for inv in ds.invoices:
+        by_job[inv.job_id].append((inv.state, statuses[inv.id]))
+    photo_counts: dict[Any, int] = defaultdict(int)
+    for photo in ds.photos:
+        photo_counts[photo.report_id] += 1
+    rows = [
+        ExpectedReport(
+            report=r,
+            job=jobs[r.job_id],
+            customer=customers[jobs[r.job_id].customer_id],
+            painter=users[r.painter_id],
+            photo_count=photo_counts[r.id],
+            billing=billing_status(by_job[r.job_id]),
+        )
+        for r in ds.reports
+    ]
+    rows.sort(
+        key=lambda e: (e.job.completed_on, e.report.submitted_at, e.job.reference), reverse=True
+    )
+    return rows
+
+
+def search_matches(row: ExpectedReport, q: str) -> bool:
+    needle = q.strip().lower()
+    job = row.job
+    fields = [
+        row.customer.name,
+        job.site_line1,
+        job.site_line2 or "",
+        job.site_town,
+        job.site_county or "",
+        job.site_postcode,
+        job.reference,
+    ]
+    if any(needle in f.lower() for f in fields):
+        return True
+    squashed = "".join(needle.split())
+    return bool(squashed) and squashed in job.site_postcode.replace(" ", "").lower()
+
+
+@dataclass(frozen=True)
+class ExpectedDashboard:
+    awaiting: int
+    completed_this_month: int
+    invoiced_this_month: int
+    outstanding: int
+    overdue: int
+    period_start: dt.date
+    period_end: dt.date
+
+
+def expected_dashboard(ds: Dataset, today: dt.date) -> ExpectedDashboard:
+    start = month_start(today, 0)
+    end = today.replace(day=calendar.monthrange(today.year, today.month)[1])
+    paid = paid_by_invoice(ds)
+    statuses = invoice_statuses_at(ds, today)
+    live = (InvoiceStatus.sent, InvoiceStatus.part_paid, InvoiceStatus.overdue)
+    return ExpectedDashboard(
+        awaiting=sum(r.review_status is ReviewStatus.awaiting_review for r in ds.reports),
+        completed_this_month=sum(
+            j.completed_on is not None and start <= j.completed_on <= end for j in ds.jobs
+        ),
+        invoiced_this_month=sum(
+            i.total_pence
+            for i in ds.invoices
+            if i.state is InvoiceState.issued
+            and i.issue_date is not None
+            and start <= i.issue_date <= end
+        ),
+        outstanding=sum(
+            balance_pence(i.total_pence, paid[i.id]) for i in ds.invoices if statuses[i.id] in live
+        ),
+        overdue=sum(s is InvoiceStatus.overdue for s in statuses.values()),
+        period_start=start,
+        period_end=end,
+    )
+
+
+def expected_invoices(ds: Dataset, today: dt.date) -> list[InvoiceRow]:
+    """Invoices in API order: drafts (no issue date) first, then issue_date desc, number desc."""
+    drafts = sorted((i for i in ds.invoices if i.issue_date is None), key=lambda i: i.number)
+    drafts.reverse()
+    issued = sorted(
+        (i for i in ds.invoices if i.issue_date is not None),
+        key=lambda i: (i.issue_date, i.number),
+        reverse=True,
+    )
+    return drafts + issued
+
+
+def deposit_paid_by_quote(ds: Dataset) -> dict[Any, int]:
+    paid: dict[Any, int] = defaultdict(int)
+    for p in ds.payments:
+        if p.kind is PaymentKind.deposit and p.quote_id is not None:
+            paid[p.quote_id] += p.amount_pence
+    return paid
+
+
+def parse_ts(value: str) -> dt.datetime:
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
