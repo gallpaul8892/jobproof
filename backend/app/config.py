@@ -16,7 +16,10 @@ _APP_ENVS = ("local", "test", "staging", "production")
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
+    # hide_input_in_errors: validation errors must never echo setting values (secrets) to logs.
+    model_config = SettingsConfigDict(
+        extra="ignore", env_ignore_empty=True, hide_input_in_errors=True
+    )
 
     # Required, no default: a deployment that forgets it must fail, not fall back to dev behaviour.
     app_env: Literal["local", "test", "staging", "production"]

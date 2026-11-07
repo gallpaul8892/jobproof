@@ -221,3 +221,16 @@ def test_seed_and_alembic_entry_points_fail_clearly_without_app_env(
         )
         assert result.returncode != 0, argv
         assert "APP_ENV is required" in result.stderr, (argv, result.stderr[-500:])
+
+
+def test_validation_errors_never_echo_secret_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed startup check must not print JWT/photo secrets (they would reach the logs)."""
+    canary = "canary-too-short"  # under the 32 character minimum, so field validation rejects it
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("DATABASE_URL", BASE["database_url"])
+    monkeypatch.setenv("JWT_SECRET", canary)
+    monkeypatch.setenv("PHOTO_URL_SECRET", "p" * 40)
+    with pytest.raises(ValidationError) as excinfo:
+        Settings()
+    # str() is what tracebacks and logs print. (.errors() is the programmatic API and keeps inputs.)
+    assert canary not in str(excinfo.value)
