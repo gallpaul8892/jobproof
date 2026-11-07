@@ -6,11 +6,14 @@ import {
   type InvoiceStatus,
   type ReviewStatus,
 } from "@jobproof/shared";
+import { useCompanyName } from "../theme/BrandingProvider";
 
+/** "Page | Company", or just "Page" before the company name is known. Text only, never HTML. */
 export function useDocumentTitle(title: string): void {
+  const name = useCompanyName();
   useEffect(() => {
-    document.title = `${title} · JobProof`;
-  }, [title]);
+    document.title = name ? `${title} | ${name}` : title;
+  }, [title, name]);
 }
 
 const BILLING_TONE: Record<string, string> = {

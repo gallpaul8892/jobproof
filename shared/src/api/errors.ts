@@ -1,6 +1,8 @@
 export interface FieldError {
   loc: (string | number)[];
   message: string;
+  measured_ratio?: number;
+  required_ratio?: number;
 }
 
 /** Normalised API failure: RFC 9457 problem responses and network/timeout failures. */
@@ -11,6 +13,8 @@ export class ApiError extends Error {
   readonly detail: string | undefined;
   readonly requestId: string | undefined;
   readonly fieldErrors: FieldError[];
+  /** The parsed problem body, so callers can read extension members. */
+  readonly problem: Record<string, unknown> | undefined;
 
   constructor(init: {
     status: number;
@@ -19,6 +23,7 @@ export class ApiError extends Error {
     detail?: string;
     requestId?: string;
     fieldErrors?: FieldError[];
+    problem?: Record<string, unknown>;
   }) {
     super(init.detail ?? init.title);
     this.name = "ApiError";
@@ -28,6 +33,7 @@ export class ApiError extends Error {
     this.detail = init.detail;
     this.requestId = init.requestId;
     this.fieldErrors = init.fieldErrors ?? [];
+    this.problem = init.problem;
   }
 }
 
@@ -49,7 +55,10 @@ export function toApiError(body: unknown, status: number, headerRequestId?: stri
       fieldErrors: errors.filter(isRecord).map((e) => ({
         loc: Array.isArray(e.loc) ? (e.loc as (string | number)[]) : [],
         message: String(e.message ?? ""),
+        ...(typeof e.measured_ratio === "number" ? { measured_ratio: e.measured_ratio } : {}),
+        ...(typeof e.required_ratio === "number" ? { required_ratio: e.required_ratio } : {}),
       })),
+      problem: body,
     });
   }
   return new ApiError({

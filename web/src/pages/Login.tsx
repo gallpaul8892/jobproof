@@ -1,12 +1,13 @@
 import { useRef, useState, type FormEvent } from "react";
 import { Navigate } from "react-router";
 import { useQueryParams } from "../app/useQueryParams";
-import { ApiError, useDemoAccounts, useLogin, useMe, type DemoAccount } from "@jobproof/shared";
+import { ApiError, roleLabel, useDemoAccounts, useLogin, useMe, type DemoAccount } from "@jobproof/shared";
 import { currentToken } from "../auth/sessionTokenStore";
 import { safeRedirect } from "../auth/redirect";
-import { BrandMark } from "../app/Shell";
+import { canVisit, homeFor } from "../app/roles";
 import { FullPageLoading } from "../app/guards";
 import { useDocumentTitle } from "../components/ui";
+import { useBrandingState, useCompanyName } from "../theme/BrandingProvider";
 
 function loginErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -27,7 +28,7 @@ function DemoAccounts({ onUse }: { onUse: (account: DemoAccount) => void }) {
         {demo.data.map((a) => (
           <li key={a.email} data-testid={`demo-account-${a.role}`}>
             <div>
-              <span className="demo-role">{a.role === "manager" ? "Manager" : "Painter"}</span>
+              <span className="demo-role">{roleLabel(a.role)}</span>
               <span className="demo-name">{a.full_name}</span>
               <code>{a.email}</code>
               <code>{a.password}</code>
@@ -44,6 +45,8 @@ function DemoAccounts({ onUse }: { onUse: (account: DemoAccount) => void }) {
 
 export function LoginPage() {
   useDocumentTitle("Sign in");
+  const companyName = useCompanyName();
+  const brandingState = useBrandingState();
   const [params] = useQueryParams();
   const token = currentToken();
   const me = useMe(token !== null);
@@ -56,7 +59,8 @@ export function LoginPage() {
   // Already signed in (page reload, or just signed in): go where they were heading.
   if (token !== null && me.isPending) return <FullPageLoading />;
   if (token !== null && me.data) {
-    const target = me.data.role === "manager" ? safeRedirect(params.get("from")) : "/not-authorised";
+    const from = safeRedirect(params.get("from"));
+    const target = canVisit(me.data.role, from) ? from : homeFor(me.data.role);
     return <Navigate to={target} replace />;
   }
 
@@ -79,12 +83,14 @@ export function LoginPage() {
   return (
     <main className="login" id="main">
       <div className="login-card">
-        <div className="brand brand-dark">
-          <BrandMark />
-          <span className="brand-name">JobProof</span>
-        </div>
-        <h1>Sign in</h1>
-        <p className="muted">Head-office manager access to job reports and billing.</p>
+        {companyName ? (
+          <h1 data-testid="login-heading">{companyName}</h1>
+        ) : brandingState === "failed" ? (
+          <h1 data-testid="login-heading">Sign in</h1>
+        ) : (
+          <h1 data-testid="login-heading" className="heading-pending" aria-hidden="true" />
+        )}
+        <p className="login-sub">Sign in to continue.</p>
 
         {expired && !login.isError && (
           <p className="notice" role="status" data-testid="session-expired">

@@ -1,11 +1,15 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 
-export const API_URL = process.env.API_URL ?? "http://localhost:8000";
+import { ADMIN, API_URL, DEFAULT_NAME, DEFAULT_THEME_COLOURS } from "./support-constants";
+
+export { ADMIN, API_URL, DEFAULT_NAME, DEFAULT_THEME_COLOURS };
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:8080";
 const ALLOWED_ORIGINS = new Set([new URL(WEB_URL).origin, new URL(API_URL).origin]);
 export const TOKEN_KEY = "jobproof.token";
 
 export const MANAGER = { email: "manager@jobproof.test", password: "Manager123!", name: "Sarah Whitfield" };
+export const MANAGER2 = { email: "manager2@jobproof.test", password: "Manager123!", name: "Priya Nair" };
 export const PAINTER = { email: "painter@jobproof.test", password: "Painter123!", name: "Dan Hughes" };
 
 /**
@@ -124,4 +128,52 @@ export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow, "horizontal page overflow in px").toBeLessThanOrEqual(0);
+}
+
+export interface Branding {
+  company_name: string;
+  theme: { primary: string; accent: string; background: string; surface: string; text: string };
+}
+
+export async function getBranding(request: APIRequestContext): Promise<Branding> {
+  const res = await request.get(`${API_URL}/api/v1/branding`);
+  expect(res.ok(), "GET /branding").toBe(true);
+  return (await res.json()) as Branding;
+}
+
+/** Admin PATCH straight to the API (used to set up and restore settings). */
+export async function patchSettings(request: APIRequestContext, data: Record<string, unknown>) {
+  const token = await apiToken(request, ADMIN);
+  return request.patch(`${API_URL}/api/v1/admin/settings`, { headers: { Authorization: `Bearer ${token}` }, data });
+}
+
+export async function restoreDefaultSettings(request: APIRequestContext): Promise<void> {
+  const res = await patchSettings(request, { company_name: DEFAULT_NAME, theme: DEFAULT_THEME_COLOURS });
+  expect(res.ok(), "restoring default settings").toBe(true);
+}
+
+/** Contrast helpers written independently of the app, for checking computed colours. */
+export function parseRgb(css: string): [number, number, number] {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(css);
+  if (!m) throw new Error(`not an rgb colour: ${css}`);
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+export function luminance([r, g, b]: [number, number, number]): number {
+  const c = [r, g, b].map((v) => {
+    const x = v / 255;
+    return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+}
+
+export function ratio(a: [number, number, number], b: [number, number, number]): number {
+  const [la, lb] = [luminance(a), luminance(b)];
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+export async function expectNoContrastViolations(page: Page, label: string): Promise<void> {
+  const results = await new AxeBuilder({ page }).withRules(["color-contrast"]).analyze();
+  const summary = results.violations.flatMap((v) => v.nodes.map((n) => `${label}: ${v.id} ${n.target.join(" ")} ${n.any[0]?.message ?? ""}`));
+  expect(summary, `color-contrast violations on ${label}`).toEqual([]);
 }

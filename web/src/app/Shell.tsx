@@ -1,15 +1,18 @@
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useLogout, type User } from "@jobproof/shared";
+import { useCompanyName } from "../theme/BrandingProvider";
+import { homeFor } from "./roles";
 
-export function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <i />
-      <i />
-      <i />
-      <i />
+/** The company name as the brand. Empty (but keeps its width) until the name is known. */
+export function BrandName() {
+  const name = useCompanyName();
+  return name ? (
+    <span className="brand-name" data-testid="brand-name">
+      {name}
     </span>
+  ) : (
+    <span className="brand-name brand-name-pending" data-testid="brand-name" aria-hidden="true" />
   );
 }
 
@@ -42,16 +45,21 @@ export function Shell({ user }: { user: User }) {
       </a>
       <header className="topbar">
         <div className="topbar-inner">
-          <NavLink to="/" className="brand" aria-label="JobProof home">
-            <BrandMark />
-            <span className="brand-name">JobProof</span>
+          <NavLink to={homeFor(user.role)} className="brand">
+            <BrandName />
           </NavLink>
           <nav className="mainnav" aria-label="Main">
-            <NavLink to="/" end>
-              Dashboard
-            </NavLink>
-            <NavLink to="/reports">Reports</NavLink>
-            <NavLink to="/billing">Billing</NavLink>
+            {user.role === "admin" ? (
+              <NavLink to="/settings">Settings</NavLink>
+            ) : (
+              <>
+                <NavLink to="/" end>
+                  Dashboard
+                </NavLink>
+                <NavLink to="/reports">Reports</NavLink>
+                <NavLink to="/billing">Billing</NavLink>
+              </>
+            )}
           </nav>
           <div className="userbox">
             <span className="user-name" data-testid="user-name">

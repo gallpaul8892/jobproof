@@ -5,7 +5,7 @@ test.describe("1. Sign in as manager", () => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/login$/);
 
-    const demo = page.getByTestId("demo-account-manager");
+    const demo = page.getByTestId("demo-account-manager").first();
     await expect(demo).toContainText(MANAGER.email);
     await demo.getByRole("button", { name: "Use" }).click();
     await expect(page.getByLabel("Email")).toHaveValue(MANAGER.email);

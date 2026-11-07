@@ -82,11 +82,15 @@ test("login, dashboard, reports, a lightbox and billing load without CSP violati
 
   await page.goto("/login");
   await expect(page.getByTestId("demo-accounts")).toBeVisible();
-  await expect(page.locator(".brand-mark i").first()).toBeVisible();
+  await expect(page.getByTestId("login-heading")).not.toBeEmpty();
 
   await signInViaApi(page);
   await page.goto("/");
   await expect(page.getByTestId("recent-report-row")).toHaveCount(5);
+  // T-002d scenario 8: the theme is applied through the CSSOM, so the header is themed under the
+  // policy and no <style> element exists (built app only; the Vite dev server injects them).
+  await expect(page.locator(".topbar")).toHaveCSS("background-color", "rgb(31, 81, 48)");
+  expect(await page.locator("style").count()).toBe(0);
   await page.goto("/reports");
   await expect(page.getByTestId("reports-table")).toBeVisible();
   await page.goto(`/reports/${withPhotos.id}`);

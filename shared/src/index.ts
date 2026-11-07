@@ -13,6 +13,9 @@ export {
   useInvoices,
   shouldRetry,
 } from "./hooks/useManager";
+export { useBranding } from "./hooks/useBranding";
+export { useAdminSettings, useUpdateAdminSettings } from "./hooks/useAdmin";
+export * from "./branding";
 export { useLogin, useMe, useLogout, useDemoAccounts } from "./auth/hooks";
 export * from "./filters";
 export * from "./format/money";
@@ -44,5 +47,6 @@ export type {
   ReviewStatus,
   Role,
   User,
+  AdminSettingsUpdate,
 } from "./generated";
 export * from "./format/address";

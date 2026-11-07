@@ -6,6 +6,7 @@ const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
 
 export default defineConfig({
   testDir: "./tests",
+  globalSetup: "./tests/global-setup.ts",
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
@@ -19,5 +20,16 @@ export default defineConfig({
       args: process.getuid?.() === 0 ? ["--no-sandbox"] : [],
     },
   },
-  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
+  // Tests that change the company settings run after everything else and one at a time, so no
+  // other test can see a half-changed theme or name. Each of them restores the defaults.
+  projects: [
+    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /settings-writes\.spec\.ts/ },
+    {
+      name: "settings-writes",
+      use: { browserName: "chromium" },
+      testMatch: /settings-writes\.spec\.ts/,
+      fullyParallel: false,
+      dependencies: ["chromium"],
+    },
+  ],
 });

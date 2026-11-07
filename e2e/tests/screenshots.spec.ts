@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { expect, test, ManagerApi, signInViaApi } from "./support";
+import { expect, test, ADMIN, ManagerApi, signInViaApi } from "./support";
 
 // Opt-in visual review: SCREENSHOT_DIR=/some/dir npx playwright test screenshots
 const dir = process.env.SCREENSHOT_DIR;
@@ -46,5 +46,15 @@ for (const size of sizes) {
     await page.goto("/billing");
     await expect(page.getByTestId("invoices-table")).toBeVisible();
     await shot("billing");
+  });
+
+  test(`admin settings screenshot at ${size.name} width`, async ({ page }) => {
+    mkdirSync(dir!, { recursive: true });
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await signInViaApi(page, ADMIN);
+    await page.goto("/settings");
+    await expect(page.getByTestId("settings-page")).toBeVisible();
+    await expect(page.getByTestId("brand-name")).not.toBeEmpty();
+    await page.screenshot({ path: `${dir}/admin-settings-${size.name}.png`, fullPage: true });
   });
 }

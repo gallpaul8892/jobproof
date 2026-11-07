@@ -211,7 +211,7 @@ export function ReportDetailPage() {
   const data = query.data;
   // Signed photo URLs expire; a failed image refetches the report once a minute at most.
   const refreshPhotoUrls = useThrottledRefetch(query.refetch);
-  useDocumentTitle(data ? data.job.reference : "Report");
+  useDocumentTitle(data ? `Report ${data.job.reference}` : "Report");
 
   const notFound = query.error instanceof ApiError && (query.error.status === 404 || query.error.status === 422);
   const back = (

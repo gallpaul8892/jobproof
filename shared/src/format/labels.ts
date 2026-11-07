@@ -6,6 +6,7 @@ import type {
   JobType,
   PhotoStage,
   ReviewStatus,
+  Role,
 } from "../generated";
 
 type Label<T extends string> = Record<T, string>;
@@ -40,6 +41,7 @@ const CUSTOMER_TYPE: Label<CustomerType> = {
   business: "Business",
 };
 const STAGE: Label<PhotoStage> = { before: "Before", during: "During", after: "After" };
+const ROLE: Label<Role> = { manager: "Manager", painter: "Painter", admin: "Admin" };
 const METHOD: Record<string, string> = { card: "Card", bank_transfer: "Bank transfer", cash: "Cash" };
 const PAYMENT_KIND: Record<string, string> = { deposit: "Deposit", invoice: "Invoice payment" };
 const QUOTE_STATUS: Record<string, string> = {
@@ -64,3 +66,4 @@ export const photoStageLabel = (v: PhotoStage) => lookup(STAGE, v);
 export const paymentMethodLabel = (v: string) => lookup(METHOD, v);
 export const paymentKindLabel = (v: string) => lookup(PAYMENT_KIND, v);
 export const quoteStatusLabel = (v: string) => lookup(QUOTE_STATUS, v);
+export const roleLabel = (v: Role) => lookup(ROLE, v);
