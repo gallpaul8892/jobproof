@@ -1,0 +1,74 @@
+{
+  "id": "architect-t002",
+  "title": "Architect report: company branding, Admin, review and editing (T-002)",
+  "agent": "architect",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-07",
+  "summary": "Wrote the technical plans for all 13 T-002 tickets, updated the API contract (the agreement between the server and the web app) and the architecture document. The work is split into three packages that engineers build one after another. Paul's open questions were answered with the defaults written in the tickets; any of them can still be changed. No application code was written.",
+  "blocks": [
+    {
+      "heading": "Documents produced",
+      "type": "list",
+      "open": true,
+      "items": [
+        {"label": "specs/T-002a.md to T-002m.md", "text": "One technical plan per ticket: what is stored, what the server offers, what each screen does, and how each scenario is tested."},
+        {"label": "specs/T-002-work-packages.md", "text": "The build order, and exactly which files each package creates or changes, so engineers do not tread on each other."},
+        {"label": "api/openapi.yaml (version 0.2.0)", "text": "Seven new operations: public branding, Admin settings (read, change, history), mark a report reviewed, edit a report, and report history. Plus the review queue on the dashboard and a sort option on the reports list. Checked with the contract linter and the client generator."},
+        {"label": "ARCHITECTURE.md", "text": "New section 16 with decisions D1 to D7, a database change plan (six steps), the Admin security model, how colours are applied safely, and new backlog items. The old 'T-002a hardening' backlog label is now T-003."}
+      ]
+    },
+    {
+      "heading": "Work packages (built in this order)",
+      "type": "table",
+      "columns": ["Package", "Tickets", "What it delivers"],
+      "rows": [
+        ["1. Branding and Admin", "T-002a, b, c, d, e", "Company settings record, Admin sign-in and Settings page, company name in the header and tab title, the new dark green look, colour scheme choice with readability checks"],
+        ["2. Review, edit, audit", "T-002k, g, h, f, i, j", "Dashboard queue of the next 5 reports, 'Mark as reviewed', a permanent change history, and editing notes and checklist safely when two managers work at once"],
+        ["3. Wording and demo data", "T-002l, T-002m (optional)", "'Operative' instead of 'Painter' on screen; an optional tree-surgery demo dataset"]
+      ]
+    },
+    {
+      "heading": "Key decisions in plain English",
+      "type": "list",
+      "open": true,
+      "items": [
+        {"label": "One copy of the app per company.", "text": "Each company gets its own installation and database. Its name and colours live in a single settings record that the Admin can change. This keeps each company's data completely separate and can grow into a shared multi-company system later."},
+        {"label": "Admin is a separate account.", "text": "The Admin sees only Settings: no reports or billing. Managers cannot open Settings. The server checks this on every request, not just the screens."},
+        {"label": "Colours that are hard to read are refused.", "text": "Both the header/button colour and the link colour must be clearly readable against white (the WCAG AA standard, 4.5 to 1). The server refuses anything weaker, and the page shows the problem before saving."},
+        {"label": "Colours change without breaking security.", "text": "The site's security policy forbids injected style code, so colours are set through the browser's own styling interface instead. The company name and colours are remembered in the browser so pages open in the right colours straight away, then checked for updates."},
+        {"label": "Nobody can overwrite someone else's work.", "text": "Every report has a version number. If two managers edit or review the same report, the second one is told who changed it and when, and keeps what they typed. Nothing is overwritten."},
+        {"label": "History cannot be rewritten.", "text": "Every review, edit and settings change is recorded with who, when, and old and new values. The database itself refuses any attempt to change or delete these records, and they are kept forever."},
+        {"label": "Editing a reviewed report sends it back for review.", "text": "'Reviewed' means 'this content was approved', so changing it reopens it. The history keeps who reviewed it before."},
+        {"label": "No product name on screen.", "text": "The word 'JobProof' and the old logo are removed. The app shows only the company's name, as text."}
+      ]
+    },
+    {
+      "heading": "Defaults used for Paul's open questions",
+      "type": "table",
+      "columns": ["Question", "Default used"],
+      "rows": [
+        ["Can the Admin see manager pages?", "No, separate accounts"],
+        ["Reject or warn on hard-to-read colours?", "Reject"],
+        ["Does editing a reviewed report reopen it?", "Yes"],
+        ["Which report fields can managers edit?", "Painter notes, checklist ticks and notes, and a new internal manager note"],
+        ["What to call field workers?", "Operative"],
+        ["Logo?", "No, company name as text only"],
+        ["Show 'JobProof' in the app?", "No"],
+        ["Where does the review queue go?", "Above 'Recent reports' on the dashboard"],
+        ["Who creates the first Admin in a real deployment?", "A documented one-line command run at setup"],
+        ["How long is history kept?", "Indefinitely"]
+      ]
+    },
+    {
+      "heading": "Risks and things to watch",
+      "type": "list",
+      "items": [
+        {"label": "Tests fail until the first ticket starts.", "text": "The contract now describes the finished state. The backend contract tests will fail until T-002a adds the small 'pending tickets' filter, which is its first step."},
+        {"label": "Database changes.", "text": "Six database steps, all reversible on test data. Undoing the history table would delete history, so that is only ever done on test data."},
+        {"label": "Tree-surgery jobs in a real deployment.", "text": "If T-002m is built, job types become data. A real Arbour deployment would still need its own job types loaded; how is a later decision (backlog B10)."},
+        {"label": "Document size.", "text": "ARCHITECTURE.md is now 474 lines. Once T-002 is built and the 'planned' entries are rewritten as built, it should shrink; if not, it will be split by component."}
+      ]
+    }
+  ]
+}

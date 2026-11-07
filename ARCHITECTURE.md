@@ -3,7 +3,9 @@
 Owner: architect. This is the system's memory: read it first, edit sections in place, link to
 files instead of copying code. Entries marked **(planned)** are specified but not yet built;
 everything else describes the code as it stands.
-Last updated: 2026-11-07 (end of Phase 1: T-001a to T-001d built; doc checked against the code).
+Last updated: 2026-11-07 (Phase 1 built and checked against the code; Phase 2a, epic T-002,
+specified and marked **(planned)**: decisions in section 16, build plan in
+[specs/T-002-work-packages.md](specs/T-002-work-packages.md)).
 
 ## 1. System overview
 
@@ -24,6 +26,10 @@ API described by [api/openapi.yaml](api/openapi.yaml).
 ```
 
 Phase 1 (built): manager persona, read-only, deterministic mock data, runs offline.
+Phase 2a (planned, T-002): Admin persona and company settings (name, colour scheme) with a
+public branding endpoint; managers mark reports reviewed and edit notes/checklist with
+optimistic concurrency and an append-only audit trail; dashboard review queue; neutral wording.
+Still web only and mock data. One deployment per company (D1).
 
 ## 2. Components and responsibilities
 
@@ -42,13 +48,19 @@ Phase 1 (built): manager persona, read-only, deterministic mock data, runs offli
 | `web/scripts/` | `check-dist.mjs` / `dist-origins.mjs`: build fails on any external URL not in the exact allowlist |
 | `shared/src/` | `@jobproof/shared`: `generated/` (hey-api output, committed), `api/` (client Adapter, `ApiError`, query keys, `TokenStore`), `auth/hooks.ts`, `hooks/` (health, manager), `filters.ts`, `format/` (money, dates, labels, address) |
 | `e2e/` | Playwright: auth, dashboard, reports, report detail, billing, states, layout, CSP, screenshots; helpers in `tests/support.ts` |
-| `api/openapi.yaml` | The contract. Hand-written OpenAPI 3.1, 10 operations. Backend conforms; clients generated from it |
+| `api/openapi.yaml` | The contract. Hand-written OpenAPI 3.1, v0.2.0: 17 operations (10 built, 7 planned for T-002, marked `x-ticket`). Backend conforms; clients generated from it |
 | `mobile/`, `infra/` | README only (Phase 2 and the AWS phase) |
+| **(planned, T-002)** `backend/app/branding/` | `defaults.py` (the only backend copy of the default name and theme), `contrast.py` (WCAG ratio) |
+| **(planned)** `backend/app/routers/branding.py`, `admin.py`; `services/settings.py`, `audit.py`, `review.py`, `report_edit.py`; `models/settings.py`, `audit.py`; `cli.py` | Branding (public), Admin router, the one settings accessor, audit store, review and edit writes, `create-admin` command |
+| **(planned)** `shared/src/branding/` | `defaults.ts` (only web/mobile copy of the default theme), `presets.ts`, `contrast.ts`, `companyName.ts`; hooks `useBranding`, `useAdmin`, `useReportWrites`; `history.ts`, `conflict.ts`, `reportEdit.ts` |
+| **(planned)** `web/src/theme/` | `applyTheme.ts` (CSSOM `setProperty` only), `brandingCache.ts` (localStorage snapshot), `BrandingProvider.tsx`; `pages/Settings.tsx`, `pages/report/*`, `pages/dashboard/ReviewQueue.tsx` |
 | `scripts/dev.sh` | No-Docker path: `up [--static] \| down \| status \| seed \| test \| e2e \| psql` |
 | `docker-compose.yml`, `Makefile`, `.env.example` | Docker stack and developer commands (see section 11 for what is unverified) |
 
 Web routes: `/login`, `/not-authorised`, and under the manager guard `/`, `/reports`,
-`/reports/:reportId`, `/billing`; `*` is NotFound.
+`/reports/:reportId`, `/billing`; `*` is NotFound. **(planned, T-002b)** the guard becomes
+`RequireRole role="manager"`, plus `/settings` under `RequireRole role="admin"`; after sign-in
+each role lands on its home (`web/src/app/roles.ts`).
 
 ## 3. Stack versions (verified 2026-11-07 against PyPI / npm; installed versions match)
 
@@ -77,6 +89,7 @@ security overrides (js-yaml, minimatch): section 13.1.
 | Contract | @hey-api/openapi-ts | 0.99.0 (exact) | 0.x churns: pin exactly |
 | Contract | @redocly/cli | 2.76.0 | config [api/redocly.yaml](api/redocly.yaml) |
 | E2E | @playwright/test | 1.65.0 | uses installed Chrome via `PLAYWRIGHT_CHROMIUM_EXECUTABLE` |
+| E2E | @axe-core/playwright | 4.14.0 | **(planned, T-002d)** colour-contrast checks; verified on npm 2026-11-07; e2e only, never in the bundle |
 | DB | PostgreSQL | 16 | `postgres:16-alpine`; RDS 16.x |
 | Web serve | nginx | `nginxinc/nginx-unprivileged:stable-alpine` | **tag not verified** (Docker Hub blocked); backlog B6 |
 | IaC | Terraform / AWS provider | 1.15.x / ~> 6.72 | not written yet |
@@ -100,11 +113,32 @@ have no issue/due date, a payment is a deposit against a quote xor a payment aga
 | `report_photos` | Before/during/after metadata; `storage_key` null = generated placeholder | built, migration 0001 |
 | `invoices` | Bill for a job; stored state draft/sent/paid/void, display status derived | built, migration 0001 |
 | `payments` | Deposit (against quote) or invoice payment | built, migration 0001 |
+| `company_settings` | The one settings row (`id = 1`): company name, five theme colours, `updated_at/by` (id + name snapshot, no FK) | planned, 0002 (T-002a) |
+| `users.role` | enum gains `admin` | planned, 0003 (T-002b) |
+| `job_reports` | + `version` (>= 1), `last_changed_at`, `last_changed_by_id` | planned, 0004 (T-002g) |
+| `audit_events` | Append-only events: actor id + name snapshot, action, report or settings, `changes` jsonb, `seq` order | planned, 0005 (T-002f) |
+| `job_reports.manager_notes` | Internal manager note | planned, 0006 (T-002i) |
+| `job_types` | Job types as data (code, label); `jobs.job_type` becomes text FK; enum dropped | planned, 0007 (T-002m, optional) |
 | `invoice_line_items` | Itemised invoice lines | later |
 | `payment_links` | Customer Stripe checkout links (capability token) | later |
 
 Migration: `backend/migrations/versions/0001_initial_schema.py` (revision `0001`), tested up,
 down, up and against the models (`backend/tests/test_migrations.py`).
+
+**Migration plan (planned, T-002), one linear chain, one revision per ticket, built in package
+order so no Alembic branches arise:**
+
+| Rev | Ticket | Change | Risk and downgrade |
+|---|---|---|---|
+| 0002 | T-002a | create `company_settings`, insert default row (`DEFAULT_COMPANY_NAME` env, else "Arbour Services"; hex codes frozen in the file) | none; drop table |
+| 0003 | T-002b | `ALTER TYPE user_role ADD VALUE 'admin'` | downgrade refuses if admins exist, else recreates the enum |
+| 0004 | T-002g | report `version` default 1, `last_changed_*` | additive; drop columns |
+| 0005 | T-002f | `audit_events`, enums, append-only triggers | downgrade drops the history: only ever run on non-production data |
+| 0006 | T-002i | `manager_notes` | additive |
+| 0007 | T-002m | `job_types` table, `jobs.job_type` enum to text FK | type change on `jobs`; downgrade refuses non-painting codes |
+
+The seed never touches `company_settings` (excluded from its truncate; no FK into it, so CASCADE
+cannot reach it) and sets `jobproof.allow_audit_truncate` for its own transaction only.
 
 Derived invoice status: pure function in `backend/app/services/billing.py`, SQL twin in
 `billing_sql.py`: `void` > `draft` > `paid` (balance 0) > `overdue` (due date before today,
@@ -128,6 +162,17 @@ customer equals the job's customer is guaranteed only by the seed and applicatio
 - Filters: one query param per field; `q` is a case-insensitive contains search (1 to 100
   chars); `date_from`/`date_to` inclusive London calendar days. Fixed server-side sort.
 - Every response carries `X-Request-ID` (echoed if the client sent one).
+- **Writes (planned, T-002):** partial updates are `PATCH` with `extra="forbid"` (unknown or
+  read-only keys are 422 naming the key); actions are `POST .../{verb}` (`/review`). Report
+  writes carry `version` (optimistic concurrency): mismatch is 409 `version_conflict` with
+  problem extensions `current_version`, `last_changed_at`, `last_changed_by`, review fields and,
+  for PATCH, `current` values of the attempted fields. A no-op write returns 200 unchanged and
+  records nothing. A write and its audit events commit in one transaction under a row lock.
+  New codes: `contrast_too_low` (422, `errors[]` with `measured_ratio`/`required_ratio`),
+  `version_conflict`, `already_reviewed` (409). `ProblemError` carries `errors` and `extensions`.
+- **Contract staging (planned, T-002a):** `x-ticket: T-002x` marks contract items not yet built;
+  `backend/tests/contract.py` `PENDING_TICKETS` hides them from parity and schema checks until
+  the ticket lands. The generated client is regenerated once per epic.
 - Contract parity: backend tests validate every response against the schema and check that
   routes and operations match (`test_route_parity.py`); `npm run gen:check` fails on stale
   generated client. Workflow: [specs/T-000-bootstrap.md](specs/T-000-bootstrap.md) section 5.
@@ -141,18 +186,26 @@ customer equals the job's customer is guaranteed only by the seed and applicatio
 | Adapter | `shared/src/api/client.ts` `configureApiClient` / `callApi` over the generated client | Runtime base URL, bearer header, 15 s timeout with abort, Problem errors to `ApiError`, 401 handler. No DOM access |
 | (none) | Authorisation: `require_roles(...)` in `backend/app/deps.py` | Role-only rules. Revisit as a per-persona Policy when painter ownership rules arrive |
 | (none) | Invoice status: pure functions plus SQL twins | No transitions in Phase 1, so no State |
+| (none) | **(planned)** Settings accessor `services/settings.py`; single-row table with `CHECK (id = 1)` | D1: name and theme read in one place; no in-process cache (multiple ECS tasks) |
+| (none) | **(planned)** Concurrency: `SELECT ... FOR UPDATE` + version compare in `services/review.py`, `report_edit.py` | Needs old values for audit and 409 bodies; simpler than conditional UPDATE |
+| (none) | **(planned)** Audit: explicit `record_event` calls in each write service, same transaction; DB triggers make the table append-only | Explicit beats ORM listeners for "who/what/old/new"; failed writes leave no trace automatically |
+| (none) | **(planned)** Theming: `applyTheme` sets CSS custom properties through the CSSOM | CSP-safe (no `<style>`, no inline style attributes); see section 9 |
+| Data record | **(planned, T-002m)** `SeedProfile` registry in `backend/app/seed/profiles/` | Profiles differ in content only, not behaviour |
 
 ## 7. Personas and permissions (as implemented)
 
-| Capability | Manager | Painter | Customer | Anonymous |
-|---|---|---|---|---|
-| `GET /health`, `POST /auth/login` | yes | yes | n/a | yes |
-| `GET /auth/demo-accounts` | yes when `DEMO_ACCOUNTS_ENABLED`, else 404 | same | n/a | same |
-| `GET /auth/me` | yes | yes | n/a | 401 |
-| `GET /manager/*` (dashboard, painters, reports, reports/{id}, invoices) | yes | 403 `forbidden` | n/a | 401 `unauthenticated` |
-| `GET /photos/{id}/image` | by valid signature only; no bearer token involved | | | |
-| Painter capture endpoints | later | own jobs (Phase 2) | | |
-| Customer payment link | | | token in link (later) | |
+| Capability | Manager | Admin (planned) | Painter | Customer | Anonymous |
+|---|---|---|---|---|---|
+| `GET /health`, `POST /auth/login` | yes | yes | yes | n/a | yes |
+| `GET /branding` (planned, T-002a) | yes | yes | yes | n/a | yes |
+| `GET /auth/demo-accounts` | yes when `DEMO_ACCOUNTS_ENABLED`, else 404 | same | same | n/a | same |
+| `GET /auth/me` | yes | yes | yes | n/a | 401 |
+| `GET /manager/*` (dashboard, painters, reports, reports/{id}, invoices) | yes | 403 | 403 `forbidden` | n/a | 401 `unauthenticated` |
+| planned: `POST /manager/reports/{id}/review`, `PATCH /manager/reports/{id}`, `GET .../history` | yes | 403 | 403 | n/a | 401 |
+| planned: `GET/PATCH /admin/settings`, `GET /admin/settings/history` | 403 | yes | 403 | n/a | 401 |
+| `GET /photos/{id}/image` | by valid signature only; no bearer token involved | | | | |
+| Painter capture endpoints | later | | own jobs (Phase 2) | | |
+| Customer payment link | | | | token in link (later) | |
 
 401 means no, invalid or expired token, or an inactive/missing user (with `WWW-Authenticate:
 Bearer`); 403 means a valid user whose database role is not allowed. Wrong email or password is
@@ -161,7 +214,7 @@ a uniform 401 `invalid_credentials`. Demo accounts (one manager, one painter, fr
 `.env.example` enables it locally and the config refuses it in production.
 
 Web: nothing under the manager guard (`web/src/app/guards.tsx`) mounts until `/auth/me` returns;
-a non-manager is sent to `/not-authorised`. A 401 on an authenticated call clears the token and
+a non-manager is sent to `/not-authorised` (planned: the same per role for `/settings`). A 401 on an authenticated call clears the token and
 goes to `/login?expired=1&from=...` (a failed sign-in is not treated as a lost session).
 
 ## 8. Authentication (Phase 1)
@@ -198,6 +251,49 @@ bearer contract stays the same.
 - **Bundle origin check**: exact-string allowlist, section 12.
 - **Photo URLs**: HMAC-SHA256 over `photo_id:variant:exp`, constant-time compare, TTL
   `PHOTO_URL_TTL_SECONDS`; the web refetches the report once (throttled) when images expire.
+- **Container entrypoint shells must be POSIX and busybox-safe** (lesson from the first Docker
+  run, B4): the nginx image is Alpine, whose `sh`, `tr`, `grep`, `sed` are busybox. Use only
+  POSIX `sh` (no bash arrays, `[[ ]]`, `local`, `pipefail`), `case` patterns and `grep -E`;
+  no `tr` character classes like `[:print:]`, no GNU-only flags (`sed -r`, `grep -P`). Any
+  change to `web/nginx/*.sh` runs the busybox regression test (`BUSYBOX=... vitest`).
+
+### 9.1 Admin persona security model (planned, T-002b to T-002f)
+
+- **Separation (D2):** one role per user. Admin endpoints live on one router guarded by
+  `require_roles(admin)`; manager endpoints by `require_roles(manager)`. Admin gets 403 on every
+  manager operation and vice versa; tests enumerate operations from the contract. The role is
+  reloaded from the database on every request, so a role change or deactivation applies at once.
+- **What Admin can do:** read and change company name and the two brand colours, and read
+  settings history. Nothing else: no reports, billing, users or audit of reports.
+- **Account creation:** no user-management UI. Local/test: seeded `admin@jobproof.test`. Other
+  environments: `python -m app.cli create-admin --email ... --full-name ...` (password from
+  `ADMIN_INITIAL_PASSWORD` or a prompt, >= 12 chars, never logged; refuses existing emails).
+- **Input handling:** company name trimmed, 1 to 60 code points, no control characters; rendered
+  only as text (JSX, `document.title`). Colours must match `#RRGGBB` before contrast is checked,
+  are stored upper case under a DB check, and are validated again on the client before
+  `setProperty`, so no CSS or markup can be injected through settings. Contrast below 4.5:1 is
+  rejected server-side whatever the client does, so the app can never become unreadable.
+- **Public exposure:** `GET /branding` returns only name and colours (no ids, users, times).
+- **Audit:** every real settings change writes `settings.changed` (old/new) in the same
+  transaction; only Admin can read it. Bearer tokens in headers (no cookies), so no CSRF surface.
+- **Audit integrity:** `audit_events` rejects UPDATE, DELETE and TRUNCATE by trigger for every
+  role (TRUNCATE allowed only when the seed sets `jobproof.allow_audit_truncate` in its own
+  local/test transaction). Events are kept indefinitely. In AWS the app additionally connects as a
+  role with only SELECT and INSERT on `audit_events` (section 10).
+
+### 9.2 Theming under the CSP (planned, T-002d)
+
+The CSP has no `style-src` override, so `default-src 'self'` blocks inline `<style>` and
+`style="..."` markup. Themes are applied **only** by `web/src/theme/applyTheme.ts` calling
+`document.documentElement.style.setProperty("--jp-primary", value)` (CSSOM, not governed by
+CSP); the stylesheet only references `var(--jp-*)`, and derived shades use `color-mix()`. React
+`style` props (swatches, preview) are CSSOM too. No `'unsafe-inline'`, hashes or nonces are added.
+Branding caching: server `Cache-Control: no-cache`; client TanStack Query `["branding"]` with
+5 min `staleTime` and refetch on focus; a validated localStorage snapshot
+(`jobproof.branding.v1`, per origin = per deployment) paints the first frame and is revalidated
+immediately; with no snapshot the brand area stays empty until `/branding` answers; on failure the
+default theme and the neutral "Sign in" heading are used. CloudFront must forward the API's
+`Cache-Control` unchanged if it ever fronts the API.
 
 ## 10. AWS deployment layout (planned, later phase)
 
@@ -208,6 +304,11 @@ web_static, photos_bucket, ci_roles}` and `envs/{staging,prod}`; state in S3 wit
   (RDS Postgres 16, Multi-AZ in prod).
 - ECS Fargate backend behind an ALB (HTTPS, ACM, health check `/health`). Secrets Manager:
   `DATABASE_URL`, `JWT_SECRET`, `PHOTO_URL_SECRET`. Set `APP_ENV` explicitly per environment.
+- **(planned, from T-002)** One stack per company (D1): its own RDS database, domain and
+  `DEFAULT_COMPANY_NAME` on the migration task. Two DB roles: a migrator (owns the schema, used by
+  the migration task) and an app role (DML on business tables, only SELECT and INSERT on
+  `audit_events`). First Admin via a one-off `python -m app.cli create-admin` task with
+  `ADMIN_INITIAL_PASSWORD` from a short-lived secret.
 - Deploy: CI builds and pushes to ECR, runs a one-off ECS task `alembic upgrade head`, then a
   rolling service update. The seed is never run outside local/test.
 - Web: `vite build` to a private S3 bucket behind CloudFront (OAC); SPA fallback; per-environment
@@ -243,7 +344,14 @@ in this order:
 7. Then run `make e2e` against it (same URLs as the dev path).
 
 URLs in both paths: web http://localhost:8080, API http://localhost:8000 (no Swagger UI; the
-contract file is the docs). First `docker compose build` / `npm ci` / `uv sync` needs network;
+contract file is the docs).
+
+**(planned, T-002)** Demo accounts add `manager2@jobproof.test` / `Manager123!` (Priya Nair) and
+`admin@jobproof.test` / `Admin123!` (Tom Ashworth). `DEFAULT_COMPANY_NAME` (optional) is read
+once by migration 0002 on an empty database. Reseeding keeps the company settings; e2e global
+setup restores the default name and theme through the API. Real Admin accounts:
+`python -m app.cli create-admin --email EMAIL --full-name NAME`. `SEED_PROFILE=tree_surgery`
+selects the tree-surgery dataset (T-002m, optional). First `docker compose build` / `npm ci` / `uv sync` needs network;
 running afterwards needs none. Details: [specs/T-000-bootstrap.md](specs/T-000-bootstrap.md) §4.
 
 ## 12. Key decisions and Phase 1 deviations
@@ -311,14 +419,17 @@ before any deployment (backlog B7).
 
 | # | Item | Owner | Suggested ticket |
 |---|---|---|---|
-| B1 | `page` has no upper bound and the contract has no `maximum`. Architect adds `maximum` (e.g. 10000) to the `Page` parameter in `api/openapi.yaml`, regenerates the client (`npm run gen`); backend adds `le=` in `backend/app/routers/manager.py`; add a 422 test | architect, then backend | T-002a hardening |
-| B2 | Invoice customer must equal the job's customer: enforced by seed and app only. Option: unique `(id, customer_id)` on jobs and a composite FK `(job_id, customer_id)` from invoices (new Alembic revision) | architect, then backend | T-002a hardening |
+| B1 | `page` has no upper bound and the contract has no `maximum`. Architect adds `maximum` (e.g. 10000) to the `Page` parameter in `api/openapi.yaml`, regenerates the client (`npm run gen`); backend adds `le=` in `backend/app/routers/manager.py`; add a 422 test | architect, then backend | T-003 hardening |
+| B2 | Invoice customer must equal the job's customer: enforced by seed and app only. Option: unique `(id, customer_id)` on jobs and a composite FK `(job_id, customer_id)` from invoices (new Alembic revision, after 0007) | architect, then backend | T-003 hardening |
 | B3 | Pin Docker base image tags and digests. Search `TODO(pin)` (compose, `backend/Dockerfile`); also `web/Dockerfile` (`node:22-alpine`, nginx), which has no `TODO(pin)` marker | backend, web | First Docker run ticket |
-| B4 | First real `make up` and `make e2e` under Docker (section 11) | orchestrator on a Docker host | First Docker run ticket | First run found: the entrypoint used a `tr` class busybox lacks (fixed; test with `BUSYBOX=... vitest`). Remaining web-image steps (nginx start, healthcheck) still unverified.
+| B4 | First real `make up` and `make e2e` under Docker (section 11). First run found the entrypoint used a `tr` class busybox lacks (fixed; rule in section 9). Remaining web-image steps (nginx start, healthcheck) still unverified | orchestrator on a Docker host | First Docker run ticket |
 | B5 | Blackhole connect-timeout test (`backend/tests/test_health.py`) skips in the sandbox; needs CI or a local accept-but-never-reply socket | backend | CI ticket |
 | B6 | nginx image tag `stable-alpine` not verified | web | First Docker run ticket |
 | B7 | Run `pip-audit` (never run) | dependency-checker | Weekly dependency ticket |
 | B8 | Weekly dependency-check schedule once the repo is on GitHub | orchestrator | CI ticket |
+| B9 | Naming debt: API/DB say `painter` (`painter_id`, role `painter`, `/manager/painters`) while the UI says "Operative" (T-002l). Rename with a contract version bump when the field-worker app is specified | architect | Phase 2 painter-app spec |
+| B10 | A non-painting production deployment needs its own job types; 0007 only inserts painting types and there is no management screen (T-002m) | architect, product owner | before the first Arbour production deployment |
+| B11 | Separate migrator and app DB roles (audit append-only defence in depth, section 9.1) | infra | AWS phase |
 
 ## 15. Phase 2 starting points (painter mobile app, Expo)
 
@@ -337,3 +448,27 @@ Not a spec; the Phase 2 spec will define screens and contract changes.
 - **Design changes that follow:** ownership rules (painter sees only own jobs) make the
   per-persona Policy worth introducing; first write endpoints need idempotency and validation
   conventions; the painter role currently gets 403 on all manager endpoints and that stays.
+- **(from T-002)** Write conventions now exist (section 5): reuse `version`/409 for report
+  drafts. `manager_notes` is internal: painter endpoints must never return it. Mobile reuses
+  `useBranding` (AsyncStorage snapshot), `DEFAULT_THEME`, `contrast.ts`, `buildReportUpdate`.
+
+## 16. Phase 2a decisions (T-002, planned)
+
+Product decisions D1 to D7 are in [the epic](tickets/T-002-admin-branding-review-workflow.md);
+these are the technical choices that implement them. Specs: `specs/T-002a.md` to `T-002m.md`;
+build order and file ownership: [specs/T-002-work-packages.md](specs/T-002-work-packages.md).
+Open questions were answered with the epic's defaults (Paul has not replied); each spec lists
+them as assumptions.
+
+| # | Decision | How (technical) |
+|---|---|---|
+| D1 | One deployment per company; multi-tenancy later | `company_settings` single row (`CHECK (id = 1)`), read only via `services/settings.py`; defaults only in `backend/app/branding/defaults.py` and `shared/src/branding/defaults.ts` (a test keeps them equal and scans for strays). No "JobProof" or company name in the UI bundle. Multi-tenancy later = `tenant_id` on settings and tables, resolve tenant from host |
+| D2 | Admin is a separate role that sees Settings only | `user_role` + `admin`; admin router guard; web `RequireRole`; per-role home. Section 9.1 |
+| D3 | Explicit review; editing a reviewed report reopens it | `POST /review` with version; PATCH reopens in the same transaction and records `report.reopened` with the previous reviewer |
+| D4 | Editable: painter notes, checklist done/note, new manager notes | `ReportUpdate` with `extra="forbid"` at every level; everything else 422 |
+| D5 | Optimistic concurrency | `job_reports.version`, row lock + compare, 409 with current state |
+| D6 | Default theme dark green, white page; AA enforced (reject) | Five tokens, two editable; WCAG 2.2 ratio vs white >= 4.5 (unrounded) on server and client; CSSOM theming (section 9.2); presets Forest, Navy, Charcoal, Burgundy |
+| D7 | Neutral wording; optional tree-surgery data | "Operative" in the label module only (API names unchanged, B9); job types become data (`job_types`) only if T-002m is built |
+
+Other defaults applied: Admin cannot see manager data; text name only, no logo; queue above
+"Recent reports"; tab title "Page | Company"; audit kept indefinitely; no Admin history screen.

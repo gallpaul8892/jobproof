@@ -6,13 +6,18 @@ completion report. Head-office managers review those reports in a web app; the r
 photos are evidence used to bill customers. Customers later pay by secure Stripe link. Quotes
 work the same way, with a deposit taken before work starts.
 
-Personas: **Manager** (head office), **Painter** (field), **Customer** (pays via link).
+Personas: **Manager** (head office), **Painter** (field), **Customer** (pays via link), **Admin**
+(company settings: name, colour scheme).
 
 ## Current phase
-Phase 1: **Manager persona only, read-only, mock data.** The manager's journey is to view data
-(dashboard, job reports with photo evidence, billing status). No uploads, no Stripe, no mobile
-yet. Later phases: painter capture (Expo), customer payment (Stripe), quotes and deposits,
-AWS deployment.
+Phase 2a (ticket epic [T-002](tickets/T-002-admin-branding-review-workflow.md)): **Manager and
+Admin personas, mock data, web app only.** **This ends Phase 1's read-only constraint.** Write
+endpoints now exist for: Admin settings (company name, colour scheme), marking reports reviewed,
+and manager edits to report notes and checklist (audited, optimistic concurrency). Report photos
+stay read-only. Deployment model: one deployment per company, configured by a settings record;
+true multi-tenancy is deliberately deferred (decision D1 in T-002). Still out of scope: painter
+capture (Expo), customer payment (Stripe), quotes and deposits, AWS deployment. The mock data is
+still painting and decorating; UI wording is industry-neutral (T-002l).
 
 ## Stack (fixed)
 - Backend: FastAPI (Python 3.13), SQLAlchemy 2.x, Alembic, Pydantic v2, PostgreSQL

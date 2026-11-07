@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: JobProof API
-  version: 0.1.0
+  version: 0.2.0
   summary: Contract between the JobProof backend and its web and mobile clients.
   description: |
     Source of truth for the JobProof API (see ARCHITECTURE.md section 5 for conventions).
@@ -11,9 +11,16 @@ info:
     - Money is integer pence (`*_pence`) with `currency` `GBP`.
     - Errors are RFC 9457 problem details (`application/problem+json`).
     - List endpoints are offset paginated with `page` (1-based) and `page_size` (max 100).
-    - Phase 1 is manager-only and read-only. Every `/api/v1/manager/*` operation requires a
-      bearer token whose user has role `manager`: no token or an invalid/expired token gives 401,
-      any other role gives 403.
+    - Personas (one role per user): every `/api/v1/manager/*` operation requires role `manager`
+      and every `/api/v1/admin/*` operation requires role `admin`. No token or an invalid/expired
+      token gives 401 `unauthenticated`; a valid token with any other role gives 403 `forbidden`.
+      An admin gets 403 on manager operations and a manager gets 403 on admin operations.
+    - Writes (Phase 2a, T-002): Admin settings, marking a report reviewed and editing a report.
+      Report writes use optimistic concurrency: the body carries the `version` the client loaded;
+      a mismatch is 409 `version_conflict` and nothing is saved.
+    - `x-ticket` marks operations, parameters and properties added by a T-002 ticket. Backend
+      contract tests ignore items whose ticket is listed in `PENDING_TICKETS`
+      (`backend/tests/contract.py`) until that ticket is built.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -25,8 +32,12 @@ tags:
     description: Liveness and readiness for load balancers and compose healthchecks.
   - name: auth
     description: Sign-in and current user.
+  - name: branding
+    description: Public company name and theme (no sign-in needed).
+  - name: admin
+    description: Admin-only company settings.
   - name: manager
-    description: Manager-only read endpoints (Phase 1).
+    description: Manager-only endpoints (reports, review, edit, history, billing).
   - name: photos
     description: Signed photo image delivery.
 security:
@@ -107,11 +118,94 @@ paths:
                 items: { $ref: "#/components/schemas/DemoAccount" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/branding:
+    get:
+      tags: [branding]
+      operationId: getBranding
+      x-ticket: T-002a
+      summary: Company name and theme for this deployment
+      description: |
+        Public: used by the login page before anyone signs in. Returns only the company name and
+        the theme. Clients should revalidate on every load (`Cache-Control: no-cache`).
+      security: []
+      responses:
+        "200":
+          description: Branding
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-cache }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Branding" }
+
+  /api/v1/admin/settings:
+    get:
+      tags: [admin]
+      operationId: getAdminSettings
+      x-ticket: T-002b
+      summary: Current company settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [admin]
+      operationId: updateAdminSettings
+      x-ticket: T-002c
+      summary: Change the company name and/or colour scheme
+      description: |
+        Partial update. Send `company_name`, `theme` or both. A field that is omitted is
+        unchanged. A save that changes nothing returns 200 with the current settings, leaves
+        `updated_at`/`updated_by` alone and records no audit event. Last write wins (single
+        settings record, no version). Colours are accepted in either case and stored upper case.
+        Each of `theme.primary` and `theme.accent` must reach 4.5:1 contrast against `#FFFFFF`
+        (WCAG 2.2 AA), else 422 `contrast_too_low` with one `errors` entry per failing colour
+        carrying `measured_ratio` and `required_ratio`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSettingsUpdate" }
+      responses:
+        "200":
+          description: Saved (or unchanged)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: |
+            Invalid body (code `validation_error`) or a colour below 4.5:1 against white (code
+            `contrast_too_low`). Format errors are reported before contrast.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/admin/settings/history:
+    get:
+      tags: [admin]
+      operationId: listAdminSettingsHistory
+      x-ticket: T-002f
+      summary: Settings change history, newest first (latest 100)
+      responses:
+        "200":
+          description: Audit events for the settings record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditHistory" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /api/v1/manager/dashboard:
     get:
       tags: [manager]
       operationId: getManagerDashboard
-      summary: Summary figures and the five most recent reports
+      summary: Summary figures, the review queue and the five most recent reports
       responses:
         "200":
           description: Dashboard
@@ -125,7 +219,7 @@ paths:
     get:
       tags: [manager]
       operationId: listManagerPainters
-      summary: All painters, for filter options
+      summary: All field workers (role painter; "Operatives" in the UI), for filter options
       responses:
         "200":
           description: Painters ordered by name
@@ -143,12 +237,17 @@ paths:
       operationId: listManagerReports
       summary: Paginated, filterable list of job completion reports
       description: |
-        Sorted by `completed_on` descending, then `submitted_at` descending, then
-        `job_reference` descending. All filters combine with AND. `total` is the count of all
-        matching rows across pages.
+        `sort=default` (or no `sort`): `completed_on` descending, then `submitted_at`
+        descending, then `job_reference` descending. `sort=submitted_asc`: `submitted_at`
+        ascending, then `job_reference` ascending (the review queue order). All filters combine
+        with AND. `total` is the count of all matching rows across pages.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - name: sort
+          in: query
+          x-ticket: T-002k
+          schema: { $ref: "#/components/schemas/ReportSort" }
         - name: review_status
           in: query
           schema: { $ref: "#/components/schemas/ReviewStatus" }
@@ -199,6 +298,110 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReportDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    patch:
+      tags: [manager]
+      operationId: updateManagerReport
+      x-ticket: T-002i
+      summary: Edit painter notes, manager notes and checklist done/note
+      description: |
+        Partial update with optimistic concurrency. `version` is the version the client loaded
+        and is required. Only `painter_notes`, `manager_notes` and, per existing checklist item,
+        `done` and `note` are editable; any other field (photos, labels, review fields, job,
+        customer, unknown keys) is 422. An empty or whitespace-only notes string is stored as
+        null. Order of checks: body validation (422), report exists (404), checklist ids belong
+        to this report and are unique (422), version matches (409 `version_conflict`). If the
+        body repeats the current values the response is 200 with the same `version`, nothing is
+        written and no audit event is recorded. Otherwise `version` increases by 1, a
+        `report.edited` event is recorded, and if the report was reviewed it returns to
+        `awaiting_review` with `reviewed_at`/`reviewed_by` cleared and a `report.reopened` event.
+        All in one transaction.
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportUpdate" }
+      responses:
+        "200":
+          description: Saved (or unchanged); the full, current report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The report changed since the client loaded it (code `version_conflict`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/VersionConflictProblem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/manager/reports/{report_id}/review:
+    post:
+      tags: [manager]
+      operationId: reviewManagerReport
+      x-ticket: T-002g
+      summary: Mark an awaiting-review report as reviewed
+      description: |
+        Records the caller and the server time as reviewer, increases `version` by 1 and records
+        a `report.reviewed` event. Order of checks: body (422), report exists (404), version
+        matches (409 `version_conflict`), not already reviewed (409 `already_reviewed`).
+        Concurrent calls are serialised by a row lock: exactly one succeeds.
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewRequest" }
+      responses:
+        "200":
+          description: Reviewed; the full, current report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Stale version (`version_conflict`) or already reviewed (`already_reviewed`)
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/VersionConflictProblem"
+                  - $ref: "#/components/schemas/AlreadyReviewedProblem"
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/manager/reports/{report_id}/history:
+    get:
+      tags: [manager]
+      operationId: listManagerReportHistory
+      x-ticket: T-002f
+      summary: Audit events for one report, newest first (latest 100)
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: History
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditHistory" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -340,10 +543,13 @@ components:
             - validation_error
             - invalid_signature
             - internal_error
+            - contrast_too_low
+            - version_conflict
+            - already_reviewed
         request_id: { type: string }
         errors:
           type: array
-          description: Present for `validation_error`.
+          description: Present for `validation_error` and `contrast_too_low`.
           items: { $ref: "#/components/schemas/FieldError" }
 
     FieldError:
@@ -355,6 +561,16 @@ components:
           items: { oneOf: [{ type: string }, { type: integer }] }
           examples: [["query", "page_size"]]
         message: { type: string }
+        measured_ratio:
+          type: number
+          x-ticket: T-002e
+          description: "`contrast_too_low` only: the colour's contrast against white, rounded to 2 decimals (never shown as 4.50 when below 4.5)"
+          examples: [2.78]
+        required_ratio:
+          type: number
+          x-ticket: T-002e
+          description: "`contrast_too_low` only"
+          examples: [4.5]
 
     Health:
       type: object
@@ -366,7 +582,8 @@ components:
 
     Role:
       type: string
-      enum: [manager, painter]
+      description: "`painter` is the field worker, shown as \"Operative\" in the UI (T-002l)."
+      enum: [manager, painter, admin]
 
     LoginRequest:
       type: object
@@ -437,6 +654,10 @@ components:
       description: "`awaiting_review` = submitted by painter, not yet reviewed by a manager."
       enum: [awaiting_review, reviewed]
 
+    ReportSort:
+      type: string
+      enum: [default, submitted_asc]
+
     InvoiceStatus:
       type: string
       description: |
@@ -475,6 +696,7 @@ components:
         - outstanding_pence
         - overdue_invoice_count
         - currency
+        - review_queue
         - recent_reports
       properties:
         as_of: { type: string, format: date-time, description: Server "now" used for the figures }
@@ -495,6 +717,15 @@ components:
           description: Sum of `balance_pence` over invoices with status sent, part_paid or overdue.
         overdue_invoice_count: { type: integer, minimum: 0 }
         currency: { $ref: "#/components/schemas/Currency" }
+        review_queue:
+          type: array
+          maxItems: 5
+          x-ticket: T-002k
+          description: |
+            Up to five awaiting-review reports that have waited longest: `submitted_at`
+            ascending, then `job_reference` ascending. Same order as
+            `GET /manager/reports?review_status=awaiting_review&sort=submitted_asc`.
+          items: { $ref: "#/components/schemas/ReportSummary" }
         recent_reports:
           type: array
           maxItems: 5
@@ -674,7 +905,11 @@ components:
         - submitted_at
         - reviewed_at
         - reviewed_by
+        - version
+        - last_changed_at
+        - last_changed_by
         - painter_notes
+        - manager_notes
         - billing_status
         - job
         - customer
@@ -693,7 +928,26 @@ components:
           oneOf:
             - $ref: "#/components/schemas/PersonRef"
             - type: "null"
+        version:
+          type: integer
+          minimum: 1
+          x-ticket: T-002g
+          description: Starts at 1; +1 on every real change (edit or review). Send it back on writes.
+        last_changed_at:
+          type: [string, "null"]
+          format: date-time
+          x-ticket: T-002g
+          description: Time of the last review or edit; null if never changed since submission
+        last_changed_by:
+          x-ticket: T-002g
+          oneOf:
+            - $ref: "#/components/schemas/PersonRef"
+            - type: "null"
         painter_notes: { type: [string, "null"] }
+        manager_notes:
+          type: [string, "null"]
+          x-ticket: T-002i
+          description: Internal note by managers; never shown to the painter
         billing_status: { $ref: "#/components/schemas/BillingStatus" }
         job: { $ref: "#/components/schemas/JobDetail" }
         customer: { $ref: "#/components/schemas/CustomerDetail" }
@@ -759,3 +1013,197 @@ components:
         total: { type: integer, minimum: 0 }
         page: { type: integer, minimum: 1 }
         page_size: { type: integer, minimum: 1, maximum: 100 }
+
+    HexColour:
+      type: string
+      description: "`#RRGGBB`, upper case in responses"
+      pattern: "^#[0-9A-F]{6}$"
+      examples: ["#1F5130"]
+
+    Theme:
+      type: object
+      additionalProperties: false
+      required: [primary, accent, background, surface, text]
+      properties:
+        primary: { $ref: "#/components/schemas/HexColour", description: "Header bar and primary buttons; carries white text" }
+        accent: { $ref: "#/components/schemas/HexColour", description: "Links, active navigation, focus ring on white" }
+        background: { $ref: "#/components/schemas/HexColour", description: "Page (fixed)" }
+        surface: { $ref: "#/components/schemas/HexColour", description: "Cards, table stripes (fixed)" }
+        text: { $ref: "#/components/schemas/HexColour", description: "Body text (fixed)" }
+
+    Branding:
+      type: object
+      additionalProperties: false
+      required: [company_name, theme]
+      properties:
+        company_name: { type: string, minLength: 1, maxLength: 60 }
+        theme: { $ref: "#/components/schemas/Theme" }
+
+    AdminSettings:
+      type: object
+      additionalProperties: false
+      required: [company_name, theme, updated_at, updated_by]
+      properties:
+        company_name: { type: string, minLength: 1, maxLength: 60 }
+        theme: { $ref: "#/components/schemas/Theme" }
+        updated_at: { type: [string, "null"], format: date-time, description: Null until the first change }
+        updated_by:
+          description: Name as it was at the time of the change; null until the first change
+          oneOf:
+            - $ref: "#/components/schemas/PersonRef"
+            - type: "null"
+
+    AdminSettingsUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        company_name:
+          type: string
+          description: |
+            Trimmed, then 1 to 60 characters, no control characters (Unicode Cc, including NUL).
+        theme:
+          x-ticket: T-002e
+          type: object
+          additionalProperties: false
+          required: [primary, accent]
+          description: Both colours are required when a theme is sent. Background, surface and text are fixed.
+          properties:
+            primary: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+            accent: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+
+    ReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1, description: The report version the manager saw }
+
+    ChecklistItemUpdate:
+      type: object
+      additionalProperties: false
+      required: [id]
+      minProperties: 2
+      properties:
+        id: { type: string, format: uuid, description: An existing item of this report }
+        done: { type: boolean }
+        note: { type: [string, "null"], maxLength: 500, description: Empty or whitespace-only is stored as null }
+
+    ReportUpdate:
+      type: object
+      additionalProperties: false
+      required: [version]
+      minProperties: 2
+      description: "`version` plus at least one editable field."
+      properties:
+        version: { type: integer, minimum: 1 }
+        painter_notes: { type: [string, "null"], maxLength: 5000 }
+        manager_notes: { type: [string, "null"], maxLength: 5000 }
+        checklist:
+          type: array
+          minItems: 1
+          description: Only the items sent are changed; ids must be unique and belong to this report
+          items: { $ref: "#/components/schemas/ChecklistItemUpdate" }
+
+    ReportEditableValues:
+      type: object
+      description: Current values of the fields the client tried to change
+      properties:
+        painter_notes: { type: [string, "null"] }
+        manager_notes: { type: [string, "null"] }
+        checklist:
+          type: array
+          items:
+            type: object
+            required: [id, done, note]
+            properties:
+              id: { type: string, format: uuid }
+              done: { type: boolean }
+              note: { type: [string, "null"] }
+
+    VersionConflictProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [code, current_version, last_changed_at, last_changed_by, review_status, reviewed_at, reviewed_by]
+          properties:
+            code: { const: version_conflict }
+            current_version: { type: integer, minimum: 1 }
+            last_changed_at: { type: [string, "null"], format: date-time }
+            last_changed_by:
+              oneOf:
+                - $ref: "#/components/schemas/PersonRef"
+                - type: "null"
+            review_status: { $ref: "#/components/schemas/ReviewStatus" }
+            reviewed_at: { type: [string, "null"], format: date-time }
+            reviewed_by:
+              oneOf:
+                - $ref: "#/components/schemas/PersonRef"
+                - type: "null"
+            current:
+              $ref: "#/components/schemas/ReportEditableValues"
+              description: PATCH only
+
+    AlreadyReviewedProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [code, current_version, reviewed_at, reviewed_by]
+          properties:
+            code: { const: already_reviewed }
+            current_version: { type: integer, minimum: 1 }
+            reviewed_at: { type: string, format: date-time }
+            reviewed_by: { $ref: "#/components/schemas/PersonRef" }
+
+    AuditAction:
+      type: string
+      enum: [report.reviewed, report.reopened, report.edited, settings.changed]
+
+    AuditField:
+      type: string
+      enum:
+        - review_status
+        - reviewed_by
+        - reviewed_at
+        - painter_notes
+        - manager_notes
+        - checklist_done
+        - checklist_note
+        - company_name
+        - theme_primary
+        - theme_accent
+
+    AuditChange:
+      type: object
+      required: [field, item_id, item_label, old_value, new_value]
+      properties:
+        field: { $ref: "#/components/schemas/AuditField" }
+        item_id: { type: [string, "null"], format: uuid, description: Checklist item for checklist_* fields }
+        item_label: { type: [string, "null"], description: Checklist label at the time }
+        old_value: { type: [string, boolean, "null"] }
+        new_value: { type: [string, boolean, "null"] }
+
+    AuditEvent:
+      type: object
+      required: [id, occurred_at, actor, action, changes]
+      properties:
+        id: { type: string, format: uuid }
+        occurred_at: { type: string, format: date-time }
+        actor:
+          $ref: "#/components/schemas/PersonRef"
+          description: Name as it was when the event happened
+        action: { $ref: "#/components/schemas/AuditAction" }
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/AuditChange" }
+
+    AuditHistory:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          description: Newest first
+          items: { $ref: "#/components/schemas/AuditEvent" }
+        total: { type: integer, minimum: 0, description: All events for the record (may exceed items) }
