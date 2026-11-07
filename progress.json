@@ -1,0 +1,131 @@
+{
+  "project": "JobProof",
+  "summary": "Phase 1: manager view with mock data, running locally in containers",
+  "updated": "2026-11-07 13:05",
+  "phases": [
+    {
+      "id": "setup",
+      "name": "Foundation",
+      "items": [
+        {
+          "id": "P-001",
+          "title": "Project skeleton, CLAUDE.md, agents, tickets, progress page",
+          "owner": "orchestrator",
+          "status": "done",
+          "note": "Skeleton, CLAUDE.md, 7 agents, orchestrator playbook, tickets"
+        },
+        {
+          "id": "T-000",
+          "title": "Architect bootstrap: ARCHITECTURE.md, repo layout, specs, ticket breakdown",
+          "owner": "architect",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "phase1",
+      "name": "Phase 1: Manager view (mock data)",
+      "items": [
+        {
+          "id": "T-001",
+          "title": "Manager can sign in and view dashboard, job reports, evidence and billing (read-only)",
+          "owner": "product-owner",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "later",
+      "name": "Later phases",
+      "items": [
+        {
+          "id": "L-001",
+          "title": "Painter mobile app: capture photos and submit completion report (Expo)",
+          "owner": "",
+          "status": "backlog"
+        },
+        {
+          "id": "L-002",
+          "title": "Customer secure payment link (Stripe)",
+          "owner": "",
+          "status": "backlog"
+        },
+        {
+          "id": "L-003",
+          "title": "Quotes and deposits",
+          "owner": "",
+          "status": "backlog"
+        },
+        {
+          "id": "L-004",
+          "title": "AWS deployment (ECS Fargate, RDS, S3/CloudFront) and CI/CD",
+          "owner": "",
+          "status": "backlog"
+        },
+        {
+          "id": "L-005",
+          "title": "Weekly dependency check schedule",
+          "owner": "",
+          "status": "backlog"
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "name": "orchestrator",
+      "model": "main session",
+      "status": "working",
+      "note": "Launching architect bootstrap"
+    },
+    {
+      "name": "product-owner",
+      "model": "sonnet",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "architect",
+      "model": "opus",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "backend-engineer",
+      "model": "sonnet",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "frontend-engineer",
+      "model": "sonnet",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "test-engineer",
+      "model": "sonnet",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "code-reviewer",
+      "model": "opus",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "dependency-checker",
+      "model": "haiku",
+      "status": "idle",
+      "note": "Scheduled weekly once the repo is on GitHub"
+    }
+  ],
+  "log": [
+    {
+      "time": "2026-11-07 13:05",
+      "who": "orchestrator",
+      "msg": "Project created with agents and tickets T-000, T-001"
+    }
+  ]
+}

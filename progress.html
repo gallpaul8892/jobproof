@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="10">
+<title>JobProof progress</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1b2430;--mute:#677386;--line:#e2e6eb;
+--backlog:#a7b0bd;--todo:#7b8794;--in_progress:#2563eb;--review:#9333ea;--blocked:#dc2626;--done:#16a34a}
+@media (prefers-color-scheme:dark){:root{--bg:#11151b;--card:#1a2029;--ink:#e7ebf0;--mute:#93a0b1;--line:#29313c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 12px}
+.sub{color:var(--mute);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
+.bar{height:12px;background:var(--line);border-radius:6px;overflow:hidden;margin:10px 0 6px}
+.bar>div{height:100%;background:var(--done);width:33%}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.stat{flex:1;min-width:90px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:20px}.stat span{color:var(--mute);font-size:12px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--mute);font-weight:600;border-top:0}
+td.id{font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:nowrap}
+.note{color:var(--mute);font-size:12px}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;white-space:nowrap}
+.badge.backlog{background:var(--backlog)}.badge.todo{background:var(--todo)}
+.badge.in_progress,.badge.working{background:var(--in_progress)}.badge.review{background:var(--review)}
+.badge.blocked{background:var(--blocked)}.badge.done{background:var(--done)}.badge.idle{background:var(--backlog)}
+.log{font-size:13px;max-height:360px;overflow:auto}
+.log div{padding:4px 0;border-top:1px solid var(--line)}.log time{color:var(--mute);margin-right:8px}
+.log b{margin-right:6px}
+</style></head><body><main>
+<h1>JobProof</h1>
+<div class="sub">Phase 1: manager view with mock data, running locally in containers &middot; updated 2026-11-07 13:05 &middot; refreshes every 10s</div>
+<div class="card"><h2>Overall: 1 of 3 active items done (33%)</h2>
+<div class="bar"><div></div></div>
+<div class="stats"><div class="stat"><b>5</b><span>backlog</span></div><div class="stat"><b>2</b><span>todo</span></div><div class="stat"><b>0</b><span>in progress</span></div><div class="stat"><b>0</b><span>review</span></div><div class="stat"><b>0</b><span>blocked</span></div><div class="stat"><b>1</b><span>done</span></div></div></div>
+<div class="card"><h2>Foundation</h2><table><tr><th>ID</th><th>Item</th><th>Owner</th><th>Status</th></tr><tr><td class="id">P-001</td><td>Project skeleton, CLAUDE.md, agents, tickets, progress page<div class="note">Skeleton, CLAUDE.md, 7 agents, orchestrator playbook, tickets</div></td><td>orchestrator</td><td><span class="badge done">done</span></td></tr><tr><td class="id">T-000</td><td>Architect bootstrap: ARCHITECTURE.md, repo layout, specs, ticket breakdown<div class="note"></div></td><td>architect</td><td><span class="badge todo">todo</span></td></tr></table></div><div class="card"><h2>Phase 1: Manager view (mock data)</h2><table><tr><th>ID</th><th>Item</th><th>Owner</th><th>Status</th></tr><tr><td class="id">T-001</td><td>Manager can sign in and view dashboard, job reports, evidence and billing (read-only)<div class="note"></div></td><td>product-owner</td><td><span class="badge todo">todo</span></td></tr></table></div><div class="card"><h2>Later phases</h2><table><tr><th>ID</th><th>Item</th><th>Owner</th><th>Status</th></tr><tr><td class="id">L-001</td><td>Painter mobile app: capture photos and submit completion report (Expo)<div class="note"></div></td><td></td><td><span class="badge backlog">backlog</span></td></tr><tr><td class="id">L-002</td><td>Customer secure payment link (Stripe)<div class="note"></div></td><td></td><td><span class="badge backlog">backlog</span></td></tr><tr><td class="id">L-003</td><td>Quotes and deposits<div class="note"></div></td><td></td><td><span class="badge backlog">backlog</span></td></tr><tr><td class="id">L-004</td><td>AWS deployment (ECS Fargate, RDS, S3/CloudFront) and CI/CD<div class="note"></div></td><td></td><td><span class="badge backlog">backlog</span></td></tr><tr><td class="id">L-005</td><td>Weekly dependency check schedule<div class="note"></div></td><td></td><td><span class="badge backlog">backlog</span></td></tr></table></div>
+<div class="card"><h2>Agents</h2><table><tr><th>Agent</th><th>Model</th><th>Status</th><th>Doing</th></tr><tr><td>orchestrator</td><td>main session</td><td><span class="badge working">working</span></td><td class="note">Launching architect bootstrap</td></tr><tr><td>product-owner</td><td>sonnet</td><td><span class="badge idle">idle</span></td><td class="note"></td></tr><tr><td>architect</td><td>opus</td><td><span class="badge idle">idle</span></td><td class="note"></td></tr><tr><td>backend-engineer</td><td>sonnet</td><td><span class="badge idle">idle</span></td><td class="note"></td></tr><tr><td>frontend-engineer</td><td>sonnet</td><td><span class="badge idle">idle</span></td><td class="note"></td></tr><tr><td>test-engineer</td><td>sonnet</td><td><span class="badge idle">idle</span></td><td class="note"></td></tr><tr><td>code-reviewer</td><td>opus</td><td><span class="badge idle">idle</span></td><td class="note"></td></tr><tr><td>dependency-checker</td><td>haiku</td><td><span class="badge idle">idle</span></td><td class="note">Scheduled weekly once the repo is on GitHub</td></tr></table></div>
+<div class="card"><h2>Activity</h2><div class="log"><div><time>2026-11-07 13:05</time><b>orchestrator</b>Project created with agents and tickets T-000, T-001</div></div></div>
+</main></body></html>
