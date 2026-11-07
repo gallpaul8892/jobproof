@@ -1,0 +1,59 @@
+{
+  "id": "engineers-t001a",
+  "title": "Engineers' report: T-001a scaffold and local stack",
+  "agent": "backend-engineer + frontend-engineer",
+  "model": "sonnet",
+  "status": "review",
+  "date": "2026-11-07",
+  "summary": "The monorepo skeleton and both ways of running it exist. The no-Docker stack starts from clean, /health works, the web shell loads runtime config and shows 'API: ok', and lint, unit tests and browser tests pass. Compose and the Dockerfiles are written and validated but could not be built or run here (no Docker daemon). Awaiting code review.",
+  "blocks": [
+    {
+      "heading": "Verification results (orchestrator integration run)",
+      "type": "table",
+      "columns": ["Check", "Result"],
+      "rows": [
+        ["scripts/dev.sh up --static from clean", "Pass: Postgres, migrations, seed, backend and web all start; status shows all up"],
+        ["GET /health", "Pass: {status ok, database ok, version 0.1.0}"],
+        ["make lint (ruff, ruff format, mypy strict, eslint, tsc, redocly, gen:check)", "Pass (one redocly warning: /health has no 4xx response)"],
+        ["Backend tests (pytest)", "26 of 26 pass"],
+        ["Frontend tests (Vitest)", "11 of 11 pass (4 shared, 7 web)"],
+        ["Playwright e2e", "2 of 2 pass: API ok page and error with Try again"],
+        ["docker compose config --quiet", "Pass (definition valid; images not built)"],
+        ["Docker images and compose run", "Not verified here: no Docker daemon. Reviewed by reading only"]
+      ]
+    },
+    {
+      "heading": "Backend half",
+      "type": "list",
+      "items": [
+        {"label": "App.", "text": "FastAPI app factory with /health (200, or 503 when the database is down in about 3ms), structured JSON access logs, request-id middleware, problem+json errors, CORS allowlist, validated settings."},
+        {"label": "Database.", "text": "Alembic configured with an empty history; python -m app.seed is a placeholder that logs 'nothing to seed'."},
+        {"label": "Tests.", "text": "assert_contract helper that validates responses against the OpenAPI schema, a route-parity test (NOT_YET_IMPLEMENTED list), and migration up/down/up/check tests."},
+        {"label": "Stack files.", "text": "backend/Dockerfile, docker-compose.yml (db, migrate, seed, backend, web with healthchecks and dependency conditions), .env.example, Makefile, scripts/dev.sh (also supports SKIP_WEB, WEB_PORT, BACKEND_PORT), infra and mobile READMEs."}
+      ]
+    },
+    {
+      "heading": "Frontend half",
+      "type": "list",
+      "items": [
+        {"label": "Workspaces.", "text": "Root npm workspaces (shared, web, e2e) with scripts gen, gen:check, lint, test, build and e2e."},
+        {"label": "Shared.", "text": "Generated API client committed under shared/src/generated, an adapter (runtime base URL, bearer token, 15 second timeout), ApiError and a useHealth hook."},
+        {"label": "Web shell.", "text": "Loads /config.js before the app; shows 'JobProof' and 'API: ok' through the generated client, with loading and error states and a Try again button. Plain CSS, no external assets; a test scans the production build for external origins."},
+        {"label": "Container.", "text": "web/Dockerfile is multi-stage and non-root with a healthcheck. The nginx entrypoint writes config.js and the content security policy from API_BASE_URL and rejects malformed values."},
+        {"label": "e2e.", "text": "Playwright config, two tests and a README. Uses the installed Chrome at /usr/bin/google-chrome."}
+      ]
+    },
+    {
+      "heading": "Deviations and open items",
+      "type": "list",
+      "items": [
+        {"text": "A harmless Starlette test-client warning about httpx2 is ignored in pytest config."},
+        {"text": "pyjwt and argon2-cffi are not added yet; T-001c adds them when first used."},
+        {"text": "HTTP 405 maps to the error code not_found because the contract has no method-not-allowed code."},
+        {"text": "The web dist scan allows w3.org namespaces and a few harmless library message strings, and skips config.js because it holds the API origin by design."},
+        {"text": "The nginx image tag is stable-alpine because Docker Hub was unreachable; it should be pinned to an exact tag on a machine with access."},
+        {"text": "npm audit flags transitive issues in the Redocly CLI dev tool (js-yaml, minimatch). Not fixed; dev-only and for the code reviewer and architect to triage."}
+      ]
+    }
+  ]
+}
