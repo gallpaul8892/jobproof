@@ -84,6 +84,9 @@ are role-only in Phase 1.
 Recorded in ARCHITECTURE.md section 3 (verified 2026-11-07). Manifests use exact pins for
 `@hey-api/openapi-ts` (0.x) and caret ranges elsewhere; lockfiles are committed. TypeScript is
 held at 6.0.x (deferral recorded). Root `package.json` sets `"engines": {"node": ">=22.22"}`.
+Root `package.json` also carries security `overrides` for transitive dev-tool dependencies
+(`js-yaml`, `minimatch`); the block, reasons and removal criteria are in ARCHITECTURE.md
+section 12.
 
 ## 3. Makefile targets
 
@@ -311,6 +314,28 @@ the entrypoint from `API_BASE_URL`.
 - Shared and web: vitest (+ Testing Library, jsdom) for formatting, hooks and components.
 - E2E: Playwright (Chromium) against the running stack at `WEB_URL`; checks UI against the live
   API; uses route interception for slow/empty/error states.
+
+### 7.1 Built-bundle origin check (T-001a scenario 5)
+`web/scripts/check-dist.mjs` (run by `npm run build`) scans every text file under `web/dist`
+except `config.js` (per-environment runtime config, holds the API origin) with the regex
+`` https?://[^\s"'`)<>\\]+ ``. Every match must equal one of these strings exactly (string
+equality, no patterns or prefixes):
+
+| Allowed string | Source | Why it is inert |
+|---|---|---|
+| `http://www.w3.org/2000/svg` | React DOM | SVG namespace identifier |
+| `http://www.w3.org/1999/xlink` | React DOM | XLink namespace identifier |
+| `http://www.w3.org/1998/Math/MathML` | React DOM | MathML namespace identifier |
+| `http://www.w3.org/XML/1998/namespace` | React DOM | XML namespace identifier |
+| `http://localhost` | react-router | dummy base for `new URL(relative, base)` parsing; never requested |
+| `https://react.dev/errors/` | React | prefix of minified production error-message text |
+| `https://reactrouter.com/en/main/routers/picking-a-router.` | react-router | text of a warning message (trailing full stop is part of the match) |
+
+Reason: these are string constants the libraries never fetch, and removing them would mean
+patching or post-processing vendor code. Defence in depth: the nginx/CloudFront CSP
+(`connect-src 'self' <api origin>`, section 6.10) blocks any other origin at runtime. Any new
+match (for example after a React or react-router upgrade) fails the build; the engineer raises
+it to the architect, who adds the exact string here only after confirming it is never fetched.
 
 ## 8. Infrastructure as code (scenario 3)
 

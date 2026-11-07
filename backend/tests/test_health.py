@@ -1,3 +1,6 @@
+import socket
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -13,16 +16,44 @@ def test_health_ok(client: TestClient) -> None:
     assert_contract(response, "getHealth")
 
 
-def test_health_503_when_database_is_unreachable() -> None:
-    settings = get_settings().model_copy(
-        update={"database_url": "postgresql+psycopg://x:x@127.0.0.1:1/none"}
-    )
+def _degraded_health(url: str) -> tuple[float, "object"]:
+    settings = get_settings().model_copy(update={"database_url": url})
     with TestClient(create_app(settings)) as client:
+        start = time.monotonic()
         response = client.get("/health")
+        elapsed = time.monotonic() - start
+    return elapsed, response
+
+
+def test_health_503_when_database_is_unreachable() -> None:
+    elapsed, response = _degraded_health("postgresql+psycopg://x:x@127.0.0.1:1/none")
     assert response.status_code == 503
     assert response.json()["database"] == "unavailable"
     assert response.json()["status"] == "degraded"
     assert_contract(response, "getHealth")
+    assert elapsed < 3
+
+
+def test_health_503_within_3s_when_database_blackholed() -> None:
+    """Exercises the connect timeout: packets to a blackhole IP are dropped, not refused."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.settimeout(0.5)
+    try:
+        probe.connect(("10.255.255.1", 5432))
+    except TimeoutError:
+        pass  # packets silently dropped: the situation we want
+    except OSError as exc:
+        pytest.skip(f"sandbox does not blackhole 10.255.255.1 (instant failure: {exc})")
+    else:
+        pytest.skip("10.255.255.1 unexpectedly accepted a connection")
+    finally:
+        probe.close()
+
+    elapsed, response = _degraded_health("postgresql+psycopg://x:x@10.255.255.1:5432/none")
+    assert response.status_code == 503
+    assert response.json()["database"] == "unavailable"
+    assert_contract(response, "getHealth")
+    assert elapsed < 3
 
 
 @pytest.mark.parametrize("path", ["/openapi.json", "/docs", "/redoc"])

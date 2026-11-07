@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { findExternalOrigins } from "./dist-origins.mjs";
+import { ALLOWED, findExternalOrigins } from "./dist-origins.mjs";
 
 describe("production bundle", () => {
   it("scanner flags external origins and allows XML namespaces", () => {
@@ -16,6 +16,32 @@ describe("production bundle", () => {
       writeFileSync(join(dir, "assets", "bad.js"), 'fetch("https://cdn.example.com/x.js")');
       const found = findExternalOrigins(dir);
       expect(found.map((f) => f.url)).toEqual(["https://cdn.example.com/x.js"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows exactly the seven listed strings and rejects near-misses", () => {
+    const dir = mkdtempSync(join(tmpdir(), "dist-scan-"));
+    try {
+      writeFileSync(join(dir, "ok.js"), [...ALLOWED].map((u) => `"${u}"`).join("\n"));
+      expect(ALLOWED.size).toBe(7);
+      expect(findExternalOrigins(dir)).toEqual([]);
+      writeFileSync(
+        join(dir, "bad.js"),
+        [
+          "http://www.w3.org/2000/svg/extra",
+          "https://react.dev/errors/123",
+          "http://localhost:8000",
+          "https://fake.example.com/x",
+        ].map((u) => `"${u}"`).join("\n"),
+      );
+      expect(findExternalOrigins(dir).map((f) => f.url)).toEqual([
+        "http://www.w3.org/2000/svg/extra",
+        "https://react.dev/errors/123",
+        "http://localhost:8000",
+        "https://fake.example.com/x",
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

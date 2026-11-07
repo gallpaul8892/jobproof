@@ -11,6 +11,7 @@ x-backend: &backend
 
 services:
   db:
+    # TODO(pin): floating tag. Pin the exact tag/digest on a machine with registry access.
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-jobproof}
@@ -21,7 +22,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jobproof"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 2s
       timeout: 3s
       retries: 30

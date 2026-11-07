@@ -172,6 +172,10 @@ prepare_web() {
 
 backend_running() { pid_alive "$DEV_DIR/backend.pid"; }
 web_running() { pid_alive "$DEV_DIR/web.pid"; }
+# True when the web server is running in the requested mode (dev or static).
+web_running_in_mode() {
+  web_running && [[ -f "$DEV_DIR/web.mode" && "$(cat "$DEV_DIR/web.mode")" == "$1" ]]
+}
 
 # ---- commands ---------------------------------------------------------------
 
@@ -184,8 +188,10 @@ cmd_up() {
     esac
   done
   mkdir -p "$DEV_DIR"
+  local mode=dev
+  [[ $static -eq 1 ]] && mode=static
 
-  if pg_accepting && backend_running && { [[ -n "${SKIP_WEB:-}" ]] || web_running; }; then
+  if pg_accepting && backend_running && { [[ -n "${SKIP_WEB:-}" ]] || web_running_in_mode "$mode"; }; then
     log "stack is already running"
     print_urls
     return 0
@@ -207,6 +213,12 @@ cmd_up() {
     cd "$ROOT"
   fi
 
+  if [[ -z "${SKIP_WEB:-}" ]] && web_running && ! web_running_in_mode "$mode"; then
+    log "web is running in a different mode; restarting it as $mode"
+    stop_process web
+    rm -f "$DEV_DIR/web.mode"
+  fi
+
   if [[ -z "${SKIP_WEB:-}" ]] && ! web_running; then
     cd "$ROOT"
     if [[ $static -eq 1 ]]; then
@@ -219,6 +231,7 @@ cmd_up() {
       log "starting web dev server on 127.0.0.1:$WEB_PORT"
       start_process web npm run dev -w @jobproof/web -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort
     fi
+    echo "$mode" > "$DEV_DIR/web.mode"
   fi
 
   wait_for_url "http://127.0.0.1:$BACKEND_PORT/health" backend "$DEV_DIR/backend.log"
@@ -237,6 +250,7 @@ print_urls() {
 
 cmd_down() {
   stop_process web
+  rm -f "$DEV_DIR/web.mode"
   stop_process backend
   stop_postgres
 }

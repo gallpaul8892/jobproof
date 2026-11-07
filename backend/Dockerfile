@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # ---- builder: resolve and install locked, production-only dependencies ----
+# TODO(pin): floating tags (python:3.13-slim here and below, uv image). The exact tag/digest
+# must be pinned on a machine with registry access; not verifiable offline.
 FROM python:3.13-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.11.32 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never \
@@ -12,6 +14,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # ---- runtime ----
+# TODO(pin): floating tag; pin the exact tag/digest on a machine with registry access.
 FROM python:3.13-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

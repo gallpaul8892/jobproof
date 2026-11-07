@@ -8,7 +8,7 @@ export default defineConfig({
   build: { target: "es2022", sourcemap: false },
   test: {
     environment: "jsdom",
-    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts", "nginx/**/*.test.ts"],
     setupFiles: ["src/test/setup.ts"],
     testTimeout: 60_000,
   },

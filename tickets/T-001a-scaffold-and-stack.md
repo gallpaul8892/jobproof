@@ -54,8 +54,12 @@ When a browser opens http://localhost:8080
 Then `/config.js` sets `window.__JOBPROOF_CONFIG__.apiBaseUrl`, and the page shows "JobProof"
 and "API: ok" fetched through the generated client from `@jobproof/shared`
 And with the backend stopped it shows an error state with a "Try again" button, never a blank page
-And the built bundle in `web/dist` references no external origin: a test greps `dist/` for
-`https?://` and allows only XML/SVG namespace URIs (for example `http://www.w3.org/2000/svg`)
+And the built bundle in `web/dist` references no external origin: a test scans every text file in
+`dist/` except `config.js` for `` https?://[^\s"'`)<>\\]+ `` and fails on any match that is not, by
+exact string equality, one of the allowed strings in
+[specs/T-000-bootstrap.md](../specs/T-000-bootstrap.md) section 7.1 (XML/SVG/MathML namespace
+URIs, react-router's dummy URL base `http://localhost`, and two React / React Router
+error-message documentation URLs; all inert text, never fetched)
 
 ### 6. Contract tooling and drift checks
 Given `api/openapi.yaml` from T-000

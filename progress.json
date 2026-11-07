@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 13:45",
+  "updated": "2026-11-07 13:59",
   "phases": [
     {
       "id": "setup",
@@ -39,7 +39,7 @@
           "title": "Scaffold, compose stack, no-Docker dev script, health endpoint",
           "owner": "backend+frontend",
           "status": "review",
-          "note": "Integrated: lint, unit (26 backend, 11 frontend) and e2e 2/2 pass; code review next"
+          "note": "Round 1 fixes verified (lint, 26+35 tests, e2e 2/2, audit 0); round 2 re-review"
         },
         {
           "id": "T-001b",
@@ -115,19 +115,19 @@
       "name": "architect",
       "model": "opus",
       "status": "idle",
-      "note": "Bootstrap complete"
+      "note": "Decided: npm overrides for js-yaml and minimatch; exact-string dist allowlist"
     },
     {
       "name": "backend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": "T-001a backend half done: 26 tests, ruff and mypy clean"
+      "note": "T-001a review fixes done"
     },
     {
       "name": "frontend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": "T-001a frontend half done"
+      "note": "T-001a review fixes done"
     },
     {
       "name": "test-engineer",
@@ -139,7 +139,7 @@
       "name": "code-reviewer",
       "model": "opus",
       "status": "working",
-      "note": "Reviewing T-001a diff (opus)"
+      "note": "T-001a re-review (round 2)"
     },
     {
       "name": "dependency-checker",
@@ -193,6 +193,21 @@
       "time": "2026-11-07 13:45",
       "who": "orchestrator",
       "msg": "Waiting on code review of T-001a"
+    },
+    {
+      "time": "2026-11-07 13:52",
+      "who": "code-reviewer",
+      "msg": "T-001a: CHANGES REQUESTED. BLOCKER dev-tool vulns (js-yaml, minimatch); MAJOR nginx entrypoint newline bypass; 5 minor"
+    },
+    {
+      "time": "2026-11-07 13:54",
+      "who": "backend-engineer",
+      "msg": "Review fixes: dev.sh web mode file, timed 503 test (+blackhole test skips in sandbox), compose pg_isready via env, TODO(pin) on image tags"
+    },
+    {
+      "time": "2026-11-07 13:56",
+      "who": "architect",
+      "msg": "Decision: add npm overrides (js-yaml ^4.3.2, minimatch ^11.0.1), audit clean in test copy; bundle allowlist is 7 exact strings"
     }
   ],
   "reports": [

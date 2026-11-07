@@ -2,7 +2,7 @@
 
 Owner: architect. This is the system's memory: read it first, edit sections in place, link to
 files instead of copying code. Entries marked **(planned)** are specified but not yet built.
-Last updated: 2026-11-07 (T-000 bootstrap).
+Last updated: 2026-11-07 (T-000 bootstrap; T-001a review: dependency overrides, dist allowlist).
 
 ## 1. System overview
 
@@ -43,7 +43,7 @@ Full layout: [specs/T-000-bootstrap.md](specs/T-000-bootstrap.md) section "Repo 
 ## 3. Stack versions (verified 2026-11-07 against PyPI / npm registry)
 
 Pin exact versions in lockfiles (`backend/uv.lock`, root `package-lock.json`). Ranges below are
-what manifests should declare.
+what manifests should declare. Transitive security overrides (js-yaml, minimatch): section 12.1.
 
 | Area | Package | Version | Notes |
 |---|---|---|---|
@@ -188,9 +188,41 @@ web_static, photos_bucket, ci_roles}` and `envs/{staging,prod}`; state in S3 wit
 | TanStack Query in shared hooks | Loading/error/retry semantics once, reused by mobile. |
 | CORS with explicit allowlist instead of same-origin proxy | Mirrors production (CloudFront domain to ALB API domain); mobile unaffected. |
 | Overdue/part-paid are derived, not stored | Always consistent with payments and today's date. |
+| Built-bundle URL check uses an exact-string allowlist | Namespace URIs, react-router's `http://localhost` parse base and React/React Router error-doc URLs are inert text; the list is exact so any new URL fails the build. List: [specs/T-000-bootstrap.md](specs/T-000-bootstrap.md) section 7.1 |
 | Injectable clock (`FIXED_NOW`, non-production only) | Deterministic tests of "this month" figures. |
 
-## 12. Deliberate dependency deferrals
+## 12. Dependency overrides and deliberate deferrals
+
+### 12.1 Security overrides (root `package.json`, decided 2026-11-07, T-001a review)
+
+```json
+"overrides": {
+  "js-yaml": "^4.3.2",
+  "minimatch": "^11.0.1"
+}
+```
+
+| Override | Pulled in by | Advisories fixed (npm advisory DB) | Compatibility |
+|---|---|---|---|
+| `js-yaml` ^4.3.2 (resolves 4.3.2, latest 4.x) | `@hey-api/openapi-ts` 0.99.0 > `@hey-api/json-schema-ref-parser` 1.4.4 pins `4.2.0` exactly; both are the latest releases, no upstream fix | GHSA-52cp-r559-cp3m (<4.3.0), GHSA-5p4m-2wfm-xmqj (<4.3.1), GHSA-2883-xcg3-v3hh (<4.3.2); all high, quadratic CPU | Same major, same `exports` and API; only the exact pin is overridden. Not 5.x (major change) |
+| `minimatch` ^11.0.1 (resolves 11.0.5) | eslint 10.14.0 (`^10.2.6`), `@eslint/config-array` 0.23.5 (`^10.2.4`), `@typescript-eslint/typescript-estree` 8.72.1 (`^10.2.2`) | GHSA-g3hv-75wg-m249 (>=7.0.0 <11.0.1), moderate, globparts DoS | Crosses the parents' `^10` range: a deliberate major override. 11.x keeps the CJS + ESM exports and Node `18 \|\| 20 \|\| >=22` engines; verified below |
+
+Verified 2026-11-07 in a scratch copy: overrides applied, `npm audit` 0 vulnerabilities;
+`npm run gen` output byte-identical, `npm run gen:check`, `redocly lint`, `npm run lint`
+(and eslint still flags a deliberately seeded error), `npm test` and `npm run build` (incl. check-dist) pass.
+`npm install` alone does not move already-locked versions; use `npm update js-yaml minimatch`.
+
+`@redocly/cli` 2.76.0 ships as a self-contained bundle with no npm dependencies, so npm audit
+and overrides do not see or affect it. Its THIRD_PARTY_NOTICES list js-yaml 4.3.2 and 5.4.3
+(both outside the advisory ranges) and glob 14.0.3 (needs minimatch ^11.0.2, outside the
+range). Nothing to override there; recheck its notices when upgrading redocly.
+
+Remove each override when every parent's own range resolves to a patched version (hey-api
+unpins js-yaml >=4.3.2; eslint, config-array and typescript-estree accept minimatch >=11.0.1).
+Revisit at each weekly dependency ticket, at the latest 2027-02-01. Residual risk while the
+minimatch major override exists: an eslint behaviour change, caught by `npm run lint` failing.
+
+### 12.2 Deferrals
 
 | Package | Held at | Reason | Revisit |
 |---|---|---|---|
