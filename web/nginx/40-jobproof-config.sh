@@ -11,12 +11,9 @@ DIST_DIR="${DIST_DIR:-/usr/share/nginx/html}"
 HEADERS_FILE="${HEADERS_FILE:-/tmp/jobproof-headers.conf}"
 
 # The API origin goes into a CSP header and a JS string, so accept only a plain
-# scheme://host[:port] origin. Reject control characters (newline, CR, tab, ...) first: grep and
-# case would otherwise match a multi-line value line by line.
-if [ -n "$(printf '%s' "$API_BASE_URL" | LC_ALL=C tr -d '[:print:]')" ]; then
-  echo "jobproof-config: API_BASE_URL must not contain control characters" >&2
-  exit 1
-fi
+# scheme://host[:port] origin. Control characters (newline, CR, tab, ...) are rejected by the
+# character-class check below, which allows only [A-Za-z0-9.:-] after the scheme. (Do not use
+# `tr -d '[:print:]'` here: busybox tr, as in Alpine, does not support that class.)
 ORIGIN="${API_BASE_URL%/}"
 # Anchored over the whole string; the character classes exclude quotes, backslash, semicolon,
 # whitespace, path, query and fragment characters.

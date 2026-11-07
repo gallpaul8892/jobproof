@@ -146,3 +146,22 @@ describe("40-jobproof-config.sh", () => {
     expect(readFileSync(join(dir, "config.js"), "utf8")).toContain("http://localhost:8000");
   });
 });
+
+// Regression: the nginx image is Alpine, whose /bin/sh is busybox. A `tr -d '[:print:]'` pre-check
+// worked under bash/dash but rejected every value under busybox and crashed the container.
+// Set BUSYBOX to a busybox binary (e.g. from `apt install busybox-static`) to run this.
+const busybox = process.env.BUSYBOX;
+describe.skipIf(!busybox)("under busybox sh (as in the Alpine image)", () => {
+  const exec = (value: string) =>
+    spawnSync(busybox as string, ["sh", script], {
+      env: { PATH: process.env.PATH ?? "", API_BASE_URL: value, DIST_DIR: dir, HEADERS_FILE: join(dir, "h.conf") },
+      encoding: "utf8",
+    });
+  it("accepts the default origin", () => {
+    expect(exec("http://localhost:8000").status).toBe(0);
+  });
+  it("still rejects control characters", () => {
+    expect(exec("http://localhost:8000\n").status).not.toBe(0);
+    expect(exec("http://ok\rhttp://evil").status).not.toBe(0);
+  });
+});

@@ -314,7 +314,7 @@ before any deployment (backlog B7).
 | B1 | `page` has no upper bound and the contract has no `maximum`. Architect adds `maximum` (e.g. 10000) to the `Page` parameter in `api/openapi.yaml`, regenerates the client (`npm run gen`); backend adds `le=` in `backend/app/routers/manager.py`; add a 422 test | architect, then backend | T-002a hardening |
 | B2 | Invoice customer must equal the job's customer: enforced by seed and app only. Option: unique `(id, customer_id)` on jobs and a composite FK `(job_id, customer_id)` from invoices (new Alembic revision) | architect, then backend | T-002a hardening |
 | B3 | Pin Docker base image tags and digests. Search `TODO(pin)` (compose, `backend/Dockerfile`); also `web/Dockerfile` (`node:22-alpine`, nginx), which has no `TODO(pin)` marker | backend, web | First Docker run ticket |
-| B4 | First real `make up` and `make e2e` under Docker (section 11) | orchestrator on a Docker host | First Docker run ticket |
+| B4 | First real `make up` and `make e2e` under Docker (section 11) | orchestrator on a Docker host | First Docker run ticket | First run found: the entrypoint used a `tr` class busybox lacks (fixed; test with `BUSYBOX=... vitest`). Remaining web-image steps (nginx start, healthcheck) still unverified.
 | B5 | Blackhole connect-timeout test (`backend/tests/test_health.py`) skips in the sandbox; needs CI or a local accept-but-never-reply socket | backend | CI ticket |
 | B6 | nginx image tag `stable-alpine` not verified | web | First Docker run ticket |
 | B7 | Run `pip-audit` (never run) | dependency-checker | Weekly dependency ticket |
