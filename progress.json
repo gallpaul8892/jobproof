@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 13:05",
+  "updated": "2026-11-07 13:33",
   "phases": [
     {
       "id": "setup",
@@ -18,7 +18,8 @@
           "id": "T-000",
           "title": "Architect bootstrap: ARCHITECTURE.md, repo layout, specs, ticket breakdown",
           "owner": "architect",
-          "status": "todo"
+          "status": "done",
+          "note": "ARCHITECTURE.md, specs, OpenAPI, 4 tickets written"
         }
       ]
     },
@@ -30,6 +31,31 @@
           "id": "T-001",
           "title": "Manager can sign in and view dashboard, job reports, evidence and billing (read-only)",
           "owner": "product-owner",
+          "status": "in_progress",
+          "note": "Split into T-001a..d"
+        },
+        {
+          "id": "T-001a",
+          "title": "Scaffold, compose stack, no-Docker dev script, health endpoint",
+          "owner": "backend+frontend",
+          "status": "todo"
+        },
+        {
+          "id": "T-001b",
+          "title": "Data model, migrations and seed data",
+          "owner": "backend-engineer",
+          "status": "todo"
+        },
+        {
+          "id": "T-001c",
+          "title": "Manager auth and read APIs",
+          "owner": "backend-engineer",
+          "status": "todo"
+        },
+        {
+          "id": "T-001d",
+          "title": "Manager web UI and e2e tests",
+          "owner": "frontend+test",
           "status": "todo"
         }
       ]
@@ -88,7 +114,7 @@
       "name": "architect",
       "model": "opus",
       "status": "idle",
-      "note": ""
+      "note": "Bootstrap complete"
     },
     {
       "name": "backend-engineer",
@@ -126,6 +152,16 @@
       "time": "2026-11-07 13:05",
       "who": "orchestrator",
       "msg": "Project created with agents and tickets T-000, T-001"
+    },
+    {
+      "time": "2026-11-07 13:06",
+      "who": "architect",
+      "msg": "Started bootstrap"
+    },
+    {
+      "time": "2026-11-07 13:33",
+      "who": "architect",
+      "msg": "Bootstrap done: Terraform, argon2+JWT, npm workspaces, tickets T-001a..d"
     }
   ]
 }

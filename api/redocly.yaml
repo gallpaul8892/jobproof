@@ -1,0 +1,7 @@
+# Lint config for api/openapi.yaml.
+# Run from repo root: npx @redocly/cli lint api/openapi.yaml --config api/redocly.yaml
+extends:
+  - recommended
+rules:
+  no-server-example.com: off   # localhost server is intentional for local dev
+  operation-4xx-response: warn # /health legitimately has no 4xx

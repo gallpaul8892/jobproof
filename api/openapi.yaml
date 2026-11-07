@@ -1,0 +1,761 @@
+openapi: 3.1.0
+info:
+  title: JobProof API
+  version: 0.1.0
+  summary: Contract between the JobProof backend and its web and mobile clients.
+  description: |
+    Source of truth for the JobProof API (see ARCHITECTURE.md section 5 for conventions).
+
+    - JSON with snake_case fields. Datetimes are ISO 8601 UTC with a `Z` suffix; calendar dates
+      are `YYYY-MM-DD` and are Europe/London calendar days.
+    - Money is integer pence (`*_pence`) with `currency` `GBP`.
+    - Errors are RFC 9457 problem details (`application/problem+json`).
+    - List endpoints are offset paginated with `page` (1-based) and `page_size` (max 100).
+    - Phase 1 is manager-only and read-only. Every `/api/v1/manager/*` operation requires a
+      bearer token whose user has role `manager`: no token or an invalid/expired token gives 401,
+      any other role gives 403.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: http://localhost:8000
+    description: Local (docker compose or scripts/dev.sh)
+tags:
+  - name: health
+    description: Liveness and readiness for load balancers and compose healthchecks.
+  - name: auth
+    description: Sign-in and current user.
+  - name: manager
+    description: Manager-only read endpoints (Phase 1).
+  - name: photos
+    description: Signed photo image delivery.
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Liveness and database readiness
+      security: []
+      responses:
+        "200":
+          description: Service and database are up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: Database unreachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Exchange email and password for a short-lived access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401":
+          description: Wrong email or password, or account inactive (code `invalid_credentials`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: The signed-in user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/auth/demo-accounts:
+    get:
+      tags: [auth]
+      operationId: listDemoAccounts
+      summary: Seeded demo credentials for the dev login page
+      description: |
+        Available only when `DEMO_ACCOUNTS_ENABLED=true` (local and test). Returns 404 when
+        disabled, and is always disabled when `APP_ENV=production`.
+      security: []
+      responses:
+        "200":
+          description: Demo accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DemoAccount" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/manager/dashboard:
+    get:
+      tags: [manager]
+      operationId: getManagerDashboard
+      summary: Summary figures and the five most recent reports
+      responses:
+        "200":
+          description: Dashboard
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/manager/painters:
+    get:
+      tags: [manager]
+      operationId: listManagerPainters
+      summary: All painters, for filter options
+      responses:
+        "200":
+          description: Painters ordered by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PersonRef" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/manager/reports:
+    get:
+      tags: [manager]
+      operationId: listManagerReports
+      summary: Paginated, filterable list of job completion reports
+      description: |
+        Sorted by `completed_on` descending, then `submitted_at` descending, then
+        `job_reference` descending. All filters combine with AND. `total` is the count of all
+        matching rows across pages.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: review_status
+          in: query
+          schema: { $ref: "#/components/schemas/ReviewStatus" }
+        - name: billing_status
+          in: query
+          schema: { $ref: "#/components/schemas/BillingStatus" }
+        - name: painter_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: date_from
+          in: query
+          description: Inclusive lower bound on `completed_on`.
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Inclusive upper bound on `completed_on`. Must not be before `date_from`.
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          description: |
+            Case-insensitive substring match (trimmed, 1 to 100 characters) against customer
+            name, any site address field (line 1, line 2, town, county, postcode, also matched
+            with spaces removed) and job reference.
+          schema: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        "200":
+          description: A page of reports
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/manager/reports/{report_id}:
+    get:
+      tags: [manager]
+      operationId: getManagerReport
+      summary: Full evidence for one report
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Report detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/manager/invoices:
+    get:
+      tags: [manager]
+      operationId: listManagerInvoices
+      summary: Paginated list of invoices, filterable by status
+      description: |
+        Sorted by `issue_date` descending with drafts (no issue date) first, then `number`
+        descending. `status` filters on the derived status.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/InvoiceStatus" }
+      responses:
+        "200":
+          description: A page of invoices
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvoicePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/photos/{photo_id}/image:
+    get:
+      tags: [photos]
+      operationId: getPhotoImage
+      summary: Photo bytes via a signed URL
+      description: |
+        Clients never build this URL; they use `url` / `thumb_url` from `ReportPhoto`. The
+        signature is `hex(HMAC-SHA256(PHOTO_URL_SECRET, "{photo_id}:{variant}:{exp}"))`.
+        Phase 1 returns a generated SVG placeholder. Later phases redirect to an S3 presigned
+        URL instead; clients must treat the URL as opaque.
+      security: []
+      parameters:
+        - name: photo_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: variant
+          in: query
+          required: true
+          schema: { type: string, enum: [thumb, full] }
+        - name: exp
+          in: query
+          required: true
+          description: Expiry, Unix seconds.
+          schema: { type: integer }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+      responses:
+        "200":
+          description: Image
+          headers:
+            Cache-Control:
+              schema: { type: string, example: "private, max-age=300" }
+          content:
+            image/svg+xml:
+              schema: { type: string }
+        "403":
+          description: Signature invalid or expired (code `invalid_signature`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    Unauthenticated:
+      description: Missing, invalid or expired token (code `unauthenticated`)
+      headers:
+        WWW-Authenticate:
+          schema: { type: string, example: Bearer }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Authenticated but role not allowed (code `forbidden`)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Resource does not exist (code `not_found`)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ValidationError:
+      description: Invalid parameters or body (code `validation_error`)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details with JobProof extensions.
+      required: [type, title, status, code, request_id]
+      properties:
+        type:
+          type: string
+          description: "`about:blank` or `https://jobproof.dev/problems/{code}`"
+          examples: ["https://jobproof.dev/problems/forbidden"]
+        title: { type: string, examples: ["Forbidden"] }
+        status: { type: integer, examples: [403] }
+        detail: { type: string, examples: ["Manager role required."] }
+        instance: { type: string, examples: ["/api/v1/manager/dashboard"] }
+        code:
+          type: string
+          enum:
+            - unauthenticated
+            - invalid_credentials
+            - forbidden
+            - not_found
+            - validation_error
+            - invalid_signature
+            - internal_error
+        request_id: { type: string }
+        errors:
+          type: array
+          description: Present for `validation_error`.
+          items: { $ref: "#/components/schemas/FieldError" }
+
+    FieldError:
+      type: object
+      required: [loc, message]
+      properties:
+        loc:
+          type: array
+          items: { oneOf: [{ type: string }, { type: integer }] }
+          examples: [["query", "page_size"]]
+        message: { type: string }
+
+    Health:
+      type: object
+      required: [status, database, version]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        database: { type: string, enum: [ok, unavailable] }
+        version: { type: string, examples: ["0.1.0"] }
+
+    Role:
+      type: string
+      enum: [manager, painter]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, minLength: 3, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 200 }
+
+    LoginResponse:
+      type: object
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, const: bearer }
+        expires_in: { type: integer, description: Seconds until expiry, examples: [1800] }
+        user: { $ref: "#/components/schemas/User" }
+
+    User:
+      type: object
+      required: [id, email, full_name, role]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        full_name: { type: string, examples: ["Sarah Whitfield"] }
+        role: { $ref: "#/components/schemas/Role" }
+
+    DemoAccount:
+      type: object
+      required: [role, email, password, full_name]
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+        email: { type: string }
+        password: { type: string }
+        full_name: { type: string }
+
+    PersonRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    Currency:
+      type: string
+      const: GBP
+
+    JobType:
+      type: string
+      enum:
+        - interior_repaint
+        - exterior_repaint
+        - wallpapering
+        - kitchen_cabinet_spray
+        - staircase_woodwork
+        - commercial_unit
+
+    JobStatus:
+      type: string
+      enum: [scheduled, in_progress, completed, cancelled]
+
+    CustomerType:
+      type: string
+      enum: [homeowner, landlord, business]
+
+    ReviewStatus:
+      type: string
+      description: "`awaiting_review` = submitted by painter, not yet reviewed by a manager."
+      enum: [awaiting_review, reviewed]
+
+    InvoiceStatus:
+      type: string
+      description: |
+        Derived. Precedence: void, draft, paid (balance 0), overdue (due date before today,
+        Europe/London, and balance > 0, including part-paid), part_paid, sent.
+      enum: [draft, sent, part_paid, overdue, paid, void]
+
+    BillingStatus:
+      type: string
+      description: Status of a job's invoice, or `not_invoiced` when it has none.
+      enum: [not_invoiced, draft, sent, part_paid, overdue, paid, void]
+
+    PhotoStage:
+      type: string
+      enum: [before, during, after]
+
+    Address:
+      type: object
+      required: [line1, town, postcode]
+      properties:
+        line1: { type: string }
+        line2: { type: [string, "null"] }
+        town: { type: string }
+        county: { type: [string, "null"] }
+        postcode: { type: string, examples: ["BS6 5QA"] }
+
+    Dashboard:
+      type: object
+      required:
+        - as_of
+        - period_start
+        - period_end
+        - reports_awaiting_review
+        - jobs_completed_this_month
+        - invoiced_this_month_pence
+        - outstanding_pence
+        - overdue_invoice_count
+        - currency
+        - recent_reports
+      properties:
+        as_of: { type: string, format: date-time, description: Server "now" used for the figures }
+        period_start: { type: string, format: date, description: First day of the current London month }
+        period_end: { type: string, format: date, description: Last day of the current London month }
+        reports_awaiting_review: { type: integer, minimum: 0 }
+        jobs_completed_this_month:
+          type: integer
+          minimum: 0
+          description: Jobs with `completed_on` in the current London month.
+        invoiced_this_month_pence:
+          type: integer
+          minimum: 0
+          description: Sum of `total_pence` of non-draft, non-void invoices with `issue_date` in the current London month.
+        outstanding_pence:
+          type: integer
+          minimum: 0
+          description: Sum of `balance_pence` over invoices with status sent, part_paid or overdue.
+        overdue_invoice_count: { type: integer, minimum: 0 }
+        currency: { $ref: "#/components/schemas/Currency" }
+        recent_reports:
+          type: array
+          maxItems: 5
+          description: Five most recently submitted reports (by `submitted_at` desc).
+          items: { $ref: "#/components/schemas/ReportSummary" }
+
+    ReportSummary:
+      type: object
+      required:
+        - id
+        - job_id
+        - job_reference
+        - job_type
+        - customer
+        - site_address
+        - painter
+        - completed_on
+        - submitted_at
+        - photo_count
+        - review_status
+        - billing_status
+      properties:
+        id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        job_reference: { type: string, examples: ["JP-1042"] }
+        job_type: { $ref: "#/components/schemas/JobType" }
+        customer: { $ref: "#/components/schemas/PersonRef" }
+        site_address: { $ref: "#/components/schemas/Address" }
+        painter: { $ref: "#/components/schemas/PersonRef" }
+        completed_on: { type: string, format: date }
+        submitted_at: { type: string, format: date-time }
+        photo_count: { type: integer, minimum: 0 }
+        review_status: { $ref: "#/components/schemas/ReviewStatus" }
+        billing_status: { $ref: "#/components/schemas/BillingStatus" }
+
+    ReportPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReportSummary" }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
+
+    ChecklistItem:
+      type: object
+      required: [id, label, done, note]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string, examples: ["Walls filled, sanded and spot-primed"] }
+        done: { type: boolean }
+        note: { type: [string, "null"] }
+
+    ReportPhoto:
+      type: object
+      required: [id, stage, caption, taken_at, width, height, url, thumb_url]
+      properties:
+        id: { type: string, format: uuid }
+        stage: { $ref: "#/components/schemas/PhotoStage" }
+        caption: { type: string }
+        taken_at: { type: string, format: date-time }
+        width: { type: integer, description: Full-size pixel width }
+        height: { type: integer, description: Full-size pixel height }
+        url: { type: string, format: uri, description: "Signed, short-lived, opaque full-size URL" }
+        thumb_url: { type: string, format: uri, description: "Signed, short-lived, opaque thumbnail URL" }
+
+    JobDetail:
+      type: object
+      required:
+        - id
+        - reference
+        - job_type
+        - title
+        - status
+        - site_address
+        - notes
+        - scheduled_start
+        - completed_on
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string }
+        job_type: { $ref: "#/components/schemas/JobType" }
+        title: { type: string, examples: ["Repaint lounge, hall and landing"] }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        site_address: { $ref: "#/components/schemas/Address" }
+        notes: { type: [string, "null"], description: Office/job notes (may be long) }
+        scheduled_start: { type: string, format: date }
+        completed_on: { type: [string, "null"], format: date }
+
+    CustomerDetail:
+      type: object
+      required: [id, name, customer_type, email, phone, billing_address, job_count]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        customer_type: { $ref: "#/components/schemas/CustomerType" }
+        contact_name: { type: [string, "null"], description: For landlords and businesses }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        billing_address: { $ref: "#/components/schemas/Address" }
+        job_count: { type: integer, minimum: 1, description: Total jobs for this customer }
+
+    QuoteSummary:
+      type: object
+      required:
+        - id
+        - reference
+        - status
+        - total_pence
+        - deposit_pence
+        - deposit_paid_pence
+        - currency
+        - issued_on
+        - accepted_on
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, examples: ["Q-0317"] }
+        status: { type: string, enum: [draft, sent, accepted, declined, expired] }
+        total_pence: { type: integer, minimum: 0 }
+        deposit_pence: { type: integer, minimum: 0, description: 0 when no deposit was requested }
+        deposit_paid_pence: { type: integer, minimum: 0 }
+        currency: { $ref: "#/components/schemas/Currency" }
+        issued_on: { type: string, format: date }
+        accepted_on: { type: [string, "null"], format: date }
+
+    InvoiceSummary:
+      type: object
+      required:
+        - id
+        - number
+        - status
+        - subtotal_pence
+        - vat_pence
+        - deposit_applied_pence
+        - total_pence
+        - paid_pence
+        - balance_pence
+        - currency
+        - issue_date
+        - due_date
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, examples: ["INV-0187"] }
+        status: { $ref: "#/components/schemas/InvoiceStatus" }
+        subtotal_pence: { type: integer, minimum: 0, description: Work value excluding VAT }
+        vat_pence: { type: integer, minimum: 0, description: VAT at 20% on subtotal }
+        deposit_applied_pence: { type: integer, minimum: 0, description: Deposit already paid on the quote and deducted }
+        total_pence:
+          type: integer
+          minimum: 0
+          description: "Amount billed on this invoice: subtotal + VAT - deposit applied."
+
+        paid_pence: { type: integer, minimum: 0 }
+        balance_pence: { type: integer, minimum: 0 }
+        currency: { $ref: "#/components/schemas/Currency" }
+        issue_date: { type: [string, "null"], format: date, description: Null for drafts }
+        due_date: { type: [string, "null"], format: date, description: Null for drafts }
+
+    Payment:
+      type: object
+      required: [id, kind, amount_pence, currency, received_at, method]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [deposit, invoice] }
+        amount_pence: { type: integer, minimum: 1 }
+        currency: { $ref: "#/components/schemas/Currency" }
+        received_at: { type: string, format: date-time }
+        method: { type: string, enum: [card, bank_transfer, cash] }
+
+    ReportDetail:
+      type: object
+      required:
+        - id
+        - review_status
+        - submitted_at
+        - reviewed_at
+        - reviewed_by
+        - painter_notes
+        - billing_status
+        - job
+        - customer
+        - painter
+        - checklist
+        - photos
+        - quote
+        - invoice
+        - payments
+      properties:
+        id: { type: string, format: uuid }
+        review_status: { $ref: "#/components/schemas/ReviewStatus" }
+        submitted_at: { type: string, format: date-time }
+        reviewed_at: { type: [string, "null"], format: date-time }
+        reviewed_by:
+          oneOf:
+            - $ref: "#/components/schemas/PersonRef"
+            - type: "null"
+        painter_notes: { type: [string, "null"] }
+        billing_status: { $ref: "#/components/schemas/BillingStatus" }
+        job: { $ref: "#/components/schemas/JobDetail" }
+        customer: { $ref: "#/components/schemas/CustomerDetail" }
+        painter: { $ref: "#/components/schemas/PersonRef" }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+        photos:
+          type: array
+          description: Ordered before, during, after, then by `taken_at`. May be empty.
+          items: { $ref: "#/components/schemas/ReportPhoto" }
+        quote:
+          oneOf:
+            - $ref: "#/components/schemas/QuoteSummary"
+            - type: "null"
+        invoice:
+          oneOf:
+            - $ref: "#/components/schemas/InvoiceSummary"
+            - type: "null"
+        payments:
+          type: array
+          description: Deposit payments on the quote and payments on the invoice, by `received_at` asc.
+          items: { $ref: "#/components/schemas/Payment" }
+
+    InvoiceRow:
+      type: object
+      required:
+        - id
+        - number
+        - status
+        - customer
+        - job_id
+        - job_reference
+        - report_id
+        - total_pence
+        - paid_pence
+        - balance_pence
+        - currency
+        - issue_date
+        - due_date
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, examples: ["INV-0187"] }
+        status: { $ref: "#/components/schemas/InvoiceStatus" }
+        customer: { $ref: "#/components/schemas/PersonRef" }
+        job_id: { type: string, format: uuid }
+        job_reference: { type: string }
+        report_id: { type: [string, "null"], format: uuid, description: "The job's completion report, used for the link" }
+        total_pence: { type: integer, minimum: 0 }
+        paid_pence: { type: integer, minimum: 0 }
+        balance_pence: { type: integer, minimum: 0 }
+        currency: { $ref: "#/components/schemas/Currency" }
+        issue_date: { type: [string, "null"], format: date }
+        due_date: { type: [string, "null"], format: date }
+
+    InvoicePage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceRow" }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
