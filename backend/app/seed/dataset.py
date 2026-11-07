@@ -700,6 +700,25 @@ def build_dataset(anchor: date) -> Dataset:  # noqa: PLR0915 - one linear build,
         )
     manager_id = users[0].id
     painter_ids = [u.id for u in users[1:]]
+    # T-002b: the second manager and the admin are appended last, draw nothing from `rng` and get
+    # uuid5 ids like everyone else, so every other id and value is unchanged.
+    for (name, email, phone), role, password in (
+        (cat.MANAGER2, UserRole.manager, cat.MANAGER_PASSWORD),
+        (cat.ADMIN, UserRole.admin, cat.ADMIN_PASSWORD),
+    ):
+        users.append(
+            UserRow(
+                uid("user", email),
+                email,
+                name,
+                role,
+                phone,
+                _demo_hash(email, password),
+                True,
+                stamp0,
+                stamp0,
+            )
+        )
 
     customers: dict[str, CustomerRow] = {}
     for spec in cat.CUSTOMERS:
@@ -1129,7 +1148,7 @@ def _invoice_payments(
 
 def _verify(ds: Dataset) -> None:
     """Fail the build if the generated data misses any specified volume or mix."""
-    _check(len(ds.users) == 7 and len(ds.customers) == 12 and len(ds.jobs) == 60, "volumes")
+    _check(len(ds.users) == 9 and len(ds.customers) == 12 and len(ds.jobs) == 60, "volumes")
     _check(len(ds.reports) == 60 and len(ds.quotes) == 24 and len(ds.invoices) == 52, "volumes")
     awaiting = sum(r.review_status is ReviewStatus.awaiting_review for r in ds.reports)
     _check(awaiting == AWAITING_REVIEW_TOTAL, f"awaiting review {awaiting}")

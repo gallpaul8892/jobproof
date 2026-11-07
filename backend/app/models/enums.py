@@ -6,6 +6,7 @@ from enum import StrEnum
 class UserRole(StrEnum):
     manager = "manager"
     painter = "painter"
+    admin = "admin"
 
 
 class CustomerType(StrEnum):

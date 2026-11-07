@@ -187,8 +187,16 @@ def test_demo_accounts_when_enabled(client: TestClient) -> None:
     response = client.get("/api/v1/auth/demo-accounts")
     assert response.status_code == 200
     assert_contract(response, "listDemoAccounts")
-    accounts = {a["role"]: a for a in response.json()}
-    assert set(accounts) == {"manager", "painter"}
+    assert [(a["role"], a["full_name"]) for a in response.json()] == [
+        ("manager", "Sarah Whitfield"),
+        ("manager", "Priya Nair"),
+        ("painter", "Dan Hughes"),
+        ("admin", "Tom Ashworth"),
+    ]
+    accounts = {a["role"]: a for a in reversed(response.json())}  # first manager wins
+    assert set(accounts) == {"manager", "painter", "admin"}
+    assert accounts["admin"]["email"] == "admin@jobproof.test"
+    assert accounts["admin"]["password"] == "Admin123!"
     assert accounts["manager"]["email"] == "manager@jobproof.test"
     assert accounts["manager"]["password"] == "Manager123!"
     assert accounts["manager"]["full_name"] == "Sarah Whitfield"

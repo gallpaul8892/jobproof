@@ -18,6 +18,10 @@ I, E, W, K, S, C = (
 )
 
 MANAGER = ("Sarah Whitfield", "manager@jobproof.test", "07700 900100")
+# Second manager (two-manager scenarios) and the administrator, added by T-002b.
+MANAGER2 = ("Priya Nair", "manager2@jobproof.test", "07700 900102")
+ADMIN = ("Tom Ashworth", "admin@jobproof.test", "07700 900103")
+ADMIN_PASSWORD = "Admin123!"  # noqa: S105 - published demo credential
 # (full name, email, phone, password or None)
 PAINTERS: list[tuple[str, str, str, str | None]] = [
     ("Dan Hughes", "painter@jobproof.test", "07700 900101", "Painter123!"),
@@ -32,11 +36,12 @@ MANAGER_PASSWORD = "Manager123!"  # noqa: S105 - published demo credential
 PAINTER_QUOTAS = [10, 11, 9, 12, 8, 10]
 
 DEMO_ACCOUNTS: list[dict[str, str]] = [
+    {"role": "manager", "email": MANAGER[1], "password": MANAGER_PASSWORD, "full_name": MANAGER[0]},
     {
         "role": "manager",
-        "email": MANAGER[1],
+        "email": MANAGER2[1],
         "password": MANAGER_PASSWORD,
-        "full_name": MANAGER[0],
+        "full_name": MANAGER2[0],
     },
     {
         "role": "painter",
@@ -44,6 +49,7 @@ DEMO_ACCOUNTS: list[dict[str, str]] = [
         "password": PAINTERS[0][3] or "",
         "full_name": PAINTERS[0][0],
     },
+    {"role": "admin", "email": ADMIN[1], "password": ADMIN_PASSWORD, "full_name": ADMIN[0]},
 ]
 
 

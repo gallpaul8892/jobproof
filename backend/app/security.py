@@ -32,6 +32,10 @@ def verify_password(stored_hash: str | None, password: str) -> bool:
     return matched and stored_hash is not None
 
 
+def hash_password(password: str) -> str:
+    return _hasher.hash(password)
+
+
 class InvalidTokenError(Exception):
     """The bearer token is missing claims, expired, mis-signed or otherwise unusable."""
 

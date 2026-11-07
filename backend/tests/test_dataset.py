@@ -38,9 +38,14 @@ def test_different_anchors_give_different_dates(ds: Dataset) -> None:
 
 def test_users_and_customers(ds: Dataset) -> None:
     roles = Counter(u.role.value for u in ds.users)
-    assert roles == {"manager": 1, "painter": 6}
+    assert roles == {"manager": 2, "painter": 6, "admin": 1}
     with_hash = {u.email for u in ds.users if u.password_hash}
-    assert with_hash == {"manager@jobproof.test", "painter@jobproof.test"}
+    assert with_hash == {
+        "manager@jobproof.test",
+        "manager2@jobproof.test",
+        "painter@jobproof.test",
+        "admin@jobproof.test",
+    }
     for user in ds.users:
         assert user.email == user.email.lower()
         if user.password_hash:

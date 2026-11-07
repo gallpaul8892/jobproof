@@ -19,9 +19,10 @@ TABLES = {
     "report_photos",
     "invoices",
     "payments",
+    "company_settings",
 }
 ENUMS = {
-    "user_role": ["manager", "painter"],
+    "user_role": ["manager", "painter", "admin"],
     "customer_type": ["homeowner", "landlord", "business"],
     "job_type": [
         "interior_repaint",
@@ -76,8 +77,8 @@ def test_upgrade_downgrade_upgrade_and_no_drift() -> None:
 
 def test_history_is_linear_with_one_head() -> None:
     script = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL))
-    assert script.get_heads() == ["0001"]
-    assert [r.revision for r in script.walk_revisions()] == ["0001"]
+    assert script.get_heads() == ["0003"]
+    assert [r.revision for r in script.walk_revisions()] == ["0003", "0002", "0001"]
 
 
 def test_schema_has_the_nine_tables_and_enums(scratch_engine: Engine) -> None:
@@ -153,3 +154,40 @@ def test_money_columns_are_integers_and_currency_is_char3(scratch_engine: Engine
                 assert str(column["type"]) == "INTEGER", (table, column["name"])
             if column["name"] == "currency":
                 assert str(column["type"]) == "CHAR(3)"
+
+
+def test_admin_role_downgrade_is_refused_while_an_admin_exists_then_restores_the_enum() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.upgrade(config, "head")
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("INSERT INTO users (email, full_name, role) VALUES ('a@x.test', 'A', 'admin')")
+            )
+        with pytest.raises(RuntimeError, match="role 'admin'"):
+            command.downgrade(config, "0002")
+        with engine.begin() as connection:  # the refused downgrade changed nothing
+            assert connection.execute(text("SELECT count(*) FROM users")).scalar() == 1
+            connection.execute(text("DELETE FROM users"))
+            connection.execute(
+                text(
+                    "INSERT INTO users (email, full_name, role) VALUES ('m@x.test', 'M', 'manager')"
+                )
+            )
+        command.downgrade(config, "0002")
+        with engine.connect() as connection:
+            labels = connection.execute(
+                text(
+                    "SELECT array_agg(e.enumlabel::text ORDER BY e.enumsortorder) FROM pg_type t "
+                    "JOIN pg_enum e ON e.enumtypid = t.oid WHERE t.typname = 'user_role'"
+                )
+            ).scalar()
+            role = connection.execute(text("SELECT role::text FROM users")).scalar()
+        assert labels == ["manager", "painter"] and role == "manager"
+    finally:
+        engine.dispose()
+        command.downgrade(config, "base")
+        command.upgrade(config, "head")

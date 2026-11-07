@@ -28,12 +28,16 @@ class ProblemError(Exception):
         code: str,
         detail: str | None = None,
         headers: dict[str, str] | None = None,
+        errors: list[dict[str, Any]] | None = None,
+        extensions: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(detail or code)
         self.status = status
         self.code = code
         self.detail = detail
         self.headers = headers
+        self.errors = errors
+        self.extensions = extensions
 
 
 def problem_response(
@@ -44,6 +48,7 @@ def problem_response(
     detail: str | None = None,
     errors: list[dict[str, Any]] | None = None,
     headers: dict[str, str] | None = None,
+    extensions: dict[str, Any] | None = None,
 ) -> JSONResponse:
     body: dict[str, Any] = {
         "type": f"{PROBLEM_TYPE_BASE}{code}",
@@ -57,13 +62,21 @@ def problem_response(
         body["detail"] = detail
     if errors is not None:
         body["errors"] = errors
+    for key, value in (extensions or {}).items():
+        body.setdefault(key, value)  # extension members never override the standard ones
     return JSONResponse(body, status_code=status, media_type=PROBLEM_MEDIA_TYPE, headers=headers)
 
 
 async def _problem_error_handler(request: Request, exc: Exception) -> JSONResponse:
     exc = cast(ProblemError, exc)
     return problem_response(
-        exc.status, exc.code, instance=request.url.path, detail=exc.detail, headers=exc.headers
+        exc.status,
+        exc.code,
+        instance=request.url.path,
+        detail=exc.detail,
+        errors=exc.errors,
+        headers=exc.headers,
+        extensions=exc.extensions,
     )
 
 
@@ -86,7 +99,11 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
 async def _validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     exc = cast(RequestValidationError, exc)
     errors = [
-        {"loc": [p if isinstance(p, int) else str(p) for p in err["loc"]], "message": err["msg"]}
+        {
+            "loc": [p if isinstance(p, int) else str(p) for p in err["loc"]],
+            # Pydantic prefixes messages raised from validators; ours are written for people.
+            "message": str(err["msg"]).removeprefix("Value error, "),
+        }
         for err in exc.errors()
     ]
     return problem_response(

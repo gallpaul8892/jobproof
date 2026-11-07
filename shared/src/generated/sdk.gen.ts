@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetHealthData, GetHealthErrors, GetHealthResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, LoginData, LoginErrors, LoginResponses } from './types.gen';
+import type { GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetBrandingData, GetBrandingResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListAdminSettingsHistoryData, ListAdminSettingsHistoryErrors, ListAdminSettingsHistoryResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportHistoryData, ListManagerReportHistoryErrors, ListManagerReportHistoryResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, LoginData, LoginErrors, LoginResponses, ReviewManagerReportData, ReviewManagerReportErrors, ReviewManagerReportResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateManagerReportData, UpdateManagerReportErrors, UpdateManagerReportResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -54,7 +54,56 @@ export const getMe = <ThrowOnError extends boolean = false>(options?: Options<Ge
 export const listDemoAccounts = <ThrowOnError extends boolean = false>(options?: Options<ListDemoAccountsData, ThrowOnError>): RequestResult<ListDemoAccountsResponses, ListDemoAccountsErrors, ThrowOnError> => (options?.client ?? client).get<ListDemoAccountsResponses, ListDemoAccountsErrors, ThrowOnError>({ url: '/api/v1/auth/demo-accounts', ...options });
 
 /**
- * Summary figures and the five most recent reports
+ * Company name and theme for this deployment
+ *
+ * Public: used by the login page before anyone signs in. Returns only the company name and
+ * the theme. Clients should revalidate on every load (`Cache-Control: no-cache`).
+ *
+ */
+export const getBranding = <ThrowOnError extends boolean = false>(options?: Options<GetBrandingData, ThrowOnError>): RequestResult<GetBrandingResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetBrandingResponses, unknown, ThrowOnError>({ url: '/api/v1/branding', ...options });
+
+/**
+ * Current company settings
+ */
+export const getAdminSettings = <ThrowOnError extends boolean = false>(options?: Options<GetAdminSettingsData, ThrowOnError>): RequestResult<GetAdminSettingsResponses, GetAdminSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetAdminSettingsResponses, GetAdminSettingsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/settings',
+    ...options
+});
+
+/**
+ * Change the company name and/or colour scheme
+ *
+ * Partial update. Send `company_name`, `theme` or both. A field that is omitted is
+ * unchanged. A save that changes nothing returns 200 with the current settings, leaves
+ * `updated_at`/`updated_by` alone and records no audit event. Last write wins (single
+ * settings record, no version). Colours are accepted in either case and stored upper case.
+ * Each of `theme.primary` and `theme.accent` must reach 4.5:1 contrast against `#FFFFFF`
+ * (WCAG 2.2 AA), else 422 `contrast_too_low` with one `errors` entry per failing colour
+ * carrying `measured_ratio` and `required_ratio`.
+ *
+ */
+export const updateAdminSettings = <ThrowOnError extends boolean = false>(options: Options<UpdateAdminSettingsData, ThrowOnError>): RequestResult<UpdateAdminSettingsResponses, UpdateAdminSettingsErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAdminSettingsResponses, UpdateAdminSettingsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/settings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Settings change history, newest first (latest 100)
+ */
+export const listAdminSettingsHistory = <ThrowOnError extends boolean = false>(options?: Options<ListAdminSettingsHistoryData, ThrowOnError>): RequestResult<ListAdminSettingsHistoryResponses, ListAdminSettingsHistoryErrors, ThrowOnError> => (options?.client ?? client).get<ListAdminSettingsHistoryResponses, ListAdminSettingsHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/settings/history',
+    ...options
+});
+
+/**
+ * Summary figures, the review queue and the five most recent reports
  */
 export const getManagerDashboard = <ThrowOnError extends boolean = false>(options?: Options<GetManagerDashboardData, ThrowOnError>): RequestResult<GetManagerDashboardResponses, GetManagerDashboardErrors, ThrowOnError> => (options?.client ?? client).get<GetManagerDashboardResponses, GetManagerDashboardErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -63,7 +112,7 @@ export const getManagerDashboard = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * All painters, for filter options
+ * All field workers (role painter; "Operatives" in the UI), for filter options
  */
 export const listManagerPainters = <ThrowOnError extends boolean = false>(options?: Options<ListManagerPaintersData, ThrowOnError>): RequestResult<ListManagerPaintersResponses, ListManagerPaintersErrors, ThrowOnError> => (options?.client ?? client).get<ListManagerPaintersResponses, ListManagerPaintersErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -74,9 +123,10 @@ export const listManagerPainters = <ThrowOnError extends boolean = false>(option
 /**
  * Paginated, filterable list of job completion reports
  *
- * Sorted by `completed_on` descending, then `submitted_at` descending, then
- * `job_reference` descending. All filters combine with AND. `total` is the count of all
- * matching rows across pages.
+ * `sort=default` (or no `sort`): `completed_on` descending, then `submitted_at`
+ * descending, then `job_reference` descending. `sort=submitted_asc`: `submitted_at`
+ * ascending, then `job_reference` ascending (the review queue order). All filters combine
+ * with AND. `total` is the count of all matching rows across pages.
  *
  */
 export const listManagerReports = <ThrowOnError extends boolean = false>(options?: Options<ListManagerReportsData, ThrowOnError>): RequestResult<ListManagerReportsResponses, ListManagerReportsErrors, ThrowOnError> => (options?.client ?? client).get<ListManagerReportsResponses, ListManagerReportsErrors, ThrowOnError>({
@@ -91,6 +141,60 @@ export const listManagerReports = <ThrowOnError extends boolean = false>(options
 export const getManagerReport = <ThrowOnError extends boolean = false>(options: Options<GetManagerReportData, ThrowOnError>): RequestResult<GetManagerReportResponses, GetManagerReportErrors, ThrowOnError> => (options.client ?? client).get<GetManagerReportResponses, GetManagerReportErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/manager/reports/{report_id}',
+    ...options
+});
+
+/**
+ * Edit painter notes, manager notes and checklist done/note
+ *
+ * Partial update with optimistic concurrency. `version` is the version the client loaded
+ * and is required. Only `painter_notes`, `manager_notes` and, per existing checklist item,
+ * `done` and `note` are editable; any other field (photos, labels, review fields, job,
+ * customer, unknown keys) is 422. An empty or whitespace-only notes string is stored as
+ * null. Order of checks: body validation (422), report exists (404), checklist ids belong
+ * to this report and are unique (422), version matches (409 `version_conflict`). If the
+ * body repeats the current values the response is 200 with the same `version`, nothing is
+ * written and no audit event is recorded. Otherwise `version` increases by 1, a
+ * `report.edited` event is recorded, and if the report was reviewed it returns to
+ * `awaiting_review` with `reviewed_at`/`reviewed_by` cleared and a `report.reopened` event.
+ * All in one transaction.
+ *
+ */
+export const updateManagerReport = <ThrowOnError extends boolean = false>(options: Options<UpdateManagerReportData, ThrowOnError>): RequestResult<UpdateManagerReportResponses, UpdateManagerReportErrors, ThrowOnError> => (options.client ?? client).patch<UpdateManagerReportResponses, UpdateManagerReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/manager/reports/{report_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Mark an awaiting-review report as reviewed
+ *
+ * Records the caller and the server time as reviewer, increases `version` by 1 and records
+ * a `report.reviewed` event. Order of checks: body (422), report exists (404), version
+ * matches (409 `version_conflict`), not already reviewed (409 `already_reviewed`).
+ * Concurrent calls are serialised by a row lock: exactly one succeeds.
+ *
+ */
+export const reviewManagerReport = <ThrowOnError extends boolean = false>(options: Options<ReviewManagerReportData, ThrowOnError>): RequestResult<ReviewManagerReportResponses, ReviewManagerReportErrors, ThrowOnError> => (options.client ?? client).post<ReviewManagerReportResponses, ReviewManagerReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/manager/reports/{report_id}/review',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Audit events for one report, newest first (latest 100)
+ */
+export const listManagerReportHistory = <ThrowOnError extends boolean = false>(options: Options<ListManagerReportHistoryData, ThrowOnError>): RequestResult<ListManagerReportHistoryResponses, ListManagerReportHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListManagerReportHistoryResponses, ListManagerReportHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/manager/reports/{report_id}/history',
     ...options
 });
 

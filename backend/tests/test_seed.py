@@ -18,6 +18,7 @@ from app.seed.loader import load
 from app.services.billing import InvoiceStatus
 from tests.conftest import TEST_DATABASE_URL
 from tests.dataset_checks import invoice_statuses
+from tests.expected import NON_USER_TABLES_CHECKSUM_2026_11_07, non_user_tables_checksum
 
 ANCHOR = date.fromisoformat(os.environ["SEED_ANCHOR_DATE"])
 
@@ -49,9 +50,10 @@ def test_seed_loads_the_specified_volumes(engine: Engine) -> None:
         table: _scalar(engine, f"SELECT count(*) FROM {table}")  # noqa: S608
         for table in Base.metadata.tables
     }
-    assert counts["users"] == 7
-    assert _scalar(engine, "SELECT count(*) FROM users WHERE role = 'manager'") == 1
+    assert counts["users"] == 9
+    assert _scalar(engine, "SELECT count(*) FROM users WHERE role = 'manager'") == 2
     assert _scalar(engine, "SELECT count(*) FROM users WHERE role = 'painter'") == 6
+    assert _scalar(engine, "SELECT count(*) FROM users WHERE role = 'admin'") == 1
     with engine.connect() as connection:
         hashed = {
             r[0]
@@ -59,7 +61,12 @@ def test_seed_loads_the_specified_volumes(engine: Engine) -> None:
                 text("SELECT email FROM users WHERE password_hash IS NOT NULL")
             )
         }
-    assert hashed == {"manager@jobproof.test", "painter@jobproof.test"}
+    assert hashed == {
+        "manager@jobproof.test",
+        "manager2@jobproof.test",
+        "painter@jobproof.test",
+        "admin@jobproof.test",
+    }
     assert counts["customers"] == 12
     with engine.connect() as connection:
         types = dict(
@@ -151,6 +158,8 @@ def test_seeded_password_hashes_verify(engine: Engine) -> None:
     for email, password in (
         ("manager@jobproof.test", "Manager123!"),
         ("painter@jobproof.test", "Painter123!"),
+        ("manager2@jobproof.test", "Manager123!"),
+        ("admin@jobproof.test", "Admin123!"),
     ):
         stored = _scalar(engine, f"SELECT password_hash FROM users WHERE email = '{email}'")  # noqa: S608
         assert stored.startswith("$argon2id$")
@@ -211,3 +220,24 @@ def test_seed_refuses_outside_local_and_test(
     assert exit_info.value.code != 0
     assert "Refusing to seed" in str(exit_info.value.code)
     assert _snapshot(engine) == before
+
+
+def test_seed_leaves_the_company_settings_row_alone(engine: Engine) -> None:
+    sql = "SELECT id, company_name, theme_primary, created_at, updated_at FROM company_settings"
+    before = _rows(engine, sql)
+    assert len(before) == 1
+    main()
+    assert _rows(engine, sql) == before
+    assert "company_settings" not in {name for name, _ in build_dataset(ANCHOR).tables()}
+
+
+def test_adding_users_changed_no_other_table() -> None:
+    ds = build_dataset(date(2026, 11, 7))
+    assert non_user_tables_checksum(ds) == NON_USER_TABLES_CHECKSUM_2026_11_07
+
+
+def test_new_users_have_stable_ids_and_are_appended_last() -> None:
+    ds = build_dataset(ANCHOR)
+    assert [u.email for u in ds.users][-2:] == ["manager2@jobproof.test", "admin@jobproof.test"]
+    painter_ids = {u.id for u in ds.users if u.role.value == "painter"}
+    assert {j.painter_id for j in ds.jobs} == painter_ids

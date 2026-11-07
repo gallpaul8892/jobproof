@@ -139,7 +139,7 @@ class PlaceholderPhotoStore:
             f'<rect width="{w}" height="{h}" fill="{wall}"/>'
             f"{_illustration(kind, w, h, bg, accent)}"
             f'<rect y="{bar_y}" width="{w}" height="{bar_h}" fill="#1f2933" opacity="0.82"/>'
-            f'<g fill="#ffffff" font-family="sans-serif">{"".join(text)}</g>'
+            f'<g fill="white" font-family="sans-serif">{"".join(text)}</g>'
             f"</svg>"
         )
         return svg.encode(), SVG_CONTENT_TYPE

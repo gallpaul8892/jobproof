@@ -17,12 +17,50 @@ _HTTP_METHODS = {"get", "put", "post", "delete", "patch", "head", "options"}
 # (METHOD, path) of operations in the contract that are not built yet. Empty since T-001c.
 NOT_YET_IMPLEMENTED: set[tuple[str, str]] = set()
 
+# Tickets whose contract items (operations, parameters, schema properties marked `x-ticket`) are
+# not built yet. load_spec() hides them so the contract tests stay green while a package is built
+# ticket by ticket. Delete a ticket's id from this set as the last step of that ticket.
+PENDING_TICKETS: set[str] = {"T-002f", "T-002g", "T-002i", "T-002k"}
+
+
+def _is_pending(node: Any, pending: set[str]) -> bool:
+    return isinstance(node, dict) and node.get("x-ticket") in pending
+
+
+def strip_pending(node: Any, pending: set[str]) -> Any:
+    """Copy of `node` without any mapping or list item whose `x-ticket` is in `pending`.
+
+    Schema properties removed this way are also removed from the sibling `required` list, and a
+    path left without operations is dropped.
+    """
+    if isinstance(node, list):
+        return [strip_pending(item, pending) for item in node if not _is_pending(item, pending)]
+    if not isinstance(node, dict):
+        return node
+    result = {
+        key: strip_pending(value, pending)
+        for key, value in node.items()
+        if not _is_pending(value, pending)
+    }
+    properties = node.get("properties")
+    if isinstance(properties, dict) and isinstance(result.get("required"), list):
+        removed = {name for name, value in properties.items() if _is_pending(value, pending)}
+        result["required"] = [name for name in result["required"] if name not in removed]
+    if isinstance(result.get("paths"), dict):
+        result["paths"] = {
+            path: item
+            for path, item in result["paths"].items()
+            if any(method in _HTTP_METHODS for method in item)
+        }
+    return result
+
 
 @lru_cache
 def load_spec() -> dict[str, Any]:
     with OPENAPI_PATH.open() as handle:
         spec: dict[str, Any] = yaml.safe_load(handle)
-    return spec
+    stripped: dict[str, Any] = strip_pending(spec, PENDING_TICKETS)
+    return stripped
 
 
 def contract_operations() -> dict[tuple[str, str], str]:

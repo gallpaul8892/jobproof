@@ -108,6 +108,34 @@ def test_painter_token_gets_403(
 
 
 @pytest.mark.parametrize(("method", "path", "operation_id"), MANAGER_OPERATIONS)
+def test_admin_token_gets_403(
+    client: TestClient,
+    ds: Any,
+    admin_headers: dict[str, str],
+    method: str,
+    path: str,
+    operation_id: str,
+) -> None:
+    response = client.request(method, _url(path, ds), headers=admin_headers)
+    assert response.status_code == 403
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "forbidden"
+    assert_contract(response, operation_id)
+
+
+@pytest.mark.parametrize(("method", "path", "operation_id"), MANAGER_OPERATIONS)
+def test_second_manager_token_gets_200(
+    client: TestClient,
+    ds: Any,
+    manager2_headers: dict[str, str],
+    method: str,
+    path: str,
+    operation_id: str,
+) -> None:
+    assert client.request(method, _url(path, ds), headers=manager2_headers).status_code == 200
+
+
+@pytest.mark.parametrize(("method", "path", "operation_id"), MANAGER_OPERATIONS)
 def test_manager_token_gets_200(
     client: TestClient,
     ds: Any,

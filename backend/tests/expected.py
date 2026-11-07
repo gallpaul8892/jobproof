@@ -154,3 +154,40 @@ def deposit_paid_by_quote(ds: Dataset) -> dict[Any, int]:
 
 def parse_ts(value: str) -> dt.datetime:
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+# ---- T-002b determinism rule --------------------------------------------------------------------
+# SHA-256 over every table except users for build_dataset(date(2026, 11, 7)), recorded from a
+# database seeded by the code that existed before T-002b. Adding the second manager and the admin
+# must not change a single other row.
+NON_USER_TABLES_CHECKSUM_2026_11_07 = (
+    "6c5f949ff4b676d2b379598e56dc08af2273283ea03e880b9f2311bd9caf77ab"
+)
+
+
+def non_user_tables_checksum(ds: Dataset) -> str:
+    import dataclasses
+    import hashlib
+
+    digest = hashlib.sha256()
+    for name, rows in sorted(ds.tables()):
+        if name == "users":
+            continue
+        normalised = []
+        for row in rows:
+            fields = dataclasses.asdict(row)  # type: ignore[call-overload]
+            normalised.append(
+                sorted(
+                    (
+                        key,
+                        value.astimezone(dt.UTC).isoformat()
+                        if isinstance(value, dt.datetime)
+                        else str(value),
+                    )
+                    for key, value in fields.items()
+                )
+            )
+        normalised.sort(key=lambda fields: dict(fields)["id"])
+        digest.update(name.encode())
+        digest.update(repr(normalised).encode())
+    return digest.hexdigest()

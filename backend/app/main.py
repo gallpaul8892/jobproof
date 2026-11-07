@@ -12,7 +12,7 @@ from app.db import make_engine, make_sessionmaker
 from app.errors import register_exception_handlers
 from app.logging import setup_logging
 from app.middleware import RequestContextMiddleware
-from app.routers import auth, health, manager, photos
+from app.routers import admin, auth, branding, health, manager, photos
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -42,7 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         expose_headers=["X-Request-ID"],
         allow_credentials=False,
@@ -52,6 +52,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(branding.router)
+    app.include_router(admin.router)
     app.include_router(manager.router)
     app.include_router(photos.router)
     return app

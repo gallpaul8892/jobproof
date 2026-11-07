@@ -16,10 +16,10 @@ export type Problem = {
     status: number;
     detail?: string;
     instance?: string;
-    code: 'unauthenticated' | 'invalid_credentials' | 'forbidden' | 'not_found' | 'validation_error' | 'invalid_signature' | 'internal_error';
+    code: 'unauthenticated' | 'invalid_credentials' | 'forbidden' | 'not_found' | 'validation_error' | 'invalid_signature' | 'internal_error' | 'contrast_too_low' | 'version_conflict' | 'already_reviewed';
     request_id: string;
     /**
-     * Present for `validation_error`.
+     * Present for `validation_error` and `contrast_too_low`.
      */
     errors?: Array<FieldError>;
 };
@@ -27,6 +27,14 @@ export type Problem = {
 export type FieldError = {
     loc: Array<string | number>;
     message: string;
+    /**
+     * `contrast_too_low` only: the colour's contrast against white, rounded to 2 decimals (never shown as 4.50 when below 4.5)
+     */
+    measured_ratio?: number;
+    /**
+     * `contrast_too_low` only
+     */
+    required_ratio?: number;
 };
 
 export type Health = {
@@ -35,7 +43,10 @@ export type Health = {
     version: string;
 };
 
-export type Role = 'manager' | 'painter';
+/**
+ * `painter` is the field worker, shown as "Operative" in the UI (T-002l).
+ */
+export type Role = 'manager' | 'painter' | 'admin';
 
 export type LoginRequest = {
     email: string;
@@ -83,6 +94,8 @@ export type CustomerType = 'homeowner' | 'landlord' | 'business';
  * `awaiting_review` = submitted by painter, not yet reviewed by a manager.
  */
 export type ReviewStatus = 'awaiting_review' | 'reviewed';
+
+export type ReportSort = 'default' | 'submitted_asc';
 
 /**
  * Derived. Precedence: void, draft, paid (balance 0), overdue (due date before today,
@@ -134,6 +147,13 @@ export type Dashboard = {
     outstanding_pence: number;
     overdue_invoice_count: number;
     currency: Currency;
+    /**
+     * Up to five awaiting-review reports that have waited longest: `submitted_at`
+     * ascending, then `job_reference` ascending. Same order as
+     * `GET /manager/reports?review_status=awaiting_review&sort=submitted_asc`.
+     *
+     */
+    review_queue: Array<ReportSummary>;
     /**
      * Five most recently submitted reports (by `submitted_at` desc).
      */
@@ -287,7 +307,20 @@ export type ReportDetail = {
     submitted_at: string;
     reviewed_at: string | null;
     reviewed_by: PersonRef | null;
+    /**
+     * Starts at 1; +1 on every real change (edit or review). Send it back on writes.
+     */
+    version: number;
+    /**
+     * Time of the last review or edit; null if never changed since submission
+     */
+    last_changed_at: string | null;
+    last_changed_by: PersonRef | null;
     painter_notes: string | null;
+    /**
+     * Internal note by managers; never shown to the painter
+     */
+    manager_notes: string | null;
     billing_status: BillingStatus;
     job: JobDetail;
     customer: CustomerDetail;
@@ -329,6 +362,173 @@ export type InvoicePage = {
     total: number;
     page: number;
     page_size: number;
+};
+
+/**
+ * `#RRGGBB`, upper case in responses
+ */
+export type HexColour = string;
+
+export type Theme = {
+    /**
+     * Header bar and primary buttons; carries white text
+     */
+    primary: HexColour;
+    /**
+     * Links, active navigation, focus ring on white
+     */
+    accent: HexColour;
+    /**
+     * Page (fixed)
+     */
+    background: HexColour;
+    /**
+     * Cards, table stripes (fixed)
+     */
+    surface: HexColour;
+    /**
+     * Body text (fixed)
+     */
+    text: HexColour;
+};
+
+export type Branding = {
+    company_name: string;
+    theme: Theme;
+};
+
+export type AdminSettings = {
+    company_name: string;
+    theme: Theme;
+    /**
+     * Null until the first change
+     */
+    updated_at: string | null;
+    /**
+     * Name as it was at the time of the change; null until the first change
+     */
+    updated_by: PersonRef | null;
+};
+
+export type AdminSettingsUpdate = {
+    /**
+     * Trimmed, then 1 to 60 characters, no control characters (Unicode Cc, including NUL).
+     *
+     */
+    company_name?: string;
+    /**
+     * Both colours are required when a theme is sent. Background, surface and text are fixed.
+     */
+    theme?: {
+        primary: string;
+        accent: string;
+    };
+};
+
+export type ReviewRequest = {
+    /**
+     * The report version the manager saw
+     */
+    version: number;
+};
+
+export type ChecklistItemUpdate = {
+    /**
+     * An existing item of this report
+     */
+    id: string;
+    done?: boolean;
+    /**
+     * Empty or whitespace-only is stored as null
+     */
+    note?: string | null;
+};
+
+/**
+ * `version` plus at least one editable field.
+ */
+export type ReportUpdate = {
+    version: number;
+    painter_notes?: string | null;
+    manager_notes?: string | null;
+    /**
+     * Only the items sent are changed; ids must be unique and belong to this report
+     */
+    checklist?: Array<ChecklistItemUpdate>;
+};
+
+/**
+ * Current values of the fields the client tried to change
+ */
+export type ReportEditableValues = {
+    painter_notes?: string | null;
+    manager_notes?: string | null;
+    checklist?: Array<{
+        id: string;
+        done: boolean;
+        note: string | null;
+    }>;
+};
+
+export type VersionConflictProblem = Problem & {
+    code: 'version_conflict';
+    current_version: number;
+    last_changed_at: string | null;
+    last_changed_by: PersonRef | null;
+    review_status: ReviewStatus;
+    reviewed_at: string | null;
+    reviewed_by: PersonRef | null;
+    /**
+     * PATCH only
+     */
+    current?: ReportEditableValues;
+};
+
+export type AlreadyReviewedProblem = Problem & {
+    code: 'already_reviewed';
+    current_version: number;
+    reviewed_at: string;
+    reviewed_by: PersonRef;
+};
+
+export type AuditAction = 'report.reviewed' | 'report.reopened' | 'report.edited' | 'settings.changed';
+
+export type AuditField = 'review_status' | 'reviewed_by' | 'reviewed_at' | 'painter_notes' | 'manager_notes' | 'checklist_done' | 'checklist_note' | 'company_name' | 'theme_primary' | 'theme_accent';
+
+export type AuditChange = {
+    field: AuditField;
+    /**
+     * Checklist item for checklist_* fields
+     */
+    item_id: string | null;
+    /**
+     * Checklist label at the time
+     */
+    item_label: string | null;
+    old_value: string | boolean | null;
+    new_value: string | boolean | null;
+};
+
+export type AuditEvent = {
+    id: string;
+    occurred_at: string;
+    /**
+     * Name as it was when the event happened
+     */
+    actor: PersonRef;
+    action: AuditAction;
+    changes: Array<AuditChange>;
+};
+
+export type AuditHistory = {
+    /**
+     * Newest first
+     */
+    items: Array<AuditEvent>;
+    /**
+     * All events for the record (may exceed items)
+     */
+    total: number;
 };
 
 export type Page = number;
@@ -439,6 +639,115 @@ export type ListDemoAccountsResponses = {
 
 export type ListDemoAccountsResponse = ListDemoAccountsResponses[keyof ListDemoAccountsResponses];
 
+export type GetBrandingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/branding';
+};
+
+export type GetBrandingResponses = {
+    /**
+     * Branding
+     */
+    200: Branding;
+};
+
+export type GetBrandingResponse = GetBrandingResponses[keyof GetBrandingResponses];
+
+export type GetAdminSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings';
+};
+
+export type GetAdminSettingsErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+};
+
+export type GetAdminSettingsError = GetAdminSettingsErrors[keyof GetAdminSettingsErrors];
+
+export type GetAdminSettingsResponses = {
+    /**
+     * Settings
+     */
+    200: AdminSettings;
+};
+
+export type GetAdminSettingsResponse = GetAdminSettingsResponses[keyof GetAdminSettingsResponses];
+
+export type UpdateAdminSettingsData = {
+    body: AdminSettingsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings';
+};
+
+export type UpdateAdminSettingsErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Invalid body (code `validation_error`) or a colour below 4.5:1 against white (code
+     * `contrast_too_low`). Format errors are reported before contrast.
+     *
+     */
+    422: Problem;
+};
+
+export type UpdateAdminSettingsError = UpdateAdminSettingsErrors[keyof UpdateAdminSettingsErrors];
+
+export type UpdateAdminSettingsResponses = {
+    /**
+     * Saved (or unchanged)
+     */
+    200: AdminSettings;
+};
+
+export type UpdateAdminSettingsResponse = UpdateAdminSettingsResponses[keyof UpdateAdminSettingsResponses];
+
+export type ListAdminSettingsHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/history';
+};
+
+export type ListAdminSettingsHistoryErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+};
+
+export type ListAdminSettingsHistoryError = ListAdminSettingsHistoryErrors[keyof ListAdminSettingsHistoryErrors];
+
+export type ListAdminSettingsHistoryResponses = {
+    /**
+     * Audit events for the settings record
+     */
+    200: AuditHistory;
+};
+
+export type ListAdminSettingsHistoryResponse = ListAdminSettingsHistoryResponses[keyof ListAdminSettingsHistoryResponses];
+
 export type GetManagerDashboardData = {
     body?: never;
     path?: never;
@@ -503,6 +812,7 @@ export type ListManagerReportsData = {
     query?: {
         page?: number;
         page_size?: number;
+        sort?: ReportSort;
         review_status?: ReviewStatus;
         billing_status?: BillingStatus;
         painter_id?: string;
@@ -589,6 +899,131 @@ export type GetManagerReportResponses = {
 };
 
 export type GetManagerReportResponse = GetManagerReportResponses[keyof GetManagerReportResponses];
+
+export type UpdateManagerReportData = {
+    body: ReportUpdate;
+    path: {
+        report_id: string;
+    };
+    query?: never;
+    url: '/api/v1/manager/reports/{report_id}';
+};
+
+export type UpdateManagerReportErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * The report changed since the client loaded it (code `version_conflict`)
+     */
+    409: VersionConflictProblem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+};
+
+export type UpdateManagerReportError = UpdateManagerReportErrors[keyof UpdateManagerReportErrors];
+
+export type UpdateManagerReportResponses = {
+    /**
+     * Saved (or unchanged); the full, current report
+     */
+    200: ReportDetail;
+};
+
+export type UpdateManagerReportResponse = UpdateManagerReportResponses[keyof UpdateManagerReportResponses];
+
+export type ReviewManagerReportData = {
+    body: ReviewRequest;
+    path: {
+        report_id: string;
+    };
+    query?: never;
+    url: '/api/v1/manager/reports/{report_id}/review';
+};
+
+export type ReviewManagerReportErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * Stale version (`version_conflict`) or already reviewed (`already_reviewed`)
+     */
+    409: VersionConflictProblem | AlreadyReviewedProblem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+};
+
+export type ReviewManagerReportError = ReviewManagerReportErrors[keyof ReviewManagerReportErrors];
+
+export type ReviewManagerReportResponses = {
+    /**
+     * Reviewed; the full, current report
+     */
+    200: ReportDetail;
+};
+
+export type ReviewManagerReportResponse = ReviewManagerReportResponses[keyof ReviewManagerReportResponses];
+
+export type ListManagerReportHistoryData = {
+    body?: never;
+    path: {
+        report_id: string;
+    };
+    query?: never;
+    url: '/api/v1/manager/reports/{report_id}/history';
+};
+
+export type ListManagerReportHistoryErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+};
+
+export type ListManagerReportHistoryError = ListManagerReportHistoryErrors[keyof ListManagerReportHistoryErrors];
+
+export type ListManagerReportHistoryResponses = {
+    /**
+     * History
+     */
+    200: AuditHistory;
+};
+
+export type ListManagerReportHistoryResponse = ListManagerReportHistoryResponses[keyof ListManagerReportHistoryResponses];
 
 export type ListManagerInvoicesData = {
     body?: never;

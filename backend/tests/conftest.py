@@ -79,7 +79,9 @@ from app.seed.dataset import Dataset, build_dataset  # noqa: E402
 ANCHOR = dt.date.fromisoformat(os.environ["SEED_ANCHOR_DATE"])
 FIXED_NOW = dt.datetime.fromisoformat(os.environ["FIXED_NOW"])
 MANAGER_LOGIN = ("manager@jobproof.test", "Manager123!")
+MANAGER2_LOGIN = ("manager2@jobproof.test", "Manager123!")
 PAINTER_LOGIN = ("painter@jobproof.test", "Painter123!")
+ADMIN_LOGIN = ("admin@jobproof.test", "Admin123!")
 
 
 @pytest.fixture(scope="session")
@@ -101,6 +103,16 @@ def bearer(token: str) -> dict[str, str]:
 @pytest.fixture(scope="session")
 def manager_headers(client: TestClient) -> dict[str, str]:
     return bearer(login_token(client, *MANAGER_LOGIN))
+
+
+@pytest.fixture(scope="session")
+def manager2_headers(client: TestClient) -> dict[str, str]:
+    return bearer(login_token(client, *MANAGER2_LOGIN))
+
+
+@pytest.fixture(scope="session")
+def admin_headers(client: TestClient) -> dict[str, str]:
+    return bearer(login_token(client, *ADMIN_LOGIN))
 
 
 @pytest.fixture(scope="session")
@@ -174,3 +186,27 @@ def temp_user(db_engine: Any) -> Iterator[Any]:
         for user_id in created:
             session.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
         session.commit()
+
+
+@pytest.fixture
+def restore_settings(db_engine: Any) -> Iterator[None]:
+    """Put the company settings record back to its default state after a test changed it."""
+    from app.branding.defaults import DEFAULT_COMPANY_NAME, DEFAULT_THEME
+
+    yield
+    with db_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE company_settings SET company_name = :name, theme_primary = :p, "
+                "theme_accent = :a, theme_background = :b, theme_surface = :s, theme_text = :t, "
+                "updated_at = NULL, updated_by_id = NULL, updated_by_name = NULL"
+            ),
+            {
+                "name": DEFAULT_COMPANY_NAME,
+                "p": DEFAULT_THEME.primary,
+                "a": DEFAULT_THEME.accent,
+                "b": DEFAULT_THEME.background,
+                "s": DEFAULT_THEME.surface,
+                "t": DEFAULT_THEME.text,
+            },
+        )
