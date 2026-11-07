@@ -187,3 +187,27 @@ def test_loader_replaces_existing_data(engine: Engine) -> None:
     assert _scalar(engine, "SELECT max(completed_on) FROM jobs") <= date(2026, 11, 1)
     load(engine, build_dataset(ANCHOR))  # restore for the other tests
     assert _scalar(engine, "SELECT count(*) FROM jobs") == 60
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_seed_refuses_outside_local_and_test(
+    env: str, monkeypatch: pytest.MonkeyPatch, engine: Engine
+) -> None:
+    """Exits non-zero before touching the database (the engine is never even created)."""
+    import app.seed.__main__ as seed_main
+    from app.config import get_settings
+
+    before = _snapshot(engine)
+    refused = get_settings().model_copy(update={"app_env": env})
+    monkeypatch.setattr(seed_main, "get_settings", lambda: refused)
+
+    def forbidden(*_: object) -> None:
+        raise AssertionError("database touched")
+
+    monkeypatch.setattr(seed_main, "make_engine", forbidden)
+    monkeypatch.setattr(seed_main, "load", forbidden)
+    with pytest.raises(SystemExit) as exit_info:
+        seed_main.main()
+    assert exit_info.value.code != 0
+    assert "Refusing to seed" in str(exit_info.value.code)
+    assert _snapshot(engine) == before

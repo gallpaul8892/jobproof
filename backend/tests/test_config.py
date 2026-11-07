@@ -75,3 +75,52 @@ def test_secrets_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("JWT_SECRET", "")  # an empty value counts as unset
     with pytest.raises(ValidationError, match="JWT_SECRET"):
         Settings()  # type: ignore[call-arg]
+
+
+GOOD_JWT = "j" * 40
+GOOD_PHOTO = "p" * 40
+
+
+def _secrets(env: str, jwt_secret: str, photo_secret: str) -> Settings:
+    return Settings(
+        database_url=BASE["database_url"],
+        app_env=env,  # type: ignore[arg-type]
+        jwt_secret=jwt_secret,
+        photo_url_secret=photo_secret,
+        demo_accounts_enabled=False,
+        fixed_now=None,
+    )
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize(
+    ("jwt_secret", "photo_secret", "culprit"),
+    [
+        ("dev-only-jwt-secret-change-me-0123456789abcdef", GOOD_PHOTO, "JWT_SECRET"),
+        ("dev-only-anything-else-0123456789abcdefghij", GOOD_PHOTO, "JWT_SECRET"),
+        (GOOD_JWT, "dev-only-photo-secret-change-me-0123456789ab", "PHOTO_URL_SECRET"),
+        (GOOD_JWT, "dev-only-something-0123456789abcdefghijklm", "PHOTO_URL_SECRET"),
+        ("s" * 40, "s" * 40, "must differ"),
+    ],
+)
+def test_real_environments_reject_dev_or_identical_secrets(
+    env: str, jwt_secret: str, photo_secret: str, culprit: str
+) -> None:
+    with pytest.raises(ValidationError, match=culprit):
+        _secrets(env, jwt_secret, photo_secret)
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_real_environments_accept_distinct_real_secrets(env: str) -> None:
+    assert _secrets(env, GOOD_JWT, GOOD_PHOTO).app_env == env
+
+
+@pytest.mark.parametrize("env", ["local", "test"])
+def test_local_and_test_keep_dev_and_identical_secrets(env: str) -> None:
+    dev = _secrets(
+        env,
+        "dev-only-jwt-secret-change-me-0123456789abcdef",
+        "dev-only-photo-secret-change-me-0123456789ab",
+    )
+    assert dev.app_env == env
+    assert _secrets(env, "s" * 40, "s" * 40).app_env == env

@@ -43,7 +43,7 @@ def report_filters(
     painter_id: uuid.UUID | None = None,
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
-    q: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    q: Annotated[str | None, Query(min_length=1, max_length=100, pattern=r"^[^\x00]*$")] = None,
 ) -> reports.ReportFilters:
     if date_from is not None and date_to is not None and date_to < date_from:
         raise RequestValidationError(

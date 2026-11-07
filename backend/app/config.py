@@ -57,6 +57,17 @@ class Settings(BaseSettings):
             for name in ("jwt_secret", "photo_url_secret"):
                 if name not in self.model_fields_set:
                     raise ValueError(f"{name.upper()} must be set when APP_ENV={self.app_env}")
+                value = getattr(self, name)
+                if value.startswith("dev-only-") or value in (
+                    _DEV_JWT_SECRET,
+                    _DEV_PHOTO_URL_SECRET,
+                ):
+                    raise ValueError(
+                        f"{name.upper()} must not be a development value when "
+                        f"APP_ENV={self.app_env}"
+                    )
+            if self.jwt_secret == self.photo_url_secret:
+                raise ValueError("JWT_SECRET and PHOTO_URL_SECRET must differ")
         if self.app_env == "production":
             if self.demo_accounts_enabled:
                 raise ValueError("DEMO_ACCOUNTS_ENABLED must be false when APP_ENV=production")

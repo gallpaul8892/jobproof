@@ -6,6 +6,7 @@ leaves the database unchanged.
 """
 
 import logging
+import sys
 
 from app.clock import today_london
 from app.config import get_settings
@@ -19,6 +20,13 @@ logger = logging.getLogger("jobproof.seed")
 
 def main() -> None:
     settings = get_settings()
+    if settings.app_env not in ("local", "test"):
+        # Seeding truncates every table; demo data never goes to staging or production.
+        logger.error("refusing to seed: APP_ENV=%s (only local or test)", settings.app_env)
+        sys.exit(
+            f"Refusing to seed: APP_ENV={settings.app_env}. "
+            "The seed deletes all data and runs only when APP_ENV is local or test."
+        )
     setup_logging(settings.log_level)
     anchor = settings.seed_anchor_date or today_london()
     dataset = build_dataset(anchor)

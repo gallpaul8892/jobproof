@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import UserRole
 from app.schemas.common import User
@@ -11,6 +11,14 @@ class LoginRequest(BaseModel):
 
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=200)
+
+    @field_validator("email", "password")
+    @classmethod
+    def _no_nul(cls, value: str) -> str:
+        # Postgres text cannot hold NUL; reject it here instead of failing in the query.
+        if "\x00" in value:
+            raise ValueError("must not contain NUL characters")
+        return value
 
 
 class LoginResponse(BaseModel):

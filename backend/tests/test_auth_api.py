@@ -207,3 +207,23 @@ def test_demo_accounts_are_404_when_disabled() -> None:
     assert response.headers["content-type"].startswith("application/problem+json")
     assert response.json()["code"] == "not_found"
     assert_contract(response, "listDemoAccounts")
+
+
+@pytest.mark.parametrize(
+    ("body", "field"),
+    [
+        ({"email": "a\u0000@x.test", "password": "x"}, "email"),
+        ({"email": "manager@jobproof.test", "password": "pa\u0000ss"}, "password"),
+        ({"email": "\u0000\u0000\u0000", "password": "\u0000"}, "email"),
+    ],
+)
+def test_nul_characters_in_login_are_422_not_500(
+    client: TestClient, body: dict[str, str], field: str
+) -> None:
+    response = client.post(LOGIN, json=body)
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert_contract(response, "login")
+    problem = response.json()
+    assert problem["code"] == "validation_error" and problem["request_id"]
+    assert any(field in err["loc"] for err in problem["errors"])

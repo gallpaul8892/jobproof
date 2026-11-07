@@ -432,3 +432,41 @@ def test_search_combines_with_other_filters(
     assert ids(both) == expected_ids(
         [r for r in expected if search_matches(r, q) and r.painter.id == painter.id]
     )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        "q=%00",
+        "q=a%00b",
+        "q=jp-1042%00",
+        "review_status=awaiting%00",
+        "billing_status=%00",
+        "painter_id=%00",
+        "date_from=2026-10-01%00",
+        "date_to=%00",
+        "page=1%00",
+        "page_size=%00",
+    ],
+)
+def test_nul_characters_in_any_report_parameter_are_422_not_500(
+    client: TestClient, manager_headers: dict[str, str], params: str
+) -> None:
+    response = client.get(f"{URL}?{params}", headers=manager_headers)
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert_contract(response, "listManagerReports")
+    problem = response.json()
+    assert problem["code"] == "validation_error" and problem["request_id"]
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/v1/manager/invoices?status=%00", "/api/v1/manager/reports/%00"]
+)
+def test_nul_characters_in_other_manager_parameters_are_422(
+    client: TestClient, manager_headers: dict[str, str], path: str
+) -> None:
+    response = client.get(path, headers=manager_headers)
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["request_id"]
