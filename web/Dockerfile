@@ -1,6 +1,7 @@
 # Build context: repository root (docker build -f web/Dockerfile .)
 
 # ---- build ----
+# TODO(pin): floating tag; pin the exact tag/digest on a machine with registry access.
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -15,6 +16,7 @@ RUN npm run build -w @jobproof/web
 # ---- serve ----
 # Tag cannot be verified from the build workspace (Docker Hub blocked); `stable-alpine` follows
 # the nginx stable branch. Pin to an exact tag (e.g. 1.xx-alpine) once checked.
+# TODO(pin): floating tag; pin the exact tag/digest on a machine with registry access.
 FROM nginxinc/nginx-unprivileged:stable-alpine
 COPY web/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY --chmod=755 web/nginx/40-jobproof-config.sh /docker-entrypoint.d/40-jobproof-config.sh

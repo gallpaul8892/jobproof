@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 21:21",
+  "updated": "2026-11-07 21:28",
   "phases": [
     {
       "id": "setup",
@@ -59,8 +59,8 @@
           "id": "T-001d",
           "title": "Manager web UI and e2e tests",
           "owner": "frontend+test",
-          "status": "in_progress",
-          "note": "Review round 1: 2 MAJOR (redirect check bypass, billing table clipped at 768px), 7 minor. Fixing"
+          "status": "review",
+          "note": "Round 1 fixes verified by orchestrator (lint, 336+159 unit, 48 e2e, audit 0, fresh 768px screenshots). Reviewer re-check"
         }
       ]
     },
@@ -118,7 +118,7 @@
       "name": "architect",
       "model": "opus",
       "status": "idle",
-      "note": "Decided: npm overrides for js-yaml and minimatch; exact-string dist allowlist"
+      "note": "Phase 1 ARCHITECTURE.md update done"
     },
     {
       "name": "backend-engineer",
@@ -141,8 +141,8 @@
     {
       "name": "code-reviewer",
       "model": "opus",
-      "status": "idle",
-      "note": "T-001d round 1 done: CHANGES REQUESTED"
+      "status": "working",
+      "note": "Re-checking T-001d fixes (round 2)"
     },
     {
       "name": "dependency-checker",
@@ -256,6 +256,16 @@
       "time": "2026-11-07 21:12",
       "who": "backend-engineer",
       "msg": "APP_ENV now required (no default); dev-secret check hardened; 336 backend tests pass"
+    },
+    {
+      "time": "2026-11-07 21:23",
+      "who": "orchestrator",
+      "msg": "T-001d fixes committed; reviewer round 2 and architect doc update running"
+    },
+    {
+      "time": "2026-11-07 21:28",
+      "who": "architect",
+      "msg": "ARCHITECTURE.md updated to as-built (339 lines): deviations, security decisions, backlog B1-B8, Phase 2 starting points, Docker unverified checklist"
     }
   ],
   "reports": [
@@ -972,6 +982,237 @@
             },
             {
               "text": "Pin Docker base image tags and digests on a machine with registry access."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "architect-phase1-update",
+      "title": "Architect report: end-of-Phase 1 architecture update",
+      "agent": "architect",
+      "model": "opus",
+      "status": "done",
+      "date": "2026-11-07",
+      "summary": "ARCHITECTURE.md now describes what was built in T-001a to T-001d, checked against the code rather than the plan. It adds the security decisions from review, the deviations from the plan, an unverified-Docker warning with a checklist, a follow-up backlog and Phase 2 starting points. No application code, tests or contract were changed.",
+      "blocks": [
+        {
+          "heading": "What changed in ARCHITECTURE.md",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "label": "Planned to built.",
+              "text": "Components, patterns, data model and personas now name real files. The nine Phase 1 tables are marked built in migration 0001 (backend/migrations/versions/0001_initial_schema.py); invoice_line_items and payment_links stay 'later'. The only remaining 'planned' section is the AWS layout."
+            },
+            {
+              "label": "Stack versions.",
+              "text": "Installed versions checked against both lockfiles; all match the table."
+            },
+            {
+              "label": "New section 9: security decisions.",
+              "text": "Secret guard, required APP_ENV, seed guard, NUL rejection, safeRedirect, CSP generation and API_BASE_URL host rules, photo URL signing."
+            },
+            {
+              "label": "Local run.",
+              "text": "The no-Docker path (scripts/dev.sh) is marked verified. Docker is marked KNOWN UNVERIFIED, with a 7-step checklist for when make up fails."
+            },
+            {
+              "label": "New sections 14 and 15.",
+              "text": "Follow-up backlog (B1 to B8) and Phase 2 starting points for the Expo painter app."
+            },
+            {
+              "label": "Size.",
+              "text": "339 lines (was 231)."
+            }
+          ]
+        },
+        {
+          "heading": "Build status",
+          "type": "table",
+          "columns": [
+            "Area",
+            "Status"
+          ],
+          "rows": [
+            [
+              "T-001a to T-001d on scripts/dev.sh",
+              "Built and verified: lint, pytest, Vitest and Playwright pass"
+            ],
+            [
+              "docker compose and Dockerfiles",
+              "Written and checked with 'docker compose config' only. Never built or run (no Docker daemon in the build workspace)"
+            ],
+            [
+              "pip-audit",
+              "Never run (needs network)"
+            ]
+          ]
+        },
+        {
+          "heading": "Deviations from the plan",
+          "type": "table",
+          "columns": [
+            "Planned",
+            "Built",
+            "Reason"
+          ],
+          "rows": [
+            [
+              "react-router useSearchParams",
+              "Custom useQueryParams (web/src/app/useQueryParams.ts)",
+              "react-router's bundled warning text contains https://github.com/ungap/url-search-params. and the exact-string allowlist would reject it. Keep the hook. To use useSearchParams later, add that string to spec T-000 7.1, T-001a scenario 5 and web/scripts/dist-origins.mjs"
+            ],
+            [
+              "CSS modules",
+              "Global web/src/styles/app.css",
+              "Small app; still plain CSS with system fonts"
+            ],
+            [
+              "shared/src/auth/tokenStore.ts",
+              "shared/src/api/tokenStore.ts; web implementation in web/src/auth/sessionTokenStore.ts",
+              "Interface sits next to the client Adapter"
+            ],
+            [
+              "One billing status function",
+              "Pure functions plus SQL twins (backend/app/services/billing_sql.py)",
+              "Filters and totals run in SQL; a test checks they agree with the pure functions"
+            ],
+            [
+              "dev.sh up/down/status/test/e2e",
+              "Adds --static, seed, psql and port variables",
+              "e2e runs against the production build"
+            ],
+            [
+              "APP_ENV with a default",
+              "Required, no default (compose defaults it to local)",
+              "Security review"
+            ]
+          ]
+        },
+        {
+          "heading": "Security decisions recorded",
+          "type": "list",
+          "items": [
+            {
+              "label": "Secret guard.",
+              "text": "When APP_ENV is not local or test, JWT_SECRET and PHOTO_URL_SECRET must be set explicitly. They are rejected if they are dev defaults, start with dev-only- (any case), have surrounding whitespace, or are equal to each other (ignoring case). Production also refuses demo accounts and FIXED_NOW."
+            },
+            {
+              "label": "APP_ENV.",
+              "text": "Required, with no default; must be exactly local, test, staging or production."
+            },
+            {
+              "label": "Seed guard.",
+              "text": "The seed runs only when APP_ENV is local or test, so staging has no demo data. A staging demo dataset needs an explicit decision."
+            },
+            {
+              "label": "NUL characters.",
+              "text": "Rejected with 422 in the login fields and the q search parameter."
+            },
+            {
+              "label": "safeRedirect.",
+              "text": "Only same-origin paths are accepted. Control characters, backslashes, // and /login targets are refused."
+            },
+            {
+              "label": "CSP.",
+              "text": "Generated by web/nginx/40-jobproof-config.sh, with strict API_BASE_URL host rules. Covered by the config-script unit test and e2e/tests/csp.spec.ts."
+            },
+            {
+              "label": "Demo accounts endpoint.",
+              "text": "Returns 404 unless DEMO_ACCOUNTS_ENABLED is set. The config refuses it when APP_ENV is production."
+            }
+          ]
+        },
+        {
+          "heading": "Follow-up backlog",
+          "type": "table",
+          "columns": [
+            "#",
+            "Item",
+            "Owner",
+            "Suggested ticket"
+          ],
+          "rows": [
+            [
+              "B1",
+              "page has no upper bound and the contract has no maximum: add maximum in api/openapi.yaml, regenerate the client, add le= in the backend, add a 422 test",
+              "architect, then backend",
+              "T-002a hardening"
+            ],
+            [
+              "B2",
+              "invoice customer = job customer is enforced only by the seed and the app; option: a composite FK",
+              "architect, then backend",
+              "T-002a hardening"
+            ],
+            [
+              "B3",
+              "Pin Docker base image tags and digests (TODO(pin); web/Dockerfile has no marker)",
+              "backend, web",
+              "First Docker run"
+            ],
+            [
+              "B4",
+              "First real make up and make e2e under Docker",
+              "orchestrator",
+              "First Docker run"
+            ],
+            [
+              "B5",
+              "Blackhole connect-timeout test skips in the sandbox",
+              "backend",
+              "CI"
+            ],
+            [
+              "B6",
+              "nginx image tag not verified",
+              "web",
+              "First Docker run"
+            ],
+            [
+              "B7",
+              "Run pip-audit (never run)",
+              "dependency-checker",
+              "Weekly dependency ticket"
+            ],
+            [
+              "B8",
+              "Weekly dependency-check schedule once the repo is on GitHub",
+              "orchestrator",
+              "CI"
+            ]
+          ]
+        },
+        {
+          "heading": "Dependencies",
+          "type": "list",
+          "items": [
+            {
+              "label": "Overrides.",
+              "text": "js-yaml ^4.3.2 (installed 4.3.2) and minimatch ^11.0.1 (installed 11.0.5). Remove each once its parents' own ranges resolve to a patched version; check weekly, at the latest by 2027-02-01."
+            },
+            {
+              "label": "typescript 7.",
+              "text": "Deferral still holds: typescript-eslint 8.72.1 does not support it."
+            }
+          ]
+        },
+        {
+          "heading": "Phase 2 starting points (Expo painter app)",
+          "type": "list",
+          "items": [
+            {
+              "label": "Reuse from shared/.",
+              "text": "Generated client, the Adapter, ApiError, query keys, auth hooks and formatters. The shared package has no DOM access."
+            },
+            {
+              "label": "Platform-specific.",
+              "text": "A TokenStore over expo-secure-store (the interface already allows async methods), navigation and camera capture."
+            },
+            {
+              "label": "Endpoints needed.",
+              "text": "The painter's own jobs, draft report with checklist, photo upload through an S3PhotoStore with presigned URLs (MinIO locally), and report submission. Ownership rules make the per-persona Policy worth introducing."
             }
           ]
         }
