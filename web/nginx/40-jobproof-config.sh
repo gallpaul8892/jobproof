@@ -2,6 +2,9 @@
 # Runs at container start (nginx image runs /docker-entrypoint.d/*.sh as the nginx user).
 # Writes the runtime config.js and the security-header include from API_BASE_URL.
 set -eu
+# Byte-wise character classes: A-Z must never match accented or look-alike letters.
+LC_ALL=C
+export LC_ALL
 
 API_BASE_URL="${API_BASE_URL-http://localhost:8000}"  # unset -> default; empty is rejected below
 DIST_DIR="${DIST_DIR:-/usr/share/nginx/html}"
@@ -15,6 +18,11 @@ if [ -n "$(printf '%s' "$API_BASE_URL" | LC_ALL=C tr -d '[:print:]')" ]; then
   exit 1
 fi
 ORIGIN="${API_BASE_URL%/}"
+# 253 is the longest valid DNS name; the whole origin (scheme included) is capped there.
+if [ "${#ORIGIN}" -gt 253 ]; then
+  echo "jobproof-config: API_BASE_URL must be at most 253 characters" >&2
+  exit 1
+fi
 # Anchored over the whole string; the character classes exclude quotes, backslash, semicolon,
 # whitespace, path, query and fragment characters.
 case "$ORIGIN" in
@@ -26,7 +34,10 @@ case "${ORIGIN#*://}" in
     echo "jobproof-config: API_BASE_URL must be an origin like https://api.example.com (no path)" >&2
     exit 1 ;;
 esac
-if ! printf '%s' "$ORIGIN" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]+)?$'; then
+# Each host label starts and ends with a letter or digit (hyphens only inside), so values such
+# as "http://-", "http://.", "http://a..b" and "http://-a-.com" are refused.
+LABEL='[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?'
+if ! printf '%s' "$ORIGIN" | grep -Eq "^https?://$LABEL(\\.$LABEL)*(:[0-9]{1,5})?\$"; then
   echo "jobproof-config: API_BASE_URL must be an origin like https://api.example.com (no path)" >&2
   exit 1
 fi

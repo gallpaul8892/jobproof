@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 14:34",
+  "updated": "2026-11-07 21:00",
   "phases": [
     {
       "id": "setup",
@@ -46,14 +46,14 @@
           "title": "Data model, migrations and seed data",
           "owner": "backend-engineer",
           "status": "review",
-          "note": "In Opus review with T-001c"
+          "note": "Review round 1: CHANGES REQUESTED (seed guard, 3 majors total with T-001c)"
         },
         {
           "id": "T-001c",
           "title": "Manager auth and read APIs",
           "owner": "backend-engineer",
           "status": "review",
-          "note": "Built: 9 operations, 273 backend tests pass, verified by curl. In Opus review with T-001b"
+          "note": "Review round 1: CHANGES REQUESTED (secret guard, NUL-byte 500s)"
         },
         {
           "id": "T-001d",
@@ -124,13 +124,13 @@
       "name": "backend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": "T-001c done"
+      "note": "T-001b/c review fixes done, 304 tests"
     },
     {
       "name": "frontend-engineer",
       "model": "sonnet",
-      "status": "working",
-      "note": "T-001d: manager web UI, e2e prep, carry-over fixes"
+      "status": "idle",
+      "note": "T-001d built"
     },
     {
       "name": "test-engineer",
@@ -141,8 +141,8 @@
     {
       "name": "code-reviewer",
       "model": "opus",
-      "status": "working",
-      "note": "Reviewing T-001b + T-001c (opus)"
+      "status": "idle",
+      "note": "T-001b/c round 1 done: CHANGES REQUESTED"
     },
     {
       "name": "dependency-checker",
@@ -226,6 +226,21 @@
       "time": "2026-11-07 14:34",
       "who": "backend-engineer",
       "msg": "T-001c done: login, role checks, dashboard, reports, invoices, signed photos; 273 tests pass"
+    },
+    {
+      "time": "2026-11-07 20:45",
+      "who": "orchestrator",
+      "msg": "Usage limit hit at ~14:40, reset 17:40. Stack restarted, both agents resumed"
+    },
+    {
+      "time": "2026-11-07 20:46",
+      "who": "code-reviewer",
+      "msg": "T-001b/c: CHANGES REQUESTED. 3 MAJOR (prod secret guard accepts dev values; seed TRUNCATE has no env guard; NUL byte causes 500), 3 minor. No blockers"
+    },
+    {
+      "time": "2026-11-07 20:49",
+      "who": "backend-engineer",
+      "msg": "Review fixes: prod secret guard, seed env guard, NUL input -> 422; 304 backend tests pass. Re-check batched into the T-001d review"
     }
   ],
   "reports": [

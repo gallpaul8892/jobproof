@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./errors";
 import { callApi, configureApiClient } from "./client";
-import { getHealth } from "../generated";
+import { getHealth, getMe } from "../generated";
 
 function jsonResponse(body: unknown, status: number, type = "application/json"): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
@@ -56,5 +56,54 @@ describe("api client adapter", () => {
     const err = await callApi(() => getHealth()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 0, code: "network_error" });
+  });
+
+  it("maps a timeout to ApiError code 'timeout'", async () => {
+    configureApiClient({
+      baseUrl: "http://api.test",
+      fetch: async () => {
+        throw new DOMException("The operation timed out", "TimeoutError");
+      },
+    });
+    const err = await callApi(() => getHealth()).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 0, code: "timeout" });
+  });
+
+  it("sends the bearer token on authenticated calls", async () => {
+    let auth: string | null = null;
+    configureApiClient({
+      baseUrl: "http://api.test",
+      tokenStore: { get: () => "tok123", set: () => undefined, clear: () => undefined },
+      fetch: async (input) => {
+        auth = input instanceof Request ? input.headers.get("Authorization") : null;
+        return jsonResponse({ id: "1", email: "a", full_name: "A", role: "manager" }, 200);
+      },
+    });
+    await callApi(() => getMe());
+    expect(auth).toBe("Bearer tok123");
+  });
+
+  it("calls onUnauthorized for a 401 but not for invalid_credentials", async () => {
+    let calls = 0;
+    const problem = (code: string) =>
+      jsonResponse({ title: "x", status: 401, code, request_id: "r" }, 401, "application/problem+json");
+    configureApiClient({
+      baseUrl: "http://api.test",
+      onUnauthorized: () => {
+        calls += 1;
+      },
+      fetch: async () => problem("unauthenticated"),
+    });
+    await callApi(() => getMe()).catch(() => undefined);
+    expect(calls).toBe(1);
+    configureApiClient({
+      baseUrl: "http://api.test",
+      onUnauthorized: () => {
+        calls += 1;
+      },
+      fetch: async () => problem("invalid_credentials"),
+    });
+    await callApi(() => getMe()).catch(() => undefined);
+    expect(calls).toBe(1);
   });
 });

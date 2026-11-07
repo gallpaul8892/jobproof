@@ -1,0 +1,50 @@
+import { mkdirSync } from "node:fs";
+import { expect, test, ManagerApi, signInViaApi } from "./support";
+
+// Opt-in visual review: SCREENSHOT_DIR=/some/dir npx playwright test screenshots
+const dir = process.env.SCREENSHOT_DIR;
+test.skip(!dir, "set SCREENSHOT_DIR to capture screenshots");
+
+const sizes = [
+  { name: "desktop", width: 1280, height: 900 },
+  { name: "tablet", width: 768, height: 1024 },
+];
+
+for (const size of sizes) {
+  test(`screenshots at ${size.name} width`, async ({ page, request }) => {
+    mkdirSync(dir!, { recursive: true });
+    await page.setViewportSize({ width: size.width, height: size.height });
+    const shot = (name: string) => page.screenshot({ path: `${dir}/${name}-${size.name}.png`, fullPage: true });
+
+    await page.goto("/login");
+    await expect(page.getByTestId("demo-accounts")).toBeVisible();
+    await shot("login");
+
+    const api = await ManagerApi.create(request);
+    const withPhotos = (await api.allReports()).find((r) => r.photo_count >= 6)!;
+    await signInViaApi(page);
+    await page.goto("/");
+    await expect(page.getByTestId("recent-report-row")).toHaveCount(5);
+    await shot("dashboard");
+
+    await page.goto("/reports");
+    await expect(page.getByTestId("reports-table")).toBeVisible();
+    await shot("reports");
+
+    await page.goto(`/reports/${withPhotos.id}`);
+    await expect(page.getByTestId("photo-thumb").first().locator("img")).toBeVisible();
+    await expect
+      .poll(() => page.locator(".photo-img").evaluateAll((imgs) => imgs.every((i) => (i as HTMLImageElement).complete)))
+      .toBe(true);
+    await shot("report-detail");
+
+    await page.getByTestId("photo-thumb").first().click();
+    await expect(page.getByTestId("lightbox")).toBeVisible();
+    await page.screenshot({ path: `${dir}/lightbox-${size.name}.png` });
+    await page.keyboard.press("Escape");
+
+    await page.goto("/billing");
+    await expect(page.getByTestId("invoices-table")).toBeVisible();
+    await shot("billing");
+  });
+}
