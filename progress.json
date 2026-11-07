@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 13:59",
+  "updated": "2026-11-07 14:01",
   "phases": [
     {
       "id": "setup",
@@ -38,14 +38,15 @@
           "id": "T-001a",
           "title": "Scaffold, compose stack, no-Docker dev script, health endpoint",
           "owner": "backend+frontend",
-          "status": "review",
-          "note": "Round 1 fixes verified (lint, 26+35 tests, e2e 2/2, audit 0); round 2 re-review"
+          "status": "done",
+          "note": "Reviewed APPROVE (round 2). Lint, 26 backend + 35 frontend tests, e2e 2/2, audit 0"
         },
         {
           "id": "T-001b",
           "title": "Data model, migrations and seed data",
           "owner": "backend-engineer",
-          "status": "todo"
+          "status": "in_progress",
+          "note": "Backend engineer: schema, migrations, seed, photos"
         },
         {
           "id": "T-001c",
@@ -120,8 +121,8 @@
     {
       "name": "backend-engineer",
       "model": "sonnet",
-      "status": "idle",
-      "note": "T-001a review fixes done"
+      "status": "working",
+      "note": "T-001b: data model, migrations, seed"
     },
     {
       "name": "frontend-engineer",
@@ -138,8 +139,8 @@
     {
       "name": "code-reviewer",
       "model": "opus",
-      "status": "working",
-      "note": "T-001a re-review (round 2)"
+      "status": "idle",
+      "note": "T-001a approved"
     },
     {
       "name": "dependency-checker",
@@ -208,6 +209,11 @@
       "time": "2026-11-07 13:56",
       "who": "architect",
       "msg": "Decision: add npm overrides (js-yaml ^4.3.2, minimatch ^11.0.1), audit clean in test copy; bundle allowlist is 7 exact strings"
+    },
+    {
+      "time": "2026-11-07 14:01",
+      "who": "code-reviewer",
+      "msg": "T-001a APPROVE after round 2; 3 minor follow-ups carried to T-001d"
     }
   ],
   "reports": [
@@ -827,6 +833,103 @@
             },
             {
               "text": "npm audit flags transitive issues in the Redocly CLI dev tool (js-yaml, minimatch). Not fixed; dev-only and for the code reviewer and architect to triage."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "review-t001a",
+      "title": "Code review report: T-001a",
+      "agent": "code-reviewer",
+      "model": "opus",
+      "status": "done",
+      "date": "2026-11-07",
+      "summary": "Round 1: CHANGES REQUESTED (1 blocker, 1 major, 5 minor). All were fixed and verified. Round 2: APPROVE, with three small follow-ups carried forward.",
+      "blocks": [
+        {
+          "heading": "Round 1 findings and resolution",
+          "type": "table",
+          "columns": [
+            "Severity",
+            "Finding",
+            "Owner",
+            "Resolution"
+          ],
+          "rows": [
+            [
+              "BLOCKER",
+              "npm audit: high and moderate vulnerabilities in dev tooling (js-yaml via @hey-api/openapi-ts, minimatch via eslint and typescript-eslint)",
+              "architect",
+              "Architect decided on npm overrides (js-yaml ^4.3.2, minimatch ^11.0.1). npm audit now reports 0 vulnerabilities; lint still catches planted errors. Recorded in ARCHITECTURE.md 12.1"
+            ],
+            [
+              "MAJOR",
+              "nginx entrypoint: multi-line API_BASE_URL passed the origin check and could inject nginx directives and break config.js",
+              "web",
+              "Control characters rejected before an anchored check; 18 hostile inputs now covered by an automated test. Re-tested by the reviewer with 20+ hostile inputs under sh, dash and bash"
+            ],
+            [
+              "MINOR",
+              "dev.sh e2e could reuse a Vite dev server instead of the production build",
+              "backend",
+              "Web mode recorded in .dev/web.mode; web restarts if the mode differs"
+            ],
+            [
+              "MINOR",
+              "Base image tags float",
+              "web, backend",
+              "Cannot pin without registry access; TODO(pin) comments added. On the handover list"
+            ],
+            [
+              "MINOR",
+              "Bundle URL allowlist did not match the spec",
+              "web, architect",
+              "Architect fixed the spec to seven exact strings; scanner now uses exact equality with a near-miss test"
+            ],
+            [
+              "MINOR",
+              "503 health test did not assert the 3 second limit",
+              "tests",
+              "Timed assertion added, plus a blackhole-address test (skips in this sandbox)"
+            ],
+            [
+              "MINOR",
+              "db healthcheck hardcoded the user",
+              "backend",
+              "Reads POSTGRES_USER and POSTGRES_DB from the environment"
+            ]
+          ]
+        },
+        {
+          "heading": "Round 2 verdict: APPROVE",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "text": "All round 1 issues verified fixed. No new blockers or majors."
+            },
+            {
+              "text": "Areas found sound in round 1: CORS allowlist, non-root containers, exec-form commands, compose dependency chain (healthy, then completed, then healthy), generated client matches the contract."
+            }
+          ]
+        },
+        {
+          "heading": "Carried forward (minor, not blocking)",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "text": "nginx entrypoint still accepts nonsense hosts such as http://-. Stricter host-label check and a 253 character cap to be added in T-001d (web owner)."
+            },
+            {
+              "text": "Add $(), backtick, unicode lookalike, uppercase scheme and very long values to the nginx script test (T-001d)."
+            },
+            {
+              "text": "The blackhole timeout test skips here. It needs a CI environment where it runs, or a local socket that accepts but never replies."
+            },
+            {
+              "text": "Pin Docker base image tags and digests on a machine with registry access."
             }
           ]
         }
