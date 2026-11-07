@@ -1,0 +1,60 @@
+{
+  "id": "review-t001bcd",
+  "title": "Code review report: T-001b, T-001c and T-001d",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-07",
+  "summary": "Data model and API (T-001b/c): round 1 CHANGES REQUESTED with 3 major issues, all fixed and re-verified. Web UI (T-001d): round 1 CHANGES REQUESTED with 2 major issues, fixed; round 2 APPROVE. No blockers at any point.",
+  "blocks": [
+    {
+      "heading": "T-001b and T-001c, round 1 (3 MAJOR)",
+      "type": "table",
+      "columns": ["Severity", "Finding", "Resolution"],
+      "rows": [
+        ["MAJOR", "Production secret guard accepted the published development secrets, so anyone reading the repo could forge a manager login", "Startup now fails outside local and test if a secret is a dev default, starts dev-only-, matches the other secret, has surrounding whitespace or differs only by case"],
+        ["MAJOR", "python -m app.seed empties every table with no environment check", "Seed refuses to run unless APP_ENV is local or test, before touching the database. Staging gets no demo data"],
+        ["MAJOR", "A NUL character in a sign-in email, password or search term caused a 500 instead of a validation error", "Rejected with 422 problem+json on login and on every text or typed parameter of the manager endpoints"],
+        ["MINOR", "Invoice customer matching the job's customer is not enforced by the database", "Recorded in ARCHITECTURE.md backlog (B2)"],
+        ["MINOR", "page parameter has no upper bound", "Needs a contract change; recorded as backlog B1"],
+        ["MINOR", "pip-audit could not run offline", "Recorded as backlog B7"]
+      ]
+    },
+    {
+      "heading": "T-001d, round 1 (2 MAJOR) and round 2 (APPROVE)",
+      "type": "table",
+      "columns": ["Severity", "Finding", "Resolution"],
+      "rows": [
+        ["MAJOR", "Login redirect check could be beaten with tab, CR or LF characters, which crashed the app after sign-in", "Redirect now resolves against the origin, requires same origin and rejects control characters and backslashes. Reviewer re-tested 18 hostile values in real Chrome"],
+        ["MAJOR", "Billing and reports tables were clipped at 768px with no sign they scroll", "Cells no longer wrap, secondary details are stacked, and a visible scroll cue appears when a table overflows. Measured at 360 to 1024px; orchestrator took fresh screenshots"],
+        ["MINOR", "Control characters in a shared ?q= link caused an error that Retry could never fix", "Dropped on parse"],
+        ["MINOR", "Replaced requests were never cancelled", "Abort signals now reach the SDK; 6 superseded requests were cancelled in the reviewer's test"],
+        ["MINOR", "Signed photo links expire after 15 minutes and never recovered", "One throttled refetch (at most once a minute) on image error"],
+        ["MINOR", "Form control borders 2.09:1 contrast (WCAG needs 3:1)", "Darkened to about 4:1 on cards"],
+        ["MINOR", "e2e origin guard missed popups and service workers; security policy never tested", "Guard now covers the whole browser context; new CSP spec loads all five pages under the generated policy with zero violations and proves the policy is enforced"],
+        ["MINOR", "nginx host check accepted bad ports, 64 character labels and numeric hosts", "Stricter validation with 83 test cases"]
+      ]
+    },
+    {
+      "heading": "Round 2 follow-ups",
+      "type": "list",
+      "open": true,
+      "items": [
+        {"label": "Fixed.", "text": "Startup validation errors printed setting values, which could put a too-short secret into the logs. Values are now hidden, with a regression test that fails without the fix."},
+        {"label": "Open (architect).", "text": "AbortSignal.any needs Chrome 116, Firefox 124 or Safari 17.4. Write a supported-browser policy into ARCHITECTURE.md before the mobile app reuses shared/ (React Native does not provide it)."},
+        {"label": "Open (low).", "text": "The demo-accounts setting is blocked only in production, so staging could switch it on and list accounts the seed never creates there."},
+        {"label": "Accepted.", "text": "Unicode zero-width variants of the dev secret are not rejected. They would have to be deliberate, so not worth chasing."}
+      ]
+    },
+    {
+      "heading": "What the reviewer found sound",
+      "type": "list",
+      "items": [
+        {"text": "Sign-in tokens: algorithm pinned, issuer, audience and expiry required, role and active status reloaded from the database on every request."},
+        {"text": "Uniform sign-in errors and timing; argon2id defaults; signed photo URLs with constant-time comparison and separate secret."},
+        {"text": "Search wildcard escaping, SQL status filters matching the pure billing functions, stable sorting, London month boundaries and clock changes."},
+        {"text": "Web: no dangerouslySetInnerHTML, all links internal, sessionStorage token, 401 handling and cache clearing, generated client used throughout, money from integer pence."}
+      ]
+    }
+  ]
+}
