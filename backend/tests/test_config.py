@@ -124,3 +124,100 @@ def test_local_and_test_keep_dev_and_identical_secrets(env: str) -> None:
     )
     assert dev.app_env == env
     assert _secrets(env, "s" * 40, "s" * 40).app_env == env
+
+
+DEV_JWT = "dev-only-jwt-secret-change-me-0123456789abcdef"
+DEV_PHOTO = "dev-only-photo-secret-change-me-0123456789ab"
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize(
+    ("jwt_secret", "photo_secret", "culprit"),
+    [
+        (" " + DEV_JWT, GOOD_PHOTO, "JWT_SECRET"),
+        (DEV_JWT.upper(), GOOD_PHOTO, "JWT_SECRET"),
+        (DEV_JWT + "  ", GOOD_PHOTO, "JWT_SECRET"),
+        (GOOD_JWT, "\t" + DEV_PHOTO, "PHOTO_URL_SECRET"),
+        (GOOD_JWT, DEV_PHOTO.upper(), "PHOTO_URL_SECRET"),
+        (GOOD_JWT, DEV_PHOTO + "\n", "PHOTO_URL_SECRET"),
+        (" " + GOOD_JWT, GOOD_PHOTO, "whitespace"),
+        (GOOD_JWT + " ", GOOD_PHOTO, "whitespace"),
+        (GOOD_JWT, GOOD_PHOTO + "\n", "whitespace"),
+    ],
+)
+def test_secret_variants_cannot_evade_the_checks(
+    env: str, jwt_secret: str, photo_secret: str, culprit: str
+) -> None:
+    with pytest.raises(ValidationError, match=culprit):
+        _secrets(env, jwt_secret, photo_secret)
+
+
+def test_secrets_differing_only_by_case_or_whitespace_count_as_equal() -> None:
+    # Whitespace is refused outright; case-only differences hit the equality check.
+    with pytest.raises(ValidationError, match="must differ"):
+        _secrets("production", "S" * 40, "s" * 40)
+    with pytest.raises(ValidationError, match="whitespace"):
+        _secrets("production", "s" * 40, "s" * 40 + " ")
+
+
+# ---- APP_ENV is required -----------------------------------------------------------------------
+
+
+def _settings_from_env(monkeypatch: pytest.MonkeyPatch, app_env: str | None) -> Settings:
+    monkeypatch.setenv("DATABASE_URL", BASE["database_url"])
+    monkeypatch.setenv("JWT_SECRET", GOOD_JWT)
+    monkeypatch.setenv("PHOTO_URL_SECRET", GOOD_PHOTO)
+    monkeypatch.setenv("DEMO_ACCOUNTS_ENABLED", "false")
+    monkeypatch.delenv("FIXED_NOW", raising=False)
+    if app_env is None:
+        monkeypatch.delenv("APP_ENV", raising=False)
+    else:
+        monkeypatch.setenv("APP_ENV", app_env)
+    return Settings()  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_missing_app_env_fails_with_a_clear_message(
+    monkeypatch: pytest.MonkeyPatch, value: str | None
+) -> None:
+    with pytest.raises(ValidationError) as error:
+        _settings_from_env(monkeypatch, value)
+    message = str(error.value)
+    assert "APP_ENV is required" in message
+    for allowed in ("local", "test", "staging", "production"):
+        assert allowed in message
+
+
+@pytest.mark.parametrize("value", ["local", "test", "staging", "production"])
+def test_each_allowed_app_env_works(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    assert _settings_from_env(monkeypatch, value).app_env == value
+
+
+@pytest.mark.parametrize("value", ["Production", " local", "prod", "LOCAL", "local ", "dev"])
+def test_near_miss_app_env_values_fail(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    with pytest.raises(ValidationError, match="app_env"):
+        _settings_from_env(monkeypatch, value)
+
+
+def test_seed_and_alembic_entry_points_fail_clearly_without_app_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    backend = Path(__file__).resolve().parents[1]
+    env = {
+        k: v
+        for k, v in __import__("os").environ.items()
+        if k not in ("APP_ENV", "FIXED_NOW", "SEED_ANCHOR_DATE")
+    }
+    for argv in (
+        [sys.executable, "-m", "app.seed"],
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+    ):
+        result = subprocess.run(  # noqa: S603
+            argv, cwd=backend, env=env, capture_output=True, text=True, timeout=60, check=False
+        )
+        assert result.returncode != 0, argv
+        assert "APP_ENV is required" in result.stderr, (argv, result.stderr[-500:])

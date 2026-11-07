@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from functools import lru_cache
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -11,12 +11,15 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 # Any other environment (staging, production) must supply real secrets, or startup fails.
 _DEV_JWT_SECRET = "dev-only-jwt-secret-change-me-0123456789abcdef"  # noqa: S105
 _DEV_PHOTO_URL_SECRET = "dev-only-photo-secret-change-me-0123456789ab"  # noqa: S105
+_DEV_SECRETS = frozenset({_DEV_JWT_SECRET.lower(), _DEV_PHOTO_URL_SECRET.lower()})
+_APP_ENVS = ("local", "test", "staging", "production")
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
 
-    app_env: Literal["local", "test", "staging", "production"] = "local"
+    # Required, no default: a deployment that forgets it must fail, not fall back to dev behaviour.
+    app_env: Literal["local", "test", "staging", "production"]
     database_url: str
     jwt_secret: str = Field(default=_DEV_JWT_SECRET, min_length=32)
     jwt_ttl_seconds: int = Field(default=1800, ge=60)
@@ -28,6 +31,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     fixed_now: datetime | None = None
     seed_anchor_date: date | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _require_app_env(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get("app_env"):
+            raise ValueError(f"APP_ENV is required; set it to one of: {', '.join(_APP_ENVS)}")
+        return data
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
@@ -58,15 +68,14 @@ class Settings(BaseSettings):
                 if name not in self.model_fields_set:
                     raise ValueError(f"{name.upper()} must be set when APP_ENV={self.app_env}")
                 value = getattr(self, name)
-                if value.startswith("dev-only-") or value in (
-                    _DEV_JWT_SECRET,
-                    _DEV_PHOTO_URL_SECRET,
-                ):
+                if value != value.strip():
+                    raise ValueError(f"{name.upper()} must not have leading or trailing whitespace")
+                if value.lower().startswith("dev-only-") or value.lower() in _DEV_SECRETS:
                     raise ValueError(
                         f"{name.upper()} must not be a development value when "
                         f"APP_ENV={self.app_env}"
                     )
-            if self.jwt_secret == self.photo_url_secret:
+            if self.jwt_secret.strip().lower() == self.photo_url_secret.strip().lower():
                 raise ValueError("JWT_SECRET and PHOTO_URL_SECRET must differ")
         if self.app_env == "production":
             if self.demo_accounts_enabled:

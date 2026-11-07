@@ -8,6 +8,11 @@ x-backend: &backend
   env_file:
     - path: .env
       required: false
+  # APP_ENV has no default in the backend, and the .env above is optional, so a fresh clone
+  # running `docker compose up` directly would start the seed without it. This keeps the local
+  # stack working (interpolated from .env or the shell, else local) and overrides env_file.
+  environment:
+    APP_ENV: ${APP_ENV:-local}
 
 services:
   db:
