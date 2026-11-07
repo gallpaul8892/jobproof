@@ -1,0 +1,19 @@
+{
+  "name": "jobproof",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22.22" },
+  "workspaces": ["shared", "web", "e2e"],
+  "scripts": {
+    "gen": "npm run gen -w @jobproof/shared",
+    "gen:check": "npm run gen:check -w @jobproof/shared",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm test -w @jobproof/shared -w @jobproof/web",
+    "build": "npm run build -w @jobproof/web",
+    "e2e": "npm run test -w @jobproof/e2e"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.76.0"
+  }
+}

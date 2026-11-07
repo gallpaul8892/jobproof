@@ -13,3 +13,5 @@ coverage/
 playwright-report/
 test-results/
 *.log
+.dev/
+e2e/.auth/

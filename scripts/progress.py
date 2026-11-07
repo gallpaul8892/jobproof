@@ -6,6 +6,9 @@ Usage:
   progress.py add <phase_id> <id> <title> [owner]  add an item to a phase
   progress.py agent <name> <status> [note...]   set an agent's status (idle|working|done)
   progress.py log <who> <message...>            append an activity log line
+  progress.py report <file.json>                add or replace an agent report section
+                                                (id, title, agent, model, status, date, summary,
+                                                blocks[{heading, type list|table, open, items|rows}])
   progress.py render                            just regenerate progress.html
 
 Item statuses: backlog, todo, in_progress, review, blocked, done
@@ -76,6 +79,12 @@ td.id{font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:nowrap
 .log{font-size:13px;max-height:360px;overflow:auto}
 .log div{padding:4px 0;border-top:1px solid var(--line)}.log time{color:var(--mute);margin-right:8px}
 .log b{margin-right:6px}
+details{border-top:1px solid var(--line);padding:8px 0}
+summary{cursor:pointer;font-weight:600}
+details ul{margin:8px 0 0;padding-left:20px}
+details li{margin:4px 0}
+ul.subl{margin:4px 0;color:var(--mute);font-size:13px}
+p.lead{margin:8px 0 4px}
 </style></head><body><main>
 <h1>%%TITLE%%</h1>
 <div class="sub">%%SUMMARY%% &middot; updated %%UPDATED%% &middot; refreshes every 10s</div>
@@ -83,10 +92,49 @@ td.id{font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:nowrap
 <div class="bar"><div></div></div>
 <div class="stats">%%STATS%%</div></div>
 %%PHASES%%
+%%REPORTS%%
 <div class="card"><h2>Agents</h2><table><tr><th>Agent</th><th>Model</th><th>Status</th><th>Doing</th></tr>%%AGENTS%%</table></div>
 <div class="card"><h2>Activity</h2><div class="log">%%LOG%%</div></div>
-</main></body></html>
+</main>
+<script>
+try{var S=JSON.parse(sessionStorage.getItem('jp-open')||'{}');
+document.querySelectorAll('details[data-key]').forEach(function(d){var k=d.dataset.key;
+if(k in S)d.open=S[k];
+d.addEventListener('toggle',function(){S[k]=d.open;sessionStorage.setItem('jp-open',JSON.stringify(S))})})}catch(e){}
+</script></body></html>
 """
+
+
+def render_block(rid, idx, b):
+    if b.get("type") == "table":
+        head = "".join(f"<th>{esc(c)}</th>" for c in b["columns"])
+        rows = "".join(
+            "<tr>" + "".join(f"<td>{esc(c)}</td>" for c in r) + "</tr>" for r in b["rows"]
+        )
+        body = f"<table><tr>{head}</tr>{rows}</table>"
+    else:
+        lis = ""
+        for it in b.get("items", []):
+            label = f"<b>{esc(it['label'])}</b> " if it.get("label") else ""
+            sub = ""
+            if it.get("sub"):
+                sub = "<ul class='subl'>" + "".join(f"<li>{esc(s)}</li>" for s in it["sub"]) + "</ul>"
+            lis += f"<li>{label}{esc(it.get('text'))}{sub}</li>"
+        body = f"<ul>{lis}</ul>"
+    op = " open" if b.get("open") else ""
+    return f'<details data-key="{esc(rid)}-{idx}"{op}><summary>{esc(b["heading"])}</summary>{body}</details>'
+
+
+def render_reports(d):
+    out = ""
+    for r in d.get("reports", []):
+        blocks = "".join(render_block(r["id"], i, b) for i, b in enumerate(r.get("blocks", [])))
+        out += (
+            f'<div class="card"><h2>{esc(r["title"])} {badge(r.get("status", "done"))}</h2>'
+            f'<div class="note">{esc(r.get("agent"))} &middot; {esc(r.get("model"))} &middot; {esc(r.get("date"))}</div>'
+            f'<p class="lead">{esc(r.get("summary"))}</p>{blocks}</div>'
+        )
+    return out
 
 
 def render(d):
@@ -129,6 +177,7 @@ def render(d):
         .replace("%%TOTAL%%", str(len(active)))
         .replace("%%STATS%%", stats)
         .replace("%%PHASES%%", phases)
+        .replace("%%REPORTS%%", render_reports(d))
         .replace("%%AGENTS%%", agents)
         .replace("%%LOG%%", log)
     )
@@ -171,6 +220,15 @@ def main(argv):
             sys.exit(f"unknown agent {args[0]}")
         a["status"] = args[1]
         a["note"] = " ".join(args[2:])
+    elif cmd == "report" and len(args) == 1:
+        r = json.loads(pathlib.Path(args[0]).read_text())
+        reports = d.setdefault("reports", [])
+        for n, existing in enumerate(reports):
+            if existing["id"] == r["id"]:
+                reports[n] = r
+                break
+        else:
+            reports.append(r)
     elif cmd == "log" and len(args) >= 2:
         d.setdefault("log", []).append({"time": now(), "who": args[0], "msg": " ".join(args[1:])})
     else:

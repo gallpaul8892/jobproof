@@ -1,0 +1,54 @@
+[project]
+name = "jobproof-backend"
+version = "0.1.0"
+description = "JobProof FastAPI backend"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi==0.162.1",
+    "uvicorn==0.54.0",
+    "sqlalchemy==2.1.8",
+    "alembic==1.20.1",
+    "pydantic==2.14.3",
+    "pydantic-settings==2.16.2",
+    "psycopg[binary]==3.3.8",
+    "tzdata==2026.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "httpx==0.28.1",
+    "ruff==0.17.4",
+    "mypy==2.4.1",
+    "jsonschema==4.26.0",
+    "pyyaml==6.0.3",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    "error",
+    # Starlette's TestClient now prefers httpx2; ARCHITECTURE.md pins httpx 0.28.1.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app"]

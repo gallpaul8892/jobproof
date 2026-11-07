@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
   "summary": "Phase 1: manager view with mock data, running locally in containers",
-  "updated": "2026-11-07 13:33",
+  "updated": "2026-11-07 13:42",
   "phases": [
     {
       "id": "setup",
@@ -38,7 +38,8 @@
           "id": "T-001a",
           "title": "Scaffold, compose stack, no-Docker dev script, health endpoint",
           "owner": "backend+frontend",
-          "status": "todo"
+          "status": "review",
+          "note": "Integrated: lint, unit (26 backend, 11 frontend) and e2e 2/2 pass; code review next"
         },
         {
           "id": "T-001b",
@@ -120,13 +121,13 @@
       "name": "backend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": ""
+      "note": "T-001a backend half done: 26 tests, ruff and mypy clean"
     },
     {
       "name": "frontend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": ""
+      "note": "T-001a frontend half done"
     },
     {
       "name": "test-engineer",
@@ -137,8 +138,8 @@
     {
       "name": "code-reviewer",
       "model": "opus",
-      "status": "idle",
-      "note": ""
+      "status": "working",
+      "note": "Reviewing T-001a diff (opus)"
     },
     {
       "name": "dependency-checker",
@@ -162,6 +163,524 @@
       "time": "2026-11-07 13:33",
       "who": "architect",
       "msg": "Bootstrap done: Terraform, argon2+JWT, npm workspaces, tickets T-001a..d"
+    },
+    {
+      "time": "2026-11-07 13:33",
+      "who": "orchestrator",
+      "msg": "Launched backend and frontend engineers for T-001a"
+    },
+    {
+      "time": "2026-11-07 13:38",
+      "who": "orchestrator",
+      "msg": "Added architect report section to progress page"
+    },
+    {
+      "time": "2026-11-07 13:40",
+      "who": "backend-engineer",
+      "msg": "T-001a backend done: /health, JSON logs, problem+json, Alembic, compose, dev.sh, Makefile; pytest 26/26"
+    },
+    {
+      "time": "2026-11-07 13:42",
+      "who": "orchestrator",
+      "msg": "T-001a integrated on the no-Docker stack; committed; sent to code-reviewer"
+    }
+  ],
+  "reports": [
+    {
+      "id": "architect-t000",
+      "title": "Architect report: bootstrap (T-000)",
+      "agent": "architect",
+      "model": "opus",
+      "status": "done",
+      "date": "2026-11-07",
+      "summary": "Defined the system, stack, data model, API contract, local and AWS layout, and split the manager view into four buildable tickets. No application code was written; implementers build from these documents.",
+      "blocks": [
+        {
+          "heading": "Documents produced",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "label": "ARCHITECTURE.md",
+              "text": "199 lines. The system's memory: overview, components, verified versions, data model, API conventions, patterns, personas and permissions, auth, AWS layout, local run, key decisions, dependency deferrals."
+            },
+            {
+              "label": "specs/T-000-bootstrap.md",
+              "text": "Repo layout, versions, Makefile targets, local environment, API contract workflow, cross-cutting concerns, testing strategy, Terraform module plan, implementation tickets."
+            },
+            {
+              "label": "specs/T-001-manager-view.md",
+              "text": "Feature spec: data model with columns, mock data volumes, API, backend rules, shared code, web screens and states, test notes, assumptions A1 to A9."
+            },
+            {
+              "label": "api/openapi.yaml",
+              "text": "761 lines, OpenAPI 3.1. Passes redocly lint (one warning: /health has no 4xx response). A TypeScript client was generated from it as a check."
+            },
+            {
+              "label": "tickets/T-001a to T-001d",
+              "text": "Four implementation tickets in Given/When/Then, ordered and independently verifiable."
+            }
+          ]
+        },
+        {
+          "heading": "Key decisions",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "label": "Terraform over CDK.",
+              "text": "Reviewable plan diffs for humans and the code-review agent, no synth step, mature AWS provider, S3 native state locking. IaC is specified only; not written in Phase 1."
+            },
+            {
+              "label": "Contract first.",
+              "text": "Hand-written OpenAPI 3.1 is the single source of truth. The backend is tested against it and the TypeScript client is generated from it, with a drift check that fails the lint if they disagree."
+            },
+            {
+              "label": "Auth (Phase 1).",
+              "text": "Seeded users, argon2id password hashes, HS256 JWT valid for 30 minutes, no refresh token. Role is reloaded from the database on every request. Painter gets 403 on manager endpoints, no token gets 401."
+            },
+            {
+              "label": "Monorepo.",
+              "text": "npm workspaces for shared, web and e2e; backend managed by uv; Makefile and scripts/dev.sh as entry points. Generated client code is committed."
+            },
+            {
+              "label": "Local and cloud parity.",
+              "text": "docker compose runs db, migrate, seed, backend and web (nginx) with one command. A no-Docker path (scripts/dev.sh) exists for this workspace. Web config.js is generated at container start from API_BASE_URL."
+            },
+            {
+              "label": "AWS layout.",
+              "text": "VPC over 2 AZs, ECS Fargate behind an ALB, RDS Postgres 16 in private subnets, S3 plus CloudFront for the web build, Secrets Manager, GitHub OIDC roles for CI/CD, migrations as a one-off ECS task before each deploy."
+            },
+            {
+              "label": "Photos.",
+              "text": "Generated SVG placeholders served through short-lived signed URLs. This matches the later S3 presigned-URL shape, needs no image dependencies and works offline."
+            },
+            {
+              "label": "Sync SQLAlchemy with psycopg 3.",
+              "text": "Read-only and low traffic, so sync is simpler to test."
+            },
+            {
+              "label": "Plain CSS, system fonts, no UI kit.",
+              "text": "Keeps the app small and fully offline."
+            },
+            {
+              "label": "CORS allowlist instead of a same-origin proxy.",
+              "text": "Mirrors production, where CloudFront and the API are on different domains."
+            },
+            {
+              "label": "Derived invoice status.",
+              "text": "Overdue and part-paid are computed by one pure function (void, draft, paid, overdue, part-paid, sent), so they always match payments and today's date."
+            },
+            {
+              "label": "Injectable clock.",
+              "text": "FIXED_NOW (non-production only) makes 'this month' figures deterministic in tests."
+            }
+          ]
+        },
+        {
+          "heading": "Design patterns chosen",
+          "type": "table",
+          "columns": [
+            "Pattern",
+            "Where",
+            "Why"
+          ],
+          "rows": [
+            [
+              "Strategy",
+              "backend/app/photos/store.py (PhotoStore: PlaceholderPhotoStore now, S3PhotoStore later)",
+              "Photo bytes and URLs differ per phase and environment"
+            ],
+            [
+              "Strategy",
+              "shared/src/auth/tokenStore.ts (web sessionStorage now, SecureStore on mobile later)",
+              "Same auth hooks, platform-specific storage"
+            ],
+            [
+              "Adapter",
+              "shared/src/api/client.ts wraps the generated client",
+              "Keeps generated code untouched; base URL, bearer header and Problem errors handled once"
+            ],
+            [
+              "None",
+              "Authorisation: router-level require_roles(...)",
+              "Role-only rules need no pattern yet; revisit as per-persona Policy when painter ownership rules arrive"
+            ],
+            [
+              "None",
+              "Invoice status: pure function",
+              "No transitions in Phase 1, so State would be over-engineering"
+            ]
+          ]
+        },
+        {
+          "heading": "Data model (9 tables in Phase 1, 2 more sketched)",
+          "type": "table",
+          "columns": [
+            "Table",
+            "Purpose",
+            "Phase"
+          ],
+          "rows": [
+            [
+              "users",
+              "Login accounts; role manager or painter",
+              "1"
+            ],
+            [
+              "customers",
+              "Homeowners, landlords, businesses; no login",
+              "1"
+            ],
+            [
+              "jobs",
+              "Work at a site address for a customer, assigned painter",
+              "1"
+            ],
+            [
+              "quotes",
+              "Price and optional deposit for a job",
+              "1"
+            ],
+            [
+              "job_reports",
+              "Painter's completion report, one per job, review status",
+              "1"
+            ],
+            [
+              "report_checklist_items",
+              "Work checklist lines on a report",
+              "1"
+            ],
+            [
+              "report_photos",
+              "Before, during and after photo metadata",
+              "1"
+            ],
+            [
+              "invoices",
+              "Bill for a job; derived display status",
+              "1"
+            ],
+            [
+              "payments",
+              "Deposit (against quote) or invoice payment",
+              "1"
+            ],
+            [
+              "invoice_line_items",
+              "Itemised invoice lines",
+              "Later"
+            ],
+            [
+              "payment_links",
+              "Customer Stripe checkout links (capability token)",
+              "Later"
+            ]
+          ]
+        },
+        {
+          "heading": "API contract (10 operations)",
+          "type": "table",
+          "columns": [
+            "Operation",
+            "Endpoint",
+            "Who"
+          ],
+          "rows": [
+            [
+              "getHealth",
+              "GET /health",
+              "Anyone (ALB and compose healthcheck)"
+            ],
+            [
+              "login",
+              "POST /api/v1/auth/login",
+              "Anyone"
+            ],
+            [
+              "getMe",
+              "GET /api/v1/auth/me",
+              "Signed in"
+            ],
+            [
+              "listDemoAccounts",
+              "GET /api/v1/auth/demo-accounts",
+              "Anyone, when enabled (dev)"
+            ],
+            [
+              "getManagerDashboard",
+              "GET /api/v1/manager/dashboard",
+              "Manager"
+            ],
+            [
+              "listManagerPainters",
+              "GET /api/v1/manager/painters",
+              "Manager"
+            ],
+            [
+              "listManagerReports",
+              "GET /api/v1/manager/reports",
+              "Manager"
+            ],
+            [
+              "getManagerReport",
+              "GET /api/v1/manager/reports/{report_id}",
+              "Manager"
+            ],
+            [
+              "listManagerInvoices",
+              "GET /api/v1/manager/invoices",
+              "Manager"
+            ],
+            [
+              "getPhotoImage",
+              "GET /api/v1/photos/{photo_id}/image",
+              "Valid signed URL"
+            ]
+          ]
+        },
+        {
+          "heading": "Tickets created",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "label": "T-001a Scaffold, local stack and health endpoint.",
+              "text": "Monorepo skeleton, Makefile, compose, scripts/dev.sh, /health, error and logging conventions, runtime config.js, contract drift checks, e2e harness.",
+              "sub": [
+                "1 Layout and tooling exist",
+                "2 No-Docker stack starts from clean",
+                "3 Health endpoint",
+                "4 Errors, request ids and logs follow conventions",
+                "5 Web loads runtime config and shows API status",
+                "6 Contract tooling and drift checks",
+                "7 Lint, unit tests and e2e harness run",
+                "8 Compose design is valid and production-like"
+              ]
+            },
+            {
+              "label": "T-001b Data model, migrations and seed data.",
+              "text": "Nine tables in Alembic, constraints, deterministic and idempotent seed (60 jobs, 12 customers, 6 painters), invoice status function, placeholder photos.",
+              "sub": [
+                "1 Migration creates schema and round-trips",
+                "2 Constraints reject invalid data",
+                "3 Seed loads specified volumes",
+                "4 Seed is deterministic and idempotent",
+                "5 Seed data is internally consistent",
+                "6 Edge cases are present",
+                "7 Invoice status function matches spec",
+                "8 Placeholder photos render offline and safely",
+                "9 Dev and compose paths seed on start"
+              ]
+            },
+            {
+              "label": "T-001c Authentication and manager read API.",
+              "text": "Login, role enforcement, dashboard, reports list and detail with filters, billing list, demo accounts, contract parity.",
+              "sub": [
+                "1 Manager signs in",
+                "2 Bad credentials rejected uniformly",
+                "3 Only managers can use manager endpoints",
+                "4 Dashboard figures match the seed",
+                "5 Reports list paginated, newest first",
+                "6 Reports can be filtered and searched",
+                "7 Report detail returns all evidence",
+                "8 Billing list filters by derived status",
+                "9 Demo accounts and contract parity",
+                "10 Performance and logging"
+              ]
+            },
+            {
+              "label": "T-001d Manager web UI and end-to-end tests.",
+              "text": "Login, dashboard, reports, evidence gallery, billing, loading/empty/error states, role gating, Playwright suite, offline run.",
+              "sub": [
+                "1 Sign in as manager",
+                "2 Bad credentials rejected",
+                "3 App never shows manager pages to others",
+                "4 Dashboard summary",
+                "5 List job reports",
+                "6 Filter and search reports",
+                "7 View evidence for a report",
+                "8 Billing overview",
+                "9 Resilient states",
+                "10 Runs locally, offline",
+                "Plus Vitest unit tests"
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Assumptions (product owner may revise)",
+          "type": "list",
+          "items": [
+            {
+              "label": "A1",
+              "text": "All 60 seeded jobs are completed and each has one completion report."
+            },
+            {
+              "label": "A2",
+              "text": "'Status' filtering covers review status and billing status, with separate filters."
+            },
+            {
+              "label": "A3",
+              "text": "'This month' is the current calendar month in Europe/London. Outstanding is the unpaid balance of issued, non-void invoices; overdue includes part-paid."
+            },
+            {
+              "label": "A4",
+              "text": "20% VAT. Payment terms 14 days for homeowners and 30 days for landlords and businesses. A paid deposit is deducted on the invoice."
+            },
+            {
+              "label": "A5",
+              "text": "Billing 'amount' is the invoice total after deposit; 'paid' is payments against the invoice; deposits show on the report detail."
+            },
+            {
+              "label": "A6",
+              "text": "Roles are exclusive; a painter signing in to the web app sees a 'managers only' page."
+            },
+            {
+              "label": "A7",
+              "text": "Mock region is Bristol and Bath. Seed dates are relative to the seed date so current-month figures always exist."
+            },
+            {
+              "label": "A8",
+              "text": "'Awaiting review' means not yet reviewed by a manager; Phase 1 has no review action."
+            },
+            {
+              "label": "A9",
+              "text": "Sessions last 30 minutes with no refresh."
+            }
+          ]
+        },
+        {
+          "heading": "Verified stack versions (checked 2026-11-07)",
+          "type": "table",
+          "columns": [
+            "Area",
+            "Package",
+            "Version"
+          ],
+          "rows": [
+            [
+              "Runtime",
+              "Python / Node / uv",
+              "3.13 / 22 LTS / 0.11"
+            ],
+            [
+              "Backend",
+              "FastAPI / uvicorn",
+              "0.162.1 / 0.54.0"
+            ],
+            [
+              "Backend",
+              "SQLAlchemy / Alembic / psycopg",
+              "2.1.8 / 1.20.1 / 3.3.8"
+            ],
+            [
+              "Backend",
+              "Pydantic / pydantic-settings",
+              "2.14.3 / 2.16.2"
+            ],
+            [
+              "Backend",
+              "pyjwt / argon2-cffi",
+              "2.15.1 / 25.1.0"
+            ],
+            [
+              "Backend dev",
+              "pytest / ruff / mypy / httpx",
+              "9.2.0 / 0.17.4 / 2.4.1 / 0.28.1"
+            ],
+            [
+              "Web",
+              "React / react-router",
+              "19.3.1 / 8.5.1"
+            ],
+            [
+              "Web",
+              "Vite / TanStack Query",
+              "8.3.6 / 5.107.1"
+            ],
+            [
+              "Web",
+              "TypeScript",
+              "6.0.3 (held back, see deferrals)"
+            ],
+            [
+              "Web dev",
+              "Vitest / ESLint",
+              "5.1.0 / 10.14.0"
+            ],
+            [
+              "Contract",
+              "@hey-api/openapi-ts / Redocly CLI",
+              "0.99.0 (pinned exactly) / 2.76.0"
+            ],
+            [
+              "E2E",
+              "Playwright",
+              "1.65.0"
+            ],
+            [
+              "Database",
+              "PostgreSQL",
+              "16"
+            ],
+            [
+              "IaC",
+              "Terraform / AWS provider",
+              "1.15.x / ~> 6.72"
+            ]
+          ]
+        },
+        {
+          "heading": "Deliberate dependency deferrals",
+          "type": "table",
+          "columns": [
+            "Package",
+            "Held at",
+            "Reason",
+            "Revisit"
+          ],
+          "rows": [
+            [
+              "typescript 7.x",
+              "6.0.3",
+              "typescript-eslint 8.72.1 does not support TS 7 yet (typescript-eslint issue 12518)",
+              "2027-02-01 or when supported"
+            ],
+            [
+              "@types/node 26",
+              "22.x",
+              "Match the Node 22 runtime",
+              "With Node runtime upgrade"
+            ],
+            [
+              "structlog, UI kits, axios",
+              "Not used",
+              "Keep Phase 1 lean",
+              "When a need appears"
+            ]
+          ]
+        },
+        {
+          "heading": "Risks and notes for the orchestrator",
+          "type": "list",
+          "items": [
+            {
+              "text": "Playwright's browser download host is blocked in this workspace, so e2e uses the installed Chrome via PLAYWRIGHT_CHROMIUM_EXECUTABLE."
+            },
+            {
+              "text": "Docker Hub was unreachable, so the nginx image tag could not be verified; implementers must pin the current stable tag."
+            },
+            {
+              "text": "No Docker daemon here: compose is checked with 'docker compose config' and by review. It has not been run in this workspace."
+            },
+            {
+              "text": "Backend tests fix the date at 2026-10-15 so the 'this month' figures are stable."
+            }
+          ]
+        }
+      ]
     }
   ]
 }
