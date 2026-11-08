@@ -30,7 +30,7 @@ const save = () => screen.getByTestId("save-changes") as HTMLButtonElement;
 describe("EditCustomerForm", () => {
   it("shows labelled fields with the saved values, Save disabled and the impact notice", () => {
     setup(() => ({ body: {} }));
-    expect(input("Name").value).toBe("Harbourside Lettings Ltd");
+    expect(input("Name").value).toBe("Seaview Lettings Ltd");
     expect(input("Contact name").value).toBe("Marcus Ellery");
     expect(input("Email").type).toBe("email");
     expect(input("Phone").type).toBe("tel");
@@ -60,7 +60,7 @@ describe("EditCustomerForm", () => {
     setup(() => ({ body: {} }));
     fireEvent.change(input("Postcode"), { target: { value: "BS1" } });
     fireEvent.change(input("Phone"), { target: { value: "12345" } });
-    fireEvent.change(input("Email"), { target: { value: "accounts at harbourside" } });
+    fireEvent.change(input("Email"), { target: { value: "accounts at seaview" } });
     fireEvent.change(input("Name"), { target: { value: "" } });
     expect(screen.getByTestId("postcode-error").textContent).toBe("Enter a UK postcode such as BS6 5QA.");
     expect(screen.getByTestId("phone-error").textContent).toContain("Enter a UK phone number such as 07700 900123");

@@ -119,7 +119,7 @@ describe("resolve", () => {
 describe("mergeOnTop (customer)", () => {
   const rec = (over: Partial<CustomerRecord> = {}): CustomerRecord => ({
     id: "c",
-    name: "Harbourside Lettings Ltd",
+    name: "Seaview Lettings Ltd",
     customer_type: "landlord",
     contact_name: "Marcus Ellery",
     email: "a@b.co.uk",

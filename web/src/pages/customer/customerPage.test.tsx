@@ -28,8 +28,8 @@ const ok = (path: string) => {
 describe("Customer page", () => {
   it("shows the details, the customer's reports with a page size of 100 and the customer filter, and History", async () => {
     const { calls } = renderPage(({ path }) => ok(path));
-    await waitFor(() => expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Harbourside Lettings Ltd"));
-    expect(screen.getByTestId("customer-email").textContent).toBe("marcus@harbourside.example.co.uk");
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Seaview Lettings Ltd"));
+    expect(screen.getByTestId("customer-email").textContent).toBe("marcus@seaview.example.co.uk");
     expect(screen.getByTestId("customer-address").textContent).toContain("BS1 4SB");
     expect(screen.getByTestId("customer-last-changed").textContent).toBe("Not changed since it was created");
     await waitFor(() => expect(screen.getAllByTestId("customer-report-row")).toHaveLength(2));

@@ -66,10 +66,10 @@ export function report(over: Partial<ReportDetail> = {}): ReportDetail {
 export function customerRecord(over: Partial<CustomerRecord> = {}): CustomerRecord {
   return {
     id: "cust1",
-    name: "Harbourside Lettings Ltd",
+    name: "Seaview Lettings Ltd",
     customer_type: "landlord",
     contact_name: "Marcus Ellery",
-    email: "marcus@harbourside.example.co.uk",
+    email: "marcus@seaview.example.co.uk",
     phone: "07700 900201",
     billing_address: { line1: "Unit 4", line2: "Welsh Back Court", town: "Bristol", county: "City of Bristol", postcode: "BS1 4SB" },
     version: 2,
