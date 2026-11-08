@@ -1,0 +1,1040 @@
+[
+ {
+  "field": "name",
+  "input": "Quayside Properties Ltd",
+  "ok": true,
+  "stored": "Quayside Properties Ltd"
+ },
+ {
+  "field": "name",
+  "input": "  Jo Bloggs  ",
+  "ok": true,
+  "stored": "Jo Bloggs"
+ },
+ {
+  "field": "name",
+  "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ok": true,
+  "stored": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+ },
+ {
+  "field": "name",
+  "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ok": false,
+  "message": "Use 120 characters or fewer."
+ },
+ {
+  "field": "name",
+  "input": "\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8",
+  "ok": true,
+  "stored": "\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8"
+ },
+ {
+  "field": "name",
+  "input": "\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8\ud83c\udfa8",
+  "ok": false,
+  "message": "Use 120 characters or fewer."
+ },
+ {
+  "field": "name",
+  "input": "  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  ",
+  "ok": true,
+  "stored": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+ },
+ {
+  "field": "name",
+  "input": "Zo\u00eb O'Brien-Smith & Sons",
+  "ok": true,
+  "stored": "Zo\u00eb O'Brien-Smith & Sons"
+ },
+ {
+  "field": "name",
+  "input": "<script>alert(1)</script>",
+  "ok": true,
+  "stored": "<script>alert(1)</script>"
+ },
+ {
+  "field": "name",
+  "input": "Caf\u00e9\u00a0Ltd",
+  "ok": true,
+  "stored": "Caf\u00e9\u00a0Ltd"
+ },
+ {
+  "field": "name",
+  "input": "Ann\u202fLee",
+  "ok": true,
+  "stored": "Ann\u202fLee"
+ },
+ {
+  "field": "name",
+  "input": "Ann\u200aLee",
+  "ok": true,
+  "stored": "Ann\u200aLee"
+ },
+ {
+  "field": "name",
+  "input": "",
+  "ok": false,
+  "message": "Enter a name."
+ },
+ {
+  "field": "name",
+  "input": "     ",
+  "ok": false,
+  "message": "Enter a name."
+ },
+ {
+  "field": "name",
+  "input": null,
+  "ok": false,
+  "message": "Enter a name."
+ },
+ {
+  "field": "name",
+  "input": "\t",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": " \n ",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u0000",
+  "ok": false,
+  "message": "Use 120 characters or fewer."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u0000 name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \t name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \n name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \r name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u001f name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u007f name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u0080 name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u0085 name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u009f name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u200b name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u200d name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u200f name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u202a name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u202e name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u2066 name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \u2069 name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \ufeff name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \ud800 name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \udbff name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Bad \udfff name",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "\u200bLeading",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "name",
+  "input": "Trailing\u202e",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "contact_name",
+  "input": "Priya Nair",
+  "ok": true,
+  "stored": "Priya Nair"
+ },
+ {
+  "field": "contact_name",
+  "input": "  ",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "contact_name",
+  "input": "",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "contact_name",
+  "input": null,
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "contact_name",
+  "input": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "ok": true,
+  "stored": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+ },
+ {
+  "field": "contact_name",
+  "input": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "ok": false,
+  "message": "Use 120 characters or fewer."
+ },
+ {
+  "field": "contact_name",
+  "input": "A\u0007B",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "contact_name",
+  "input": "A\u2067B",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "email",
+  "input": "name@example.co.uk",
+  "ok": true,
+  "stored": "name@example.co.uk"
+ },
+ {
+  "field": "email",
+  "input": "  Name@Example.CO.UK ",
+  "ok": true,
+  "stored": "Name@Example.CO.UK"
+ },
+ {
+  "field": "email",
+  "input": "a@b.c",
+  "ok": true,
+  "stored": "a@b.c"
+ },
+ {
+  "field": "email",
+  "input": "first.last+tag@sub.example.com",
+  "ok": true,
+  "stored": "first.last+tag@sub.example.com"
+ },
+ {
+  "field": "email",
+  "input": "j\u00f6rg@ex\u00e4mple.de",
+  "ok": true,
+  "stored": "j\u00f6rg@ex\u00e4mple.de"
+ },
+ {
+  "field": "email",
+  "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com",
+  "ok": true,
+  "stored": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com"
+ },
+ {
+  "field": "email",
+  "input": "",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "email",
+  "input": "   ",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "email",
+  "input": null,
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "email",
+  "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "plainaddress",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@b",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@b.",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@.co",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@b..co",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "@example.com",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@@example.com",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@b@example.com",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a b@example.com",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@exa mple.com",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@example.com\u00a0x",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "email",
+  "input": "a@example.com\n",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "email",
+  "input": "a\u200b@example.com",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "email",
+  "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.comxxxx",
+  "ok": false,
+  "message": "Use 254 characters or fewer."
+ },
+ {
+  "field": "email",
+  "input": "'; DROP TABLE customers;--",
+  "ok": false,
+  "message": "Enter an email address such as name@example.co.uk."
+ },
+ {
+  "field": "phone",
+  "input": "07700 900123",
+  "ok": true,
+  "stored": "07700 900123"
+ },
+ {
+  "field": "phone",
+  "input": "07700900123",
+  "ok": true,
+  "stored": "07700900123"
+ },
+ {
+  "field": "phone",
+  "input": "0117 496 0123",
+  "ok": true,
+  "stored": "0117 496 0123"
+ },
+ {
+  "field": "phone",
+  "input": "+44 7700 900123",
+  "ok": true,
+  "stored": "+44 7700 900123"
+ },
+ {
+  "field": "phone",
+  "input": "+44 (0)117 496 0123",
+  "ok": true,
+  "stored": "+44 (0)117 496 0123"
+ },
+ {
+  "field": "phone",
+  "input": "+447700900123",
+  "ok": true,
+  "stored": "+447700900123"
+ },
+ {
+  "field": "phone",
+  "input": "+1 202 555 0100",
+  "ok": true,
+  "stored": "+1 202 555 0100"
+ },
+ {
+  "field": "phone",
+  "input": "+353 1 234 5678",
+  "ok": true,
+  "stored": "+353 1 234 5678"
+ },
+ {
+  "field": "phone",
+  "input": "(0117) 496 0123",
+  "ok": true,
+  "stored": "(0117) 496 0123"
+ },
+ {
+  "field": "phone",
+  "input": "0117-496-0123",
+  "ok": true,
+  "stored": "0117-496-0123"
+ },
+ {
+  "field": "phone",
+  "input": "+44 (0) 117 496 0123",
+  "ok": true,
+  "stored": "+44 (0) 117 496 0123"
+ },
+ {
+  "field": "phone",
+  "input": "+44 0117 496 0123",
+  "ok": true,
+  "stored": "+44 0117 496 0123"
+ },
+ {
+  "field": "phone",
+  "input": "+44(0)(0)1174960123",
+  "ok": true,
+  "stored": "+44(0)(0)1174960123"
+ },
+ {
+  "field": "phone",
+  "input": "07700   900123",
+  "ok": true,
+  "stored": "07700 900123"
+ },
+ {
+  "field": "phone",
+  "input": "  0117 496 0123  ",
+  "ok": true,
+  "stored": "0117 496 0123"
+ },
+ {
+  "field": "phone",
+  "input": "",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "phone",
+  "input": "  ",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "phone",
+  "input": null,
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "phone",
+  "input": "abc",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "0770",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "07700 900123 ext 5",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "07700.900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "+44 770",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "0044 7700 900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "+0 123 456 789 0",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "+12 34",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "12345678",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "++447700900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "07700+900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "(+44) 7700 900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "\u0660\u0667\u0667\u0660\u0660\u0669\u0660\u0660\u0661\u0662\u0663",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "07700 9001234567",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "+",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "()",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "- - -",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "0 1 2 3 4 5 6 7 8",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "input": "0000000000000000000000000000000",
+  "ok": false,
+  "message": "Use 30 characters or fewer."
+ },
+ {
+  "field": "phone",
+  "input": "07700 900123\t",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "phone",
+  "input": "07700\u200b900123",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "line1",
+  "input": "14 Quay Road",
+  "ok": true,
+  "stored": "14 Quay Road"
+ },
+ {
+  "field": "line1",
+  "input": "  Flat 2, 7 Ash Court ",
+  "ok": true,
+  "stored": "Flat 2, 7 Ash Court"
+ },
+ {
+  "field": "line1",
+  "input": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "ok": true,
+  "stored": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+ },
+ {
+  "field": "line1",
+  "input": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "ok": false,
+  "message": "Use 100 characters or fewer."
+ },
+ {
+  "field": "line1",
+  "input": "",
+  "ok": false,
+  "message": "Enter the first line of the address."
+ },
+ {
+  "field": "line1",
+  "input": "  ",
+  "ok": false,
+  "message": "Enter the first line of the address."
+ },
+ {
+  "field": "line1",
+  "input": null,
+  "ok": false,
+  "message": "Enter the first line of the address."
+ },
+ {
+  "field": "line1",
+  "input": "1 High St\u0000",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "line2",
+  "input": "Hotwells",
+  "ok": true,
+  "stored": "Hotwells"
+ },
+ {
+  "field": "line2",
+  "input": "   ",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "line2",
+  "input": null,
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "line2",
+  "input": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "ok": false,
+  "message": "Use 100 characters or fewer."
+ },
+ {
+  "field": "line2",
+  "input": "x\ty",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "town",
+  "input": "Bristol",
+  "ok": true,
+  "stored": "Bristol"
+ },
+ {
+  "field": "town",
+  "input": " Bath ",
+  "ok": true,
+  "stored": "Bath"
+ },
+ {
+  "field": "town",
+  "input": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+  "ok": true,
+  "stored": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+ },
+ {
+  "field": "town",
+  "input": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+  "ok": false,
+  "message": "Use 60 characters or fewer."
+ },
+ {
+  "field": "town",
+  "input": "",
+  "ok": false,
+  "message": "Enter a town or city."
+ },
+ {
+  "field": "town",
+  "input": null,
+  "ok": false,
+  "message": "Enter a town or city."
+ },
+ {
+  "field": "town",
+  "input": "Bris\u202etol",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "county",
+  "input": "Somerset",
+  "ok": true,
+  "stored": "Somerset"
+ },
+ {
+  "field": "county",
+  "input": "",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "county",
+  "input": null,
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "county",
+  "input": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+  "ok": false,
+  "message": "Use 60 characters or fewer."
+ },
+ {
+  "field": "county",
+  "input": "Som\rerset",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5QA",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "input": "bs65qa",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "input": "bs6   5qa",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "input": "  bs6 5qa ",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "input": "EC1A 1BB",
+  "ok": true,
+  "stored": "EC1A 1BB"
+ },
+ {
+  "field": "postcode",
+  "input": "ec1a 1bb",
+  "ok": true,
+  "stored": "EC1A 1BB"
+ },
+ {
+  "field": "postcode",
+  "input": "M1 1AE",
+  "ok": true,
+  "stored": "M1 1AE"
+ },
+ {
+  "field": "postcode",
+  "input": "m11ae",
+  "ok": true,
+  "stored": "M1 1AE"
+ },
+ {
+  "field": "postcode",
+  "input": "SW1A 2AA",
+  "ok": true,
+  "stored": "SW1A 2AA"
+ },
+ {
+  "field": "postcode",
+  "input": "B33 8TH",
+  "ok": true,
+  "stored": "B33 8TH"
+ },
+ {
+  "field": "postcode",
+  "input": "CR2 6XH",
+  "ok": true,
+  "stored": "CR2 6XH"
+ },
+ {
+  "field": "postcode",
+  "input": "DN55 1PT",
+  "ok": true,
+  "stored": "DN55 1PT"
+ },
+ {
+  "field": "postcode",
+  "input": "W1A 0AX",
+  "ok": true,
+  "stored": "W1A 0AX"
+ },
+ {
+  "field": "postcode",
+  "input": "bs14sb",
+  "ok": true,
+  "stored": "BS1 4SB"
+ },
+ {
+  "field": "postcode",
+  "input": "BS6    5QA",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "input": "GIR 0AA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "   ",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": null,
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5Q",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5QAA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "1BS 5QA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5QA9",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "ABC1 2DE",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6-5QA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6\u00a05QA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "B S 6 5 Q A",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "\u0131\u01311 1AA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5QA\u00df",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6  5QA  extra",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS\uff16 5QA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5Q\u0410",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5QA\n",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5\u200bQA",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "input": "BS6 5QA     X",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ }
+]

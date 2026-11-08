@@ -175,3 +175,24 @@ class InvoicePage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class CustomerImpact(BaseModel):
+    job_count: int
+    report_count: int
+    reviewed_report_count: int
+    issued_invoice_count: int
+
+
+class CustomerRecord(BaseModel):
+    id: uuid.UUID
+    name: str
+    customer_type: CustomerType
+    contact_name: str | None
+    email: str | None
+    phone: str | None
+    billing_address: Address
+    version: int
+    last_changed_at: UtcDatetime | None
+    last_changed_by: PersonRef | None
+    impact: CustomerImpact

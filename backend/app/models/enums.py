@@ -77,8 +77,10 @@ class AuditAction(StrEnum):
     report_reopened = "report.reopened"
     report_edited = "report.edited"
     settings_changed = "settings.changed"
+    customer_edited = "customer.edited"
 
 
 class AuditEntity(StrEnum):
     report = "report"
     settings = "settings"
+    customer = "customer"

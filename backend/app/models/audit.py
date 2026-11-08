@@ -27,8 +27,13 @@ class AuditEvent(Base):
         CheckConstraint(
             "(entity_type = 'report') = (report_id IS NOT NULL)", name="report_id_matches_entity"
         ),
+        CheckConstraint(
+            "(entity_type = 'customer') = (customer_id IS NOT NULL)",
+            name="customer_id_matches_entity",
+        ),
         CheckConstraint("jsonb_typeof(changes) = 'array'", name="changes_is_array"),
         Index("ix_audit_events_report_id_seq", "report_id", text("seq DESC")),
+        Index("ix_audit_events_customer_id_seq", "customer_id", text("seq DESC")),
         Index(
             "ix_audit_events_settings_seq",
             text("seq DESC"),
@@ -45,6 +50,9 @@ class AuditEvent(Base):
     entity_type: Mapped[AuditEntity] = mapped_column(pg_enum(AuditEntity, "audit_entity"))
     report_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("job_reports.id", ondelete="RESTRICT")
+    )
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT")
     )
     request_id: Mapped[str | None] = mapped_column(Text)
     changes: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))

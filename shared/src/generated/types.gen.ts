@@ -491,9 +491,96 @@ export type AlreadyReviewedProblem = Problem & {
     reviewed_by: PersonRef;
 };
 
-export type AuditAction = 'report.reviewed' | 'report.reopened' | 'report.edited' | 'settings.changed';
+/**
+ * How many records show this customer's details (computed when read)
+ */
+export type CustomerImpact = {
+    job_count: number;
+    report_count: number;
+    /**
+     * Stay reviewed after a customer edit
+     */
+    reviewed_report_count: number;
+    /**
+     * Issued (not draft, not void) invoices; they show the current billing address (no snapshot yet)
+     */
+    issued_invoice_count: number;
+};
 
-export type AuditField = 'review_status' | 'reviewed_by' | 'reviewed_at' | 'painter_notes' | 'manager_notes' | 'checklist_done' | 'checklist_note' | 'company_name' | 'theme_primary' | 'theme_accent';
+export type CustomerRecord = {
+    id: string;
+    name: string;
+    customer_type: CustomerType;
+    contact_name: string | null;
+    email: string | null;
+    phone: string | null;
+    billing_address: Address;
+    /**
+     * Starts at 1; +1 on every real change. Send it back on PATCH
+     */
+    version: number;
+    /**
+     * Null if never edited
+     */
+    last_changed_at: string | null;
+    last_changed_by: PersonRef | null;
+    impact: CustomerImpact;
+};
+
+/**
+ * Only the parts sent are changed
+ */
+export type AddressUpdate = {
+    line1?: string;
+    line2?: string | null;
+    town?: string;
+    county?: string | null;
+    postcode?: string;
+};
+
+/**
+ * `version` plus at least one editable field. Rules: `updateManagerCustomer`.
+ */
+export type CustomerUpdate = {
+    version: number;
+    name?: string;
+    contact_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    billing_address?: AddressUpdate;
+};
+
+/**
+ * Current values of the fields the client tried to change (billing address parts as sent)
+ */
+export type CustomerEditableValues = {
+    name?: string;
+    contact_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    billing_address?: {
+        line1?: string;
+        line2?: string | null;
+        town?: string;
+        county?: string | null;
+        postcode?: string;
+    };
+};
+
+export type CustomerVersionConflictProblem = Problem & {
+    code: 'version_conflict';
+    current_version: number;
+    last_changed_at: string | null;
+    last_changed_by: PersonRef | null;
+    current: CustomerEditableValues;
+};
+
+/**
+ * `customer.edited` added by T-002n.
+ */
+export type AuditAction = 'report.reviewed' | 'report.reopened' | 'report.edited' | 'settings.changed' | 'customer.edited';
+
+export type AuditField = 'review_status' | 'reviewed_by' | 'reviewed_at' | 'painter_notes' | 'manager_notes' | 'checklist_done' | 'checklist_note' | 'company_name' | 'theme_primary' | 'theme_accent' | 'customer_name' | 'customer_contact_name' | 'customer_email' | 'customer_phone' | 'customer_billing_line1' | 'customer_billing_line2' | 'customer_billing_town' | 'customer_billing_county' | 'customer_billing_postcode';
 
 export type AuditChange = {
     field: AuditField;
@@ -517,6 +604,10 @@ export type AuditEvent = {
      */
     actor: PersonRef;
     action: AuditAction;
+    /**
+     * Set for `customer.edited` events (the customer whose details changed), else null
+     */
+    customer_id?: string | null;
     changes: Array<AuditChange>;
 };
 
@@ -817,6 +908,10 @@ export type ListManagerReportsData = {
         billing_status?: BillingStatus;
         painter_id?: string;
         /**
+         * Only reports for this customer's jobs (the customer page list). Unknown id gives an empty page.
+         */
+        customer_id?: string;
+        /**
          * Inclusive lower bound on `completed_on`.
          */
         date_from?: string;
@@ -1024,6 +1119,127 @@ export type ListManagerReportHistoryResponses = {
 };
 
 export type ListManagerReportHistoryResponse = ListManagerReportHistoryResponses[keyof ListManagerReportHistoryResponses];
+
+export type GetManagerCustomerData = {
+    body?: never;
+    path: {
+        customer_id: string;
+    };
+    query?: never;
+    url: '/api/v1/manager/customers/{customer_id}';
+};
+
+export type GetManagerCustomerErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+};
+
+export type GetManagerCustomerError = GetManagerCustomerErrors[keyof GetManagerCustomerErrors];
+
+export type GetManagerCustomerResponses = {
+    /**
+     * Customer
+     */
+    200: CustomerRecord;
+};
+
+export type GetManagerCustomerResponse = GetManagerCustomerResponses[keyof GetManagerCustomerResponses];
+
+export type UpdateManagerCustomerData = {
+    body: CustomerUpdate;
+    path: {
+        customer_id: string;
+    };
+    query?: never;
+    url: '/api/v1/manager/customers/{customer_id}';
+};
+
+export type UpdateManagerCustomerErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * The customer changed since the client loaded it (code `version_conflict`)
+     */
+    409: CustomerVersionConflictProblem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+};
+
+export type UpdateManagerCustomerError = UpdateManagerCustomerErrors[keyof UpdateManagerCustomerErrors];
+
+export type UpdateManagerCustomerResponses = {
+    /**
+     * Saved (or unchanged); the full, current customer
+     */
+    200: CustomerRecord;
+};
+
+export type UpdateManagerCustomerResponse = UpdateManagerCustomerResponses[keyof UpdateManagerCustomerResponses];
+
+export type ListManagerCustomerHistoryData = {
+    body?: never;
+    path: {
+        customer_id: string;
+    };
+    query?: never;
+    url: '/api/v1/manager/customers/{customer_id}/history';
+};
+
+export type ListManagerCustomerHistoryErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+};
+
+export type ListManagerCustomerHistoryError = ListManagerCustomerHistoryErrors[keyof ListManagerCustomerHistoryErrors];
+
+export type ListManagerCustomerHistoryResponses = {
+    /**
+     * History (only `customer.edited` events)
+     */
+    200: AuditHistory;
+};
+
+export type ListManagerCustomerHistoryResponse = ListManagerCustomerHistoryResponses[keyof ListManagerCustomerHistoryResponses];
 
 export type ListManagerInvoicesData = {
     body?: never;

@@ -18,7 +18,7 @@ from app.config import get_settings
 from app.db import make_engine
 from app.models import User
 from app.models.enums import UserRole
-from app.schemas.settings import contains_forbidden_character
+from app.schemas.text import contains_forbidden_character
 from app.security import hash_password
 from app.services.auth import normalise_email
 

@@ -1,8 +1,20 @@
 """Users (manager and painters) and customers."""
 
+import datetime as dt
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, Index, SmallInteger, Text, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, pg_enum, uuid_pk
@@ -29,6 +41,11 @@ class Customer(TimestampMixin, Base):
     __tablename__ = "customers"
     __table_args__ = (
         CheckConstraint("payment_terms_days BETWEEN 0 AND 120", name="payment_terms_range"),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint(
+            "(last_changed_at IS NULL) = (last_changed_by_id IS NULL)",
+            name="last_changed_fields_together",
+        ),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -44,6 +61,11 @@ class Customer(TimestampMixin, Base):
     billing_postcode: Mapped[str] = mapped_column(Text)
     payment_terms_days: Mapped[int] = mapped_column(SmallInteger)
     notes: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    last_changed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    last_changed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
 
 
 Index("ix_customers_lower_name", func.lower(Customer.name))

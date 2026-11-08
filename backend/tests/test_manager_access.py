@@ -16,7 +16,7 @@ MANAGER_OPERATIONS = sorted(
     for (method, path), operation_id in contract_operations().items()
     if path.startswith("/api/v1/manager/")
 )
-WRITE_OPERATIONS = {"updateManagerReport", "reviewManagerReport"}
+WRITE_OPERATIONS = {"updateManagerReport", "reviewManagerReport", "updateManagerCustomer"}
 READ_OPERATIONS = {
     "getManagerDashboard",
     "listManagerPainters",
@@ -24,6 +24,8 @@ READ_OPERATIONS = {
     "getManagerReport",
     "listManagerInvoices",
     "listManagerReportHistory",
+    "getManagerCustomer",
+    "listManagerCustomerHistory",
 }
 GET_OPERATIONS = sorted(op for op in MANAGER_OPERATIONS if op[0] == "GET")
 UNAUTHENTICATED_CASES = [
@@ -43,13 +45,15 @@ UNAUTHENTICATED_CASES = [
 
 
 def test_the_contract_has_manager_operations() -> None:
-    assert len(MANAGER_OPERATIONS) == 8
+    assert len(MANAGER_OPERATIONS) == 11
     assert {m for m, _, _ in MANAGER_OPERATIONS} == {"GET", "PATCH", "POST"}
     assert {i for _, _, i in MANAGER_OPERATIONS if i not in READ_OPERATIONS} == WRITE_OPERATIONS
 
 
 def _url(path: str, ds: Any) -> str:
-    return path.replace("{report_id}", str(ds.reports[0].id))
+    return path.replace("{report_id}", str(ds.reports[0].id)).replace(
+        "{customer_id}", str(ds.customers[0].id)
+    )
 
 
 def _call(client: TestClient, method: str, url: str, headers: dict[str, str]) -> Any:

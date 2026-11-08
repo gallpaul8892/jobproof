@@ -21,6 +21,7 @@ class AuditEvent(BaseModel):
     occurred_at: UtcDatetime
     actor: PersonRef
     action: AuditAction
+    customer_id: uuid.UUID | None = None
     changes: list[AuditChange]
 
 

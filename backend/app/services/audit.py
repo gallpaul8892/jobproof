@@ -10,12 +10,12 @@ import datetime as dt
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.errors import ProblemError
 from app.logging import request_id_var
-from app.models import AuditEvent, JobReport, User
+from app.models import AuditEvent, Customer, Job, JobReport, User
 from app.models.enums import AuditAction, AuditEntity
 from app.schemas import audit as schemas
 from app.schemas.common import PersonRef
@@ -53,13 +53,21 @@ def record_event(
     changes: list[FieldChange],
     now: dt.datetime,
     report_id: uuid.UUID | None = None,
+    customer_id: uuid.UUID | None = None,
 ) -> AuditEvent:
     """Add an event to the session (the caller commits). Flushes so `seq` follows call order."""
     if not changes:
         raise ValueError("record_event needs at least one change; do not record no-op events")
-    entity = AuditEntity.settings if action == AuditAction.settings_changed else AuditEntity.report
+    if action == AuditAction.settings_changed:
+        entity = AuditEntity.settings
+    elif action == AuditAction.customer_edited:
+        entity = AuditEntity.customer
+    else:
+        entity = AuditEntity.report
     if (entity == AuditEntity.report) != (report_id is not None):
-        raise ValueError("report events need a report_id and settings events must not have one")
+        raise ValueError("report events need a report_id and other events must not have one")
+    if (entity == AuditEntity.customer) != (customer_id is not None):
+        raise ValueError("customer events need a customer_id and other events must not have one")
     event = AuditEvent(
         occurred_at=now,
         actor_id=actor.id,
@@ -67,6 +75,7 @@ def record_event(
         action=action,
         entity_type=entity,
         report_id=report_id,
+        customer_id=customer_id,
         request_id=request_id_var.get(),
         changes=[change.to_json() for change in changes],
     )
@@ -81,6 +90,7 @@ def _to_schema(event: AuditEvent) -> schemas.AuditEvent:
         occurred_at=event.occurred_at,
         actor=PersonRef(id=event.actor_id, name=event.actor_name),
         action=event.action,
+        customer_id=event.customer_id,
         changes=[
             schemas.AuditChange(
                 field=c["field"],
@@ -103,9 +113,23 @@ def _history(session: Session, *where: Any) -> schemas.AuditHistory:
 
 
 def report_history(session: Session, report_id: uuid.UUID) -> schemas.AuditHistory:
-    if session.scalar(select(JobReport.id).where(JobReport.id == report_id)) is None:
+    """The report's own events plus the `customer.edited` events of its job's customer (D8)."""
+    customer_id = session.scalar(
+        select(Job.customer_id)
+        .join(JobReport, JobReport.job_id == Job.id)
+        .where(JobReport.id == report_id)
+    )
+    if customer_id is None:
         raise ProblemError(404, "not_found", "Report not found.")
-    return _history(session, AuditEvent.report_id == report_id)
+    return _history(
+        session, or_(AuditEvent.report_id == report_id, AuditEvent.customer_id == customer_id)
+    )
+
+
+def customer_history(session: Session, customer_id: uuid.UUID) -> schemas.AuditHistory:
+    if session.scalar(select(Customer.id).where(Customer.id == customer_id)) is None:
+        raise ProblemError(404, "not_found", "Customer not found.")
+    return _history(session, AuditEvent.customer_id == customer_id)
 
 
 def settings_history(session: Session) -> schemas.AuditHistory:

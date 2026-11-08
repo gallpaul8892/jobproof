@@ -48,6 +48,9 @@ def urls(ds: Any) -> dict[str, str]:
         "report detail": f"/api/v1/manager/reports/{busiest.id}",
         "reports oldest first": "/api/v1/manager/reports?sort=submitted_asc",
         "report history": f"/api/v1/manager/reports/{busiest.id}/history",
+        "customer": f"/api/v1/manager/customers/{ds.customers[0].id}",
+        "customer history": f"/api/v1/manager/customers/{ds.customers[0].id}/history",
+        "reports of a customer": f"/api/v1/manager/reports?customer_id={ds.customers[0].id}",
         "invoices": "/api/v1/manager/invoices",
         "invoices filtered": "/api/v1/manager/invoices?status=overdue",
     }
@@ -104,8 +107,17 @@ def test_write_endpoints_use_a_bounded_number_of_queries(
         409,
     )
     run("history", "GET", f"{base}/history", None, 200)
+    customer = f"/api/v1/manager/customers/{ds.customers[0].id}"
+    run("customer get", "GET", customer, None, 200)
+    run("customer edit", "PATCH", customer, {"version": 1, "phone": "0117 000 0001"}, 200)
+    run("customer no-op", "PATCH", customer, {"version": 2, "phone": "0117 000 0001"}, 200)
+    run("customer stale", "PATCH", customer, {"version": 1, "phone": "0117 000 0002"}, 409)
+    run("customer history", "GET", f"{customer}/history", None, 200)
     assert all(1 <= n <= MAX_WRITE_QUERIES for n in measured.values()), measured
     assert measured["history"] <= MAX_QUERIES
+    assert measured["customer get"] <= 3, measured
+    assert measured["customer edit"] <= 10, measured
+    assert measured["customer history"] <= MAX_QUERIES
 
 
 @pytest.mark.parametrize("path", ["/api/v1/manager/reports", "/api/v1/manager/invoices"])

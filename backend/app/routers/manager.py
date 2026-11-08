@@ -12,10 +12,19 @@ from app.clock import now, today_london
 from app.deps import CurrentUser, PhotoStoreDep, SessionDep, require_roles
 from app.models.enums import ReportSort, ReviewStatus, UserRole
 from app.schemas import audit as audit_schemas
+from app.schemas import customer_write, report_write
 from app.schemas import manager as schemas
-from app.schemas import report_write
 from app.schemas.common import PersonRef
-from app.services import audit, dashboard, invoices, painters, report_edit, reports, review
+from app.services import (
+    audit,
+    customers,
+    dashboard,
+    invoices,
+    painters,
+    report_edit,
+    reports,
+    review,
+)
 from app.services.billing import BillingStatus, InvoiceStatus
 
 router = APIRouter(
@@ -43,6 +52,7 @@ def report_filters(
     review_status: ReviewStatus | None = None,
     billing_status: BillingStatus | None = None,
     painter_id: uuid.UUID | None = None,
+    customer_id: uuid.UUID | None = None,
     date_from: dt.date | None = None,
     date_to: dt.date | None = None,
     q: Annotated[str | None, Query(min_length=1, max_length=100, pattern=r"^[^\x00]*$")] = None,
@@ -63,6 +73,7 @@ def report_filters(
         review_status=review_status,
         billing_status=billing_status,
         painter_id=painter_id,
+        customer_id=customer_id,
         date_from=date_from,
         date_to=date_to,
         q=(q.strip() or None) if q else None,  # blank after trimming means "no search"
@@ -131,6 +142,26 @@ def review_report(
 @router.get("/reports/{report_id}/history", response_model=audit_schemas.AuditHistory)
 def get_report_history(report_id: uuid.UUID, session: SessionDep) -> audit_schemas.AuditHistory:
     return audit.report_history(session, report_id)
+
+
+@router.get("/customers/{customer_id}", response_model=schemas.CustomerRecord)
+def get_customer(customer_id: uuid.UUID, session: SessionDep) -> schemas.CustomerRecord:
+    return customers.get_customer_record(session, customer_id)
+
+
+@router.patch("/customers/{customer_id}", response_model=schemas.CustomerRecord)
+def update_customer(
+    customer_id: uuid.UUID,
+    body: customer_write.CustomerUpdate,
+    session: SessionDep,
+    user: CurrentUser,
+) -> schemas.CustomerRecord:
+    return customers.update_customer(session, customer_id, user, body, now())
+
+
+@router.get("/customers/{customer_id}/history", response_model=audit_schemas.AuditHistory)
+def get_customer_history(customer_id: uuid.UUID, session: SessionDep) -> audit_schemas.AuditHistory:
+    return audit.customer_history(session, customer_id)
 
 
 @router.get("/invoices", response_model=schemas.InvoicePage)

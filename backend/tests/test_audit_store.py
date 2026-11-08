@@ -1,5 +1,6 @@
 """T-002f scenario 5: the database itself refuses to change or delete audit events."""
 
+import uuid
 from collections.abc import Iterator
 from typing import Any
 
@@ -181,3 +182,114 @@ def test_the_triggers_exist_and_are_enabled(app_engine: Engine) -> None:
         ("audit_events_no_truncate", "O"),
         ("audit_events_no_update_delete", "O"),
     ]
+
+
+# ---- T-002n: customer events --------------------------------------------------------------
+
+
+@pytest.fixture
+def one_customer_event(app_engine: Engine, ds: Any) -> Any:
+    customer_id = ds.customers[0].id
+    with app_engine.begin() as connection:
+        _insert_customer_event(connection, customer_id)
+    return customer_id
+
+
+def _insert_customer_event(connection: Connection, customer_id: Any) -> None:
+    connection.execute(
+        text(
+            "INSERT INTO audit_events (occurred_at, actor_id, actor_name, action, entity_type, "
+            "customer_id, changes) SELECT now(), id, full_name, 'customer.edited', 'customer', "
+            ":c, '[]'::jsonb FROM users WHERE role = 'manager' LIMIT 1"
+        ),
+        {"c": customer_id},
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE audit_events SET customer_id = NULL, entity_type = 'settings'",
+        "UPDATE audit_events SET actor_name = 'x'",
+        "DELETE FROM audit_events",
+    ],
+)
+def test_customer_events_are_append_only_too(
+    app_engine: Engine, one_customer_event: Any, statement: str
+) -> None:
+    with pytest.raises(ProgrammingError) as caught, app_engine.begin() as connection:
+        connection.execute(text(statement))
+    assert _sqlstate(caught.value) == "42501"
+    assert _count(app_engine) == 1
+
+
+def test_a_customer_event_needs_a_customer_id_and_only_it(
+    app_engine: Engine, ds: Any, one_event: Any
+) -> None:
+    customer_id = ds.customers[0].id
+    insert = (
+        "INSERT INTO audit_events (occurred_at, actor_id, actor_name, action, entity_type, "
+        "report_id, customer_id, changes) SELECT now(), id, 'x', '{action}', '{entity}', "
+        "{report}, {customer}, '[]'::jsonb FROM users WHERE role = 'manager' LIMIT 1"
+    )
+    report = f"'{one_event}'"
+    customer = f"'{customer_id}'"
+    bad = [
+        ("customer.edited", "customer", "NULL", "NULL"),  # no customer_id
+        ("customer.edited", "customer", report, customer),  # a report id as well
+        ("report.edited", "report", report, customer),  # a report event with a customer_id
+        ("settings.changed", "settings", "NULL", customer),  # a settings event with a customer_id
+    ]
+    for action, entity, report_sql, customer_sql in bad:
+        with pytest.raises(IntegrityError), app_engine.begin() as connection:
+            connection.execute(
+                text(
+                    insert.format(
+                        action=action, entity=entity, report=report_sql, customer=customer_sql
+                    )
+                )
+            )
+    assert _count(app_engine) == 1  # only the fixture's report event
+    with app_engine.begin() as connection:
+        _insert_customer_event(connection, customer_id)
+    assert _count(app_engine) == 2
+
+
+def test_the_customer_id_must_exist_and_the_customer_cannot_be_deleted_while_events_exist(
+    app_engine: Engine, ds: Any, one_customer_event: Any
+) -> None:
+    with pytest.raises(IntegrityError), app_engine.begin() as connection:
+        _insert_customer_event(connection, uuid.uuid4())
+    with pytest.raises(IntegrityError), app_engine.begin() as connection:
+        connection.execute(text("DELETE FROM customers WHERE id = :c"), {"c": one_customer_event})
+    assert _count(app_engine) == 1
+
+
+def test_record_event_rejects_mismatched_entity_ids(db_engine: Engine, ds: Any) -> None:
+    import datetime as dt
+
+    from sqlalchemy.orm import Session
+
+    from app.models import User
+    from app.models.enums import AuditAction
+    from app.services.audit import FieldChange, record_event
+
+    change = [FieldChange("customer_phone", "a", "b")]
+    now = dt.datetime.now(dt.UTC)
+    with Session(db_engine) as session:
+        user = session.query(User).filter(User.role == "manager").first()
+        assert user is not None
+        for action, kwargs in (
+            (AuditAction.customer_edited, {}),
+            (AuditAction.customer_edited, {"report_id": ds.reports[0].id}),
+            (
+                AuditAction.customer_edited,
+                {"customer_id": ds.customers[0].id, "report_id": ds.reports[0].id},
+            ),
+            (AuditAction.report_edited, {"customer_id": ds.customers[0].id}),
+            (AuditAction.report_edited, {}),
+            (AuditAction.settings_changed, {"customer_id": ds.customers[0].id}),
+        ):
+            with pytest.raises(ValueError):
+                record_event(session, actor=user, action=action, changes=change, now=now, **kwargs)  # type: ignore[arg-type]
+        session.rollback()

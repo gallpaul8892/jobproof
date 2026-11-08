@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetBrandingData, GetBrandingResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListAdminSettingsHistoryData, ListAdminSettingsHistoryErrors, ListAdminSettingsHistoryResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportHistoryData, ListManagerReportHistoryErrors, ListManagerReportHistoryResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, LoginData, LoginErrors, LoginResponses, ReviewManagerReportData, ReviewManagerReportErrors, ReviewManagerReportResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateManagerReportData, UpdateManagerReportErrors, UpdateManagerReportResponses } from './types.gen';
+import type { GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetBrandingData, GetBrandingResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetManagerCustomerData, GetManagerCustomerErrors, GetManagerCustomerResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListAdminSettingsHistoryData, ListAdminSettingsHistoryErrors, ListAdminSettingsHistoryResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerCustomerHistoryData, ListManagerCustomerHistoryErrors, ListManagerCustomerHistoryResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportHistoryData, ListManagerReportHistoryErrors, ListManagerReportHistoryResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, LoginData, LoginErrors, LoginResponses, ReviewManagerReportData, ReviewManagerReportErrors, ReviewManagerReportResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateManagerCustomerData, UpdateManagerCustomerErrors, UpdateManagerCustomerResponses, UpdateManagerReportData, UpdateManagerReportErrors, UpdateManagerReportResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -192,10 +192,76 @@ export const reviewManagerReport = <ThrowOnError extends boolean = false>(option
 
 /**
  * Audit events for one report, newest first (latest 100)
+ *
+ * The report's own events plus (T-002n) every `customer.edited` event of the customer of
+ * the report's job, merged in `seq` order, so a change of customer details shows in the
+ * history of every report that uses that customer. `total` counts both kinds.
+ *
  */
 export const listManagerReportHistory = <ThrowOnError extends boolean = false>(options: Options<ListManagerReportHistoryData, ThrowOnError>): RequestResult<ListManagerReportHistoryResponses, ListManagerReportHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListManagerReportHistoryResponses, ListManagerReportHistoryErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/manager/reports/{report_id}/history',
+    ...options
+});
+
+/**
+ * One customer's details, version and how many records use them
+ */
+export const getManagerCustomer = <ThrowOnError extends boolean = false>(options: Options<GetManagerCustomerData, ThrowOnError>): RequestResult<GetManagerCustomerResponses, GetManagerCustomerErrors, ThrowOnError> => (options.client ?? client).get<GetManagerCustomerResponses, GetManagerCustomerErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/manager/customers/{customer_id}',
+    ...options
+});
+
+/**
+ * Correct a customer's name, contact name, email, phone or billing address
+ *
+ * Partial update with optimistic concurrency, manager only (admin and painter 403).
+ * `version` is the customer version the client loaded and is required. Editable: `name`,
+ * `contact_name`, `email`, `phone` and the parts of `billing_address`. Anything else
+ * (`id`, `customer_type`, `payment_terms_days`, `notes`, job, report, photo or checklist
+ * data, unknown keys) is 422 naming the key. A customer is shared by all its jobs: the
+ * change shows on every job, report and invoice of the customer.
+ *
+ * Text rules (code points, after trimming the ordinary space U+0020 only): no control
+ * characters U+0000-001F and U+007F-009F (so no tabs or line breaks), no zero-width or
+ * bidi formatting characters (U+200B-200F, U+202A-202E, U+2066-2069, U+FEFF) and no lone
+ * surrogates: the company-name rule. Nullable fields: empty or space-only is stored as
+ * null. Required fields (`name`, `billing_address.line1`, `town`, `postcode`) cannot be
+ * null or blank. `postcode` must be a UK postcode in any case and spacing and is stored
+ * upper case as outward code, one space, inward code (`bs65qa` -> `BS6 5QA`). `phone` may
+ * contain digits, spaces, `-`, `(`, `)` and a leading `+`, and must be a UK number (`0`
+ * then 9 or 10 digits, or `+44`, optionally `(0)`, then 9 or 10 digits) or an
+ * international number (`+`, then 8 to 15 digits); stored trimmed with runs of spaces
+ * collapsed. `email` is trimmed and must look like `local@domain.tld` (no spaces, one
+ * `@`); stored as entered. Only the keys sent are validated, so an unusual stored value
+ * that the manager did not touch never blocks a save.
+ *
+ * Order of checks: body validation (422), customer exists (404), version matches (409
+ * `version_conflict`). If every sent value (after normalising) equals the stored one,
+ * the response is 200 with the same `version`, nothing is written and no event is
+ * recorded. Otherwise `version` increases by 1, `last_changed_at`/`last_changed_by` are
+ * set and one `customer.edited` event with old and new values is recorded, all in one
+ * transaction. Report versions and review status are not changed: a reviewed report
+ * stays reviewed, and the change appears in its history.
+ *
+ */
+export const updateManagerCustomer = <ThrowOnError extends boolean = false>(options: Options<UpdateManagerCustomerData, ThrowOnError>): RequestResult<UpdateManagerCustomerResponses, UpdateManagerCustomerErrors, ThrowOnError> => (options.client ?? client).patch<UpdateManagerCustomerResponses, UpdateManagerCustomerErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/manager/customers/{customer_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Changes to one customer's details, newest first (latest 100)
+ */
+export const listManagerCustomerHistory = <ThrowOnError extends boolean = false>(options: Options<ListManagerCustomerHistoryData, ThrowOnError>): RequestResult<ListManagerCustomerHistoryResponses, ListManagerCustomerHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListManagerCustomerHistoryResponses, ListManagerCustomerHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/manager/customers/{customer_id}/history',
     ...options
 });
 

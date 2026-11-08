@@ -70,6 +70,7 @@ class ReportFilters:
     review_status: ReviewStatus | None = None
     billing_status: BillingStatus | None = None
     painter_id: uuid.UUID | None = None
+    customer_id: uuid.UUID | None = None
     date_from: dt.date | None = None
     date_to: dt.date | None = None
     q: str | None = None
@@ -120,6 +121,8 @@ def _filter_clauses(filters: ReportFilters, today: dt.date) -> list[ColumnElemen
         )
     if filters.painter_id is not None:
         clauses.append(JobReport.painter_id == filters.painter_id)
+    if filters.customer_id is not None:
+        clauses.append(Job.customer_id == filters.customer_id)
     if filters.date_from is not None:
         clauses.append(Job.completed_on >= filters.date_from)
     if filters.date_to is not None:

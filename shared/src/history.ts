@@ -13,6 +13,15 @@ const FIELD_LABELS: Record<AuditField, string> = {
   company_name: "Company name",
   theme_primary: "Primary colour",
   theme_accent: "Accent colour",
+  customer_name: "Customer name",
+  customer_contact_name: "Contact name",
+  customer_email: "Email",
+  customer_phone: "Phone",
+  customer_billing_line1: "Billing address line 1",
+  customer_billing_line2: "Billing address line 2",
+  customer_billing_town: "Town",
+  customer_billing_county: "County",
+  customer_billing_postcode: "Postcode",
 };
 
 export const REVIEW_STATUS_VALUES: Record<string, string> = {

@@ -40,8 +40,14 @@ ENUMS = {
     "invoice_state": ["draft", "issued", "void"],
     "payment_kind": ["deposit", "invoice"],
     "payment_method": ["card", "bank_transfer", "cash"],
-    "audit_action": ["report.reviewed", "report.reopened", "report.edited", "settings.changed"],
-    "audit_entity": ["report", "settings"],
+    "audit_action": [
+        "report.reviewed",
+        "report.reopened",
+        "report.edited",
+        "settings.changed",
+        "customer.edited",
+    ],
+    "audit_entity": ["report", "settings", "customer"],
 }
 SCRATCH = make_url(TEST_DATABASE_URL).set(database="jobproof_migrations_scratch")
 
@@ -80,8 +86,9 @@ def test_upgrade_downgrade_upgrade_and_no_drift() -> None:
 
 def test_history_is_linear_with_one_head() -> None:
     script = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL))
-    assert script.get_heads() == ["0006"]
+    assert script.get_heads() == ["0007"]
     assert [r.revision for r in script.walk_revisions()] == [
+        "0007",
         "0006",
         "0005",
         "0004",
@@ -299,3 +306,198 @@ def test_version_and_last_changed_constraints(db_engine: Engine) -> None:
             with pytest.raises(IntegrityError):
                 connection.execute(text(f"UPDATE job_reports SET {assignment}"))  # noqa: S608
             transaction.rollback()
+
+
+def test_0007_adds_customer_versioning_and_audit_links(scratch_engine: Engine) -> None:
+    inspector = inspect(scratch_engine)
+    columns = {c["name"]: c for c in inspector.get_columns("customers")}
+    assert str(columns["version"]["type"]) == "INTEGER" and not columns["version"]["nullable"]
+    assert "1" in str(columns["version"]["default"])
+    assert columns["last_changed_at"]["nullable"] and columns["last_changed_by_id"]["nullable"]
+    assert {
+        "ck_customers_version_positive",
+        "ck_customers_last_changed_fields_together",
+    } <= {c["name"] for c in inspector.get_check_constraints("customers")}
+    fks = {fk["name"]: fk for fk in inspector.get_foreign_keys("customers")}
+    assert fks["fk_customers_last_changed_by_id_users"]["referred_table"] == "users"
+    audit_columns = {c["name"]: c for c in inspector.get_columns("audit_events")}
+    assert audit_columns["customer_id"]["nullable"]
+    audit_fks = {fk["name"]: fk for fk in inspector.get_foreign_keys("audit_events")}
+    customer_fk = audit_fks["fk_audit_events_customer_id_customers"]
+    assert customer_fk["referred_table"] == "customers"
+    assert (customer_fk["options"].get("ondelete") or "").upper() == "RESTRICT"
+    assert "ck_audit_events_customer_id_matches_entity" in {
+        c["name"] for c in inspector.get_check_constraints("audit_events")
+    }
+    index = next(
+        ix
+        for ix in inspector.get_indexes("audit_events")
+        if ix["name"] == "ix_audit_events_customer_id_seq"
+    )
+    assert index["column_names"][0] == "customer_id"
+    # the older settings index and report check survive
+    names = {ix["name"] for ix in inspector.get_indexes("audit_events")}
+    assert {"ix_audit_events_report_id_seq", "ix_audit_events_settings_seq"} <= names
+    assert "ck_audit_events_report_id_matches_entity" in {
+        c["name"] for c in inspector.get_check_constraints("audit_events")
+    }
+
+
+def test_0007_constraints_reject_bad_customer_rows(db_engine: Engine) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    with db_engine.connect() as connection:
+        for assignment in (
+            "version = 0",
+            "version = -3",
+            "last_changed_at = now()",
+            "last_changed_by_id = (SELECT id FROM users LIMIT 1)",
+        ):
+            transaction = connection.begin()
+            with pytest.raises(IntegrityError):
+                connection.execute(text(f"UPDATE customers SET {assignment}"))  # noqa: S608
+            transaction.rollback()
+
+
+def test_0007_upgrade_keeps_existing_customers_and_downgrade_restores_the_enums() -> None:
+    """Customers present before 0007 become version 1; downgrade and upgrade round-trip."""
+    from sqlalchemy import insert
+
+    from app.models import Base
+    from app.seed.dataset import build_dataset
+    from tests.conftest import ANCHOR
+
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0006")
+    engine = create_engine(url)
+    try:
+        import dataclasses
+
+        dataset = build_dataset(ANCHOR)
+        with engine.begin() as connection:
+            for name, rows in dataset.tables():
+                if rows:
+                    payload = [dataclasses.asdict(r) for r in rows]  # type: ignore[call-overload]
+                    connection.execute(insert(Base.metadata.tables[name]), payload)
+        command.upgrade(config, "0007")
+        with engine.connect() as connection:
+            total, at_one = connection.execute(
+                text(
+                    "SELECT count(*), count(*) FILTER (WHERE version = 1 "
+                    "AND last_changed_at IS NULL AND last_changed_by_id IS NULL) FROM customers"
+                )
+            ).one()
+            assert total == len(dataset.customers) == at_one
+            labels = connection.execute(
+                text(
+                    "SELECT t.typname, array_agg(e.enumlabel::text ORDER BY e.enumsortorder) "
+                    "FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid "
+                    "WHERE t.typname IN ('audit_action', 'audit_entity') GROUP BY t.typname"
+                )
+            ).all()
+            assert dict(labels) == {
+                "audit_action": ENUMS["audit_action"],
+                "audit_entity": ENUMS["audit_entity"],
+            }
+        # a report event written at 0007 survives a round trip through 0006
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO audit_events (occurred_at, actor_id, actor_name, action, "
+                    "entity_type, report_id, changes) SELECT now(), u.id, 'x', 'report.edited', "
+                    "'report', (SELECT id FROM job_reports LIMIT 1), '[]'::jsonb "
+                    "FROM users u WHERE role = 'manager' LIMIT 1"
+                )
+            )
+        command.downgrade(config, "0006")
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert not {"version", "last_changed_at", "last_changed_by_id"} & {
+                c["name"] for c in inspector.get_columns("customers")
+            }
+            assert "customer_id" not in {c["name"] for c in inspector.get_columns("audit_events")}
+            assert "ix_audit_events_customer_id_seq" not in {
+                ix["name"] for ix in inspector.get_indexes("audit_events")
+            }
+            labels = connection.execute(
+                text(
+                    "SELECT t.typname, array_agg(e.enumlabel::text ORDER BY e.enumsortorder) "
+                    "FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid "
+                    "WHERE t.typname IN ('audit_action', 'audit_entity') GROUP BY t.typname"
+                )
+            ).all()
+            assert dict(labels) == {
+                "audit_action": [
+                    "report.reviewed",
+                    "report.reopened",
+                    "report.edited",
+                    "settings.changed",
+                ],
+                "audit_entity": ["report", "settings"],
+            }
+            assert connection.execute(text("SELECT count(*) FROM audit_events")).scalar() == 1
+            assert connection.execute(text("SELECT count(*) FROM customers")).scalar() == len(
+                dataset.customers
+            )
+        # the append-only triggers still guard the table after the enum swap
+        from sqlalchemy.exc import DBAPIError
+
+        with pytest.raises(DBAPIError), engine.begin() as connection:
+            connection.execute(text("DELETE FROM audit_events"))
+        command.upgrade(config, "head")
+        command.check(config)
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        engine.dispose()
+        command.upgrade(config, "head")
+
+
+def test_0007_downgrade_is_refused_while_a_customer_event_exists() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.upgrade(config, "head")
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO users (email, full_name, role) VALUES ('m@x.test', 'M', 'manager')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO customers (customer_type, name, billing_line1, billing_town, "
+                    "billing_postcode, payment_terms_days) VALUES ('homeowner', 'C', '1 A St', "
+                    "'Bath', 'BA1 1AA', 14)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO audit_events (occurred_at, actor_id, actor_name, action, "
+                    "entity_type, customer_id, changes) SELECT now(), (SELECT id FROM users), 'M', "
+                    "'customer.edited', 'customer', id, '[]'::jsonb FROM customers"
+                )
+            )
+        with pytest.raises(RuntimeError, match=r"1 customer\.edited"):
+            command.downgrade(config, "0006")
+        with engine.connect() as connection:  # the refused downgrade changed nothing
+            assert connection.execute(text("SELECT count(*) FROM audit_events")).scalar() == 1
+            assert "customer_id" in {
+                c["name"] for c in inspect(connection).get_columns("audit_events")
+            }
+            assert (
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+                == "0007"
+            )
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        engine.dispose()
+        command.upgrade(config, "head")
