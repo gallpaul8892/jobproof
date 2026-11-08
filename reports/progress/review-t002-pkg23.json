@@ -1,0 +1,193 @@
+{
+  "id": "review-t002-pkg23",
+  "title": "Code review report: T-002 Packages 2 and 3 (T-002f to T-002l) and Package 1 review fixes",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-08",
+  "summary": "Round 1 for Packages 2 and 3, and a re-review of the Package 1 fixes: APPROVE. There are no blockers or major issues and 9 minor ones. The flaky test_many_simultaneous_reviews_exactly_one_wins was a test-harness bug, not an application bug, and the reviewer fixed the test: 30 of 30 runs of the test and 30 of 30 runs of the whole concurrency module now pass. Optimistic concurrency, the append-only audit trail, authorisation on every new route, PATCH and review validation, and conflict handling that keeps typed text are sound. Package 1: the MAJOR (contrast on the surface) and 5 of 7 minors are fixed. The two-round validation and fastapi 0.162.2 are still open. Backend 737 passed (1 environment skip), Vitest 101 + 200 passed, Playwright e2e 127 passed. Screenshots were re-captured with the Operative wording.",
+  "blocks": [
+    {
+      "heading": "Round 1 (0 BLOCKER, 0 MAJOR, 9 MINOR)",
+      "type": "table",
+      "columns": [
+        "Severity",
+        "Finding",
+        "Resolution"
+      ],
+      "rows": [
+        [
+          "MINOR",
+          "Unchanged Package 1 item: an invalid company name and failing colours in one PATCH still return only the name error (verified live: one entry at loc body.company_name). Contrast is checked after Pydantic validation. Owner: backend",
+          "Open, low. Optionally collect both before responding. Nothing is saved either way, so the request stays atomic"
+        ],
+        [
+          "MINOR",
+          "Unchanged Package 1 item: fastapi is still 0.162.1 (latest 0.162.2, patch). No package was added or changed in this diff. npm audit: 0 vulnerabilities, pip-audit: none. TypeScript 7 and @types/node 26 remain deliberate deferrals. Owner: architect",
+          "Open. Bump in the next dependency ticket"
+        ],
+        [
+          "MINOR",
+          "ARCHITECTURE.md still marks the built work as planned: line 54 to 56 (services/audit.py, review.py, report_edit.py, useReportWrites, history.ts, conflict.ts, reportEdit.ts, pages/report/*, ReviewQueue.tsx), lines 116 to 120 (migrations 0002 to 0006) and lines 165 and 189 to 191 (writes, settings accessor, concurrency, audit patterns). Line 51 still says '10 built, 7 planned'. Owner: architect",
+          "Open. Remove the (planned) markers for T-002a to T-002l and update the operation count. The definition of done expects this"
+        ],
+        [
+          "MINOR",
+          "backend/app/schemas/report_write.py:79: `checklist` has min_length=1 and no maximum. A body with 10,000 foreign item ids (verified) returns 422 with 10,000 error entries, about 850 KB, from one manager request. Authenticated, manager only and fast (0.08 s), so it is low risk, but the size is unbounded. Owner: backend",
+          "Add Field(max_length=...) to `checklist` (for example 200, well above any real checklist) and a test for the 422"
+        ],
+        [
+          "MINOR",
+          "backend/app/schemas/report_write.py:68-69, 77-78: `Annotated[SafeText, Field(max_length=...)]` makes Pydantic report 'Value should have at most 5000 items after validation' for a 5,001-character note (verified). The web blocks this client-side, so only API clients and the mobile app later will see the wording. Owner: backend",
+          "Put the length rule in the AfterValidator, or use StringConstraints(max_length=...), so the message reads 'Use 5,000 characters or fewer.' (the web wording). Assert the message in the scenario 9 test"
+        ],
+        [
+          "MINOR",
+          "web/src/pages/report/ReviewPanel.tsx:27, 78: the panel's `note` state survives a save that reopens the report. After 'Mark as reviewed' then 'Edit report' and Save, the panel shows 'Awaiting review', the visible status text 'Marked as reviewed' and the Mark button together (found by reading the code: the panel is not remounted and nothing clears `note` when review_status changes). Owner: web",
+          "Clear `note` when `report.version` changes (for example key ReviewPanel by version, or reset in an effect), and add a Vitest case: review, then rerender with an awaiting report at a higher version, then expect no 'Marked as reviewed'"
+        ],
+        [
+          "MINOR",
+          "web/src/pages/ReportDetail.tsx:338-341 with shared/src/hooks/useReportWrites.ts:61: 'Reload latest' awaits `refetchQueries`, which does not throw when the request fails. The form is then remounted from the old cached report, so after the user has confirmed discarding their edits it shows the old values at the old version, and the next save gets 409 again with no explanation. Owner: web",
+          "After the refetch, check the query state (or use `fetchQuery`, which throws). On failure, keep the form and the conflict view and show 'Could not load the latest version. Try again.'"
+        ],
+        [
+          "MINOR",
+          "web/src/pages/dashboard/ReviewQueue.tsx:69: the site address is in a `col-wide` cell with no `stack-only` copy, so it is not shown at 768px or 360px (see dashboard-tablet.png and dashboard-mobile.png). The spec lists the site address for every row. At 360px the queue is still a 3-column table, and 'Submitted 2 Oct 2026, 15:51' wraps over three lines. Owner: web",
+          "Add the one-line site address to the stacked cell, and at 360px use the stacked-card layout the spec names (below 640px)"
+        ],
+        [
+          "MINOR",
+          "Audit escape hatch (verified that only backend/app/seed/loader.py sets it, and no route imports the loader): `jobproof.allow_audit_truncate` is a custom setting that any role can SET. The trigger therefore stops mistakes, not a compromised app role. Locally the role is a superuser and owns the table, so it can also DISABLE TRIGGER. Owner: architect",
+          "No code change. In the AWS role plan (B11), state that the app role does not own audit_events and has no TRUNCATE on it or on the tables that cascade into it (users, job_reports). Then neither the setting nor the trigger owner can be misused"
+        ]
+      ]
+    },
+    {
+      "heading": "Package 1 review items: status",
+      "type": "table",
+      "columns": [
+        "Item",
+        "Status"
+      ],
+      "rows": [
+        [
+          "MAJOR: accent contrast on the surface colour",
+          "Fixed. `weakest_contrast` checks both white and the surface in the server and in contrast.ts. An e2e axe run with the lowest-contrast accepted accent passes"
+        ],
+        [
+          "MINOR: trimming and invisible characters (Cf, bidi, BOM, surrogates)",
+          "Fixed. Only U+0020 is trimmed, and the same forbidden set is used in Python and TS, with tests"
+        ],
+        [
+          "MINOR: create-admin control characters U+007F to U+009F",
+          "Fixed. Uses contains_forbidden_character"
+        ],
+        [
+          "MINOR: invalid name and failing colours reported over two rounds",
+          "Still open (verified live). Low priority"
+        ],
+        [
+          "MINOR: demo accounts allowed outside local and test",
+          "Fixed. Config refuses DEMO_ACCOUNTS_ENABLED unless APP_ENV is local or test"
+        ],
+        [
+          "MINOR: README create-admin and ARCHITECTURE.md drift",
+          "README fixed. ARCHITECTURE.md still marks the work as planned (see Round 1)"
+        ],
+        [
+          "MINOR: 360px screenshots",
+          "Fixed. The *-mobile.png set is present. Re-captured by the reviewer so login, reports, dashboard and report detail show 'Operative' (the old files predated T-002l)"
+        ],
+        [
+          "MINOR: fastapi 0.162.1 to 0.162.2",
+          "Still open"
+        ]
+      ]
+    },
+    {
+      "heading": "Flaky test: test_many_simultaneous_reviews_exactly_one_wins",
+      "type": "list",
+      "items": [
+        {
+          "label": "Symptom.",
+          "text": "About 1 failure in 10 runs before the fix. The failure was never in the race itself: the warm-up GET .../history returned 500 in one thread, which aborted the barrier for the other 7 (BrokenBarrierError)."
+        },
+        {
+          "label": "Cause (test problem).",
+          "text": "Each thread builds its own app, and FastAPI builds route state lazily on the first requests. While doing so it wraps a pydantic TypeAdapter in warnings.catch_warnings() to silence UnsupportedFieldAttributeWarning. In Python 3.13 catch_warnings swaps the process-wide filter list and is not thread-safe, so one thread leaving it restores the filters while another thread is still inside. pytest's filterwarnings = error then raises the warning, which surfaces as a 500. With 8 threads the overlap is likely; with 2 it is rare. Production is not affected: warnings are not errors there, and uvicorn builds routes on the single event-loop thread. Row locking and version checks were never involved."
+        },
+        {
+          "label": "Fix (backend/tests/test_concurrency.py).",
+          "text": "A module-level _SETUP_LOCK serialises each thread's login and warm-up. The warm-up now also builds the review and PATCH routes, using an unknown id so they return 404 and write nothing. The barrier and the requests under test still run concurrently. Verified: the test passed 30 of 30 runs, the whole concurrency module 30 of 30, and ruff, ruff format and the full backend suite are clean (737 passed). Owner: tests (already done by the reviewer, so nothing to do)."
+        }
+      ]
+    },
+    {
+      "heading": "Checks run by the reviewer",
+      "type": "list",
+      "items": [
+        {
+          "label": "Tests.",
+          "text": "pytest: 737 passed, 1 skipped (sandbox network check). Vitest: shared 101 passed, web 200 passed (2 opt-in screenshot skips). Playwright e2e with system Chrome against the dev stack: 127 passed, 6 skipped (screenshot spec without SCREENSHOT_DIR)."
+        },
+        {
+          "label": "Lint.",
+          "text": "ruff, ruff format, mypy app, eslint and tsc, and redocly lint are clean. Redocly's 2 warnings are existing ones on /health and /branding. gen:check OK. PENDING_TICKETS is empty."
+        },
+        {
+          "label": "Dependencies.",
+          "text": "The diff adds or changes no package. npm audit: 0 vulnerabilities. pip-audit on the hashed uv export: no known vulnerabilities."
+        },
+        {
+          "label": "Live API probes (dev backend).",
+          "text": "PATCH: {}, version-only, version as '1', true or 1.0, notes as an int, 5,001 characters, NUL, a lone surrogate, photos, review_status, checklist null or [], a bad uuid, a foreign id, label, done null or 'yes', duplicate ids, an empty item, an array body, text/plain and deeply nested JSON all return 422 with the right loc. Two problems give two entries. Review: {}, 0, -1, 1.5, '1', true, an extra key and null return 422. A huge version returns 409 (no crash). Admin and painter get 403 and anonymous 401 on PATCH, review and report history. Manager and painter get 403 and anonymous 401 on /admin/settings/history. PUT, DELETE, PATCH and POST on history return 405."
+        },
+        {
+          "label": "Database.",
+          "text": "On the dev database, UPDATE, DELETE and TRUNCATE of audit_events and TRUNCATE job_reports CASCADE all fail with 'audit_events is append-only'. Both triggers are enabled."
+        },
+        {
+          "label": "Screenshots.",
+          "text": "Re-captured with SCREENSHOT_DIR=reports/screenshots (6 passed). The reviewer inspected login (360px), dashboard (768 and 360px), report detail and awaiting (360 and 768px) and report edit (768 and 360px). 'Operative' wording, review panel, history panel and edit form all render without horizontal overflow. These are the queue layout issues listed above."
+        }
+      ]
+    },
+    {
+      "heading": "What the reviewer found sound",
+      "type": "list",
+      "items": [
+        {
+          "text": "Concurrency: review and edit both start with session.get(..., with_for_update=True) on a fresh per-request session, so READ COMMITTED returns the committed row after the lock. The version compare comes after the lock, there is one commit, and any ProblemError rolls back and releases the lock. A no-op edit rolls back explicitly. Review against edit is serialised on the same row lock (test_a_review_racing_an_edit_one_wins). Reopen happens in the same transaction with one version bump, records reopened after edited, and a racing double reopen yields exactly one reopened event. Checklist items are only changed under the report lock. The order of checks matches the spec: 404, then foreign item 422, then 409, then diff."
+        },
+        {
+          "text": "Audit: record_event is called inside each write service before the single commit, so a failed write leaves no event (409 and 422 tests check event counts). Settings no-ops record nothing. actor_name is a snapshot. request_id comes from a validated header pattern. request_id and old_id are stored but _to_schema returns only field, item_id, item_label, old_value and new_value. History is manager or admin only, and manager_notes appear only on manager endpoints. Triggers apply to the owner too. Only the seed loader sets the truncate setting, and the seed refuses to run outside local and test."
+        },
+        {
+          "text": "Authorisation: the new routes sit on the router-level require_roles guards (manager and admin). The access loop is generated from the contract and now covers PATCH and POST with a body, so authorisation wins over validation."
+        },
+        {
+          "text": "Validation: extra keys are forbidden at every level. version is a strict int >= 1. done is a strict bool and an explicit null is rejected. Notes reject NUL and lone surrogates and count code points. A blank note becomes null in the service only, so validation messages refer to the raw input."
+        },
+        {
+          "text": "Frontend conflicts: EditReportForm pins the report it started from (useState(report)), so a background refetch never moves the version forward. On 409 the typed values stay in the form, and 'Current saved value' is shown only for fields that were sent. A retry whose 409 names the current user with current values equal to the body is treated as saved, so there is no duplicate event. 403 keeps the text. Unsaved-changes protection uses both useBlocker and beforeunload. QueryBoundary keeps children mounted on a background error, so the form is not lost."
+        },
+        {
+          "text": "XSS: notes, history before and after values, item labels and names are rendered only as JSX text (pre-wrap). There is no dangerouslySetInnerHTML or innerHTML in web/src or shared/src. The e2e checks that markup in notes is shown literally and that 1,200 characters fit at 360px."
+        },
+        {
+          "text": "T-002l: WORDING is the one source of the trade words, and roleLabel uses it. The API, generated client and contract are unchanged. A wording test guards the chrome. The only remaining trade words in the UI are job-type labels (T-002m, out of scope) and identifiers."
+        }
+      ]
+    },
+    {
+      "heading": "Questions for the architect",
+      "type": "list",
+      "items": [
+        {
+          "text": "Should the 17 remaining x-ticket markers in api/openapi.yaml be removed now that PENDING_TICKETS is empty, or are they kept as provenance?"
+        }
+      ]
+    }
+  ]
+}

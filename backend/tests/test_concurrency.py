@@ -32,6 +32,13 @@ pytestmark = pytest.mark.usefixtures("reseed")
 
 Request = Callable[[TestClient], Any]
 
+# FastAPI builds each app's route state lazily on its first requests and, while doing so, wraps
+# a pydantic call in `warnings.catch_warnings()`. In Python 3.13 that context manager swaps the
+# process-wide filter list, so two threads doing it at once can restore each other's filters
+# mid-build; pytest's `filterwarnings = error` then turns the suppressed pydantic warning into a
+# 500. Only the setup is serialised: the requests under test still run at the same instant.
+_SETUP_LOCK = threading.Lock()
+
 
 def race(requests: list[tuple[str, Request]]) -> list[Any]:
     """Start every request at the same instant, each from its own app instance and client."""
@@ -46,11 +53,17 @@ def race(requests: list[tuple[str, Request]]) -> list[Any]:
                     "sarah": ("manager@jobproof.test", "Manager123!"),
                     "priya": ("manager2@jobproof.test", "Manager123!"),
                 }[who]
-                token = login_token(local, email, password)
-                local.headers.update(bearer(token))
-                # Warm up: FastAPI builds route state lazily on the first request, and doing that
-                # in several threads at once trips Python's process-wide warning filters.
-                assert local.get(f"{BASE}/{uuid.uuid4()}/history").status_code == 404
+                with _SETUP_LOCK:  # see _SETUP_LOCK: warm up one app at a time
+                    token = login_token(local, email, password)
+                    local.headers.update(bearer(token))
+                    unknown = uuid.uuid4()
+                    assert local.get(f"{BASE}/{unknown}/history").status_code == 404
+                    # Build the write routes too (404: nothing is written, no lock is taken).
+                    review = local.post(f"{BASE}/{unknown}/review", json={"version": 1})
+                    edit = local.patch(
+                        f"{BASE}/{unknown}", json={"version": 1, "manager_notes": "x"}
+                    )
+                    assert (review.status_code, edit.status_code) == (404, 404)
                 barrier.wait(timeout=20)
                 results[index] = call(local)
         except BaseException as exc:  # noqa: BLE001
