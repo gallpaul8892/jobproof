@@ -18,9 +18,10 @@ from app.models import Customer, Invoice, Job, JobReport, User
 from app.models.enums import AuditAction, InvoiceState, ReviewStatus
 from app.schemas import manager as schemas
 from app.schemas.common import Address, PersonRef
-from app.schemas.customer_write import CustomerUpdate
+from app.schemas.customer_write import CustomerUpdate, validate_phone, validate_postcode
 from app.services.audit import FieldChange, record_event
 from app.services.review import iso_utc
+from app.services.settings import get_company_settings
 
 # API key -> (Customer attribute, audit field). Billing address parts are sent under
 # `billing_address`; the attribute names are the same as the column names.
@@ -175,6 +176,26 @@ def _conflict(
     )
 
 
+def validate_contact_fields(update: CustomerUpdate, *, uk_only: bool) -> None:
+    """Phone and postcode rules depend on the company setting `uk_only_contact_details`, which a
+    Pydantic field validator cannot see, so they run here. Normalised values replace the sent
+    ones on `update`. Problems come back as the same 422 `errors` entries as body validation."""
+    errors: list[dict[str, Any]] = []
+    if "phone" in update.model_fields_set:
+        try:
+            update.phone = validate_phone(update.phone, uk_only=uk_only)
+        except ValueError as problem:
+            errors.append({"loc": ["body", "phone"], "message": str(problem)})
+    address = update.billing_address
+    if address is not None and "postcode" in address.model_fields_set:
+        try:
+            address.postcode = validate_postcode(address.postcode, uk_only=uk_only)
+        except ValueError as problem:
+            errors.append({"loc": ["body", "billing_address", "postcode"], "message": str(problem)})
+    if errors:
+        raise ProblemError(422, "validation_error", "Request validation failed.", errors=errors)
+
+
 def update_customer(
     session: Session,
     customer_id: uuid.UUID,
@@ -182,6 +203,7 @@ def update_customer(
     update: CustomerUpdate,
     now: dt.datetime,
 ) -> schemas.CustomerRecord:
+    validate_contact_fields(update, uk_only=get_company_settings(session).uk_only_contact_details)
     customer = session.get(Customer, customer_id, with_for_update=True)
     if customer is None:
         raise ProblemError(404, "not_found", "Customer not found.")

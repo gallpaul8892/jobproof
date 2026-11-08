@@ -3,7 +3,17 @@
 import datetime as dt
 import uuid
 
-from sqlalchemy import CHAR, CheckConstraint, DateTime, SmallInteger, Text, Uuid, func, text
+from sqlalchemy import (
+    CHAR,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    SmallInteger,
+    Text,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -41,6 +51,7 @@ class CompanySettings(Base):
     theme_background: Mapped[str] = mapped_column(CHAR(7))
     theme_surface: Mapped[str] = mapped_column(CHAR(7))
     theme_text: Mapped[str] = mapped_column(CHAR(7))
+    uk_only_contact_details: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     updated_by_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     updated_by_name: Mapped[str | None] = mapped_column(Text)

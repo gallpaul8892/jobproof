@@ -9,6 +9,7 @@ import { CompanyNameForm } from "./CompanyNameForm";
 const settings: AdminSettings = {
   company_name: "Oak Ltd",
   theme: { ...DEFAULT_THEME },
+  uk_only_contact_details: true,
   updated_at: null,
   updated_by: null,
 };

@@ -13,6 +13,7 @@ const FIELD_LABELS: Record<AuditField, string> = {
   company_name: "Company name",
   theme_primary: "Primary colour",
   theme_accent: "Accent colour",
+  uk_only_contact_details: "UK-only contact details",
   customer_name: "Customer name",
   customer_contact_name: "Contact name",
   customer_email: "Email",
@@ -53,7 +54,10 @@ export function changeLabel(change: Pick<AuditChange, "field" | "item_label">): 
 
 function show(change: AuditChange, value: AuditChange["old_value"]): string {
   if (value === null || value === undefined || value === "") return EMPTY_VALUE;
-  if (typeof value === "boolean") return value ? "Done" : "Not done";
+  if (typeof value === "boolean") {
+    if (change.field === "uk_only_contact_details") return value ? "On" : "Off";
+    return value ? "Done" : "Not done";
+  }
   if (change.field === "review_status") return REVIEW_STATUS_VALUES[value] ?? value;
   if (change.field === "reviewed_at") return formatDateTime(value);
   return value;

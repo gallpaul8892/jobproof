@@ -4,6 +4,8 @@ import { VALIDATORS, phoneDigits, normalisePhone, normalisePostcode, type Custom
 
 interface Case {
   field: CustomerField;
+  /** Phone and postcode cases only: the value of the company setting `uk_only_contact_details`. */
+  ukOnly?: boolean;
   input: string | null;
   ok: boolean;
   stored?: string | null;
@@ -17,20 +19,30 @@ describe("customer validators against the shared case table", () => {
   it("has a large table covering every field", () => {
     expect(CASES.length).toBeGreaterThanOrEqual(40);
     expect(new Set(CASES.map((c) => c.field))).toEqual(new Set(Object.keys(VALIDATORS)));
+    for (const c of CASES) expect(c.ukOnly !== undefined).toBe(c.field === "phone" || c.field === "postcode");
   });
 
   it.each(CASES.map((c, i) => [i, c.field, JSON.stringify(c.input).slice(0, 40), c] as const))(
     "#%i %s %s",
     (_i, _field, _input, c) => {
-      const result = VALIDATORS[c.field](c.input);
-      if (c.ok) expect(result).toEqual({ ok: true, value: c.stored ?? null });
-      else expect(result).toEqual({ ok: false, message: c.message });
+      // A case without ukOnly holds in both modes.
+      for (const ukOnly of c.ukOnly === undefined ? [true, false] : [c.ukOnly]) check(c, ukOnly);
     },
   );
 
+  function check(c: Case, ukOnly: boolean) {
+    const result = VALIDATORS[c.field](c.input, ukOnly);
+    if (c.ok) expect(result).toEqual({ ok: true, value: c.stored ?? null });
+    else expect(result).toEqual({ ok: false, message: c.message });
+  }
+
   it("is idempotent on its own output", () => {
     for (const c of CASES) {
-      if (c.ok && c.stored != null) expect(VALIDATORS[c.field](c.stored)).toEqual({ ok: true, value: c.stored });
+      if (c.ok && c.stored != null) {
+        for (const ukOnly of c.ukOnly === undefined ? [true, false] : [c.ukOnly]) {
+          expect(VALIDATORS[c.field](c.stored, ukOnly)).toEqual({ ok: true, value: c.stored });
+        }
+      }
     }
   });
 });

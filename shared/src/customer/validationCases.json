@@ -439,234 +439,546 @@
  },
  {
   "field": "phone",
+  "ukOnly": true,
   "input": "07700 900123",
   "ok": true,
   "stored": "07700 900123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "07700 900123",
+  "ok": true,
+  "stored": "07700 900123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "07700900123",
   "ok": true,
   "stored": "07700900123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "07700900123",
+  "ok": true,
+  "stored": "07700900123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "0117 496 0123",
   "ok": true,
   "stored": "0117 496 0123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "0117 496 0123",
+  "ok": true,
+  "stored": "0117 496 0123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "+44 7700 900123",
   "ok": true,
   "stored": "+44 7700 900123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "+44 7700 900123",
+  "ok": true,
+  "stored": "+44 7700 900123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "+44 (0)117 496 0123",
   "ok": true,
   "stored": "+44 (0)117 496 0123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "+44 (0)117 496 0123",
+  "ok": true,
+  "stored": "+44 (0)117 496 0123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "+447700900123",
   "ok": true,
   "stored": "+447700900123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "+447700900123",
+  "ok": true,
+  "stored": "+447700900123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "+1 202 555 0100",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+1 202 555 0100",
   "ok": true,
   "stored": "+1 202 555 0100"
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "+353 1 234 5678",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+353 1 234 5678",
   "ok": true,
   "stored": "+353 1 234 5678"
  },
  {
   "field": "phone",
+  "ukOnly": true,
   "input": "(0117) 496 0123",
   "ok": true,
   "stored": "(0117) 496 0123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "(0117) 496 0123",
+  "ok": true,
+  "stored": "(0117) 496 0123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "0117-496-0123",
   "ok": true,
   "stored": "0117-496-0123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "0117-496-0123",
+  "ok": true,
+  "stored": "0117-496-0123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "+44 (0) 117 496 0123",
   "ok": true,
   "stored": "+44 (0) 117 496 0123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "+44 (0) 117 496 0123",
+  "ok": true,
+  "stored": "+44 (0) 117 496 0123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "+44 0117 496 0123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+44 0117 496 0123",
   "ok": true,
   "stored": "+44 0117 496 0123"
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "+44(0)(0)1174960123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+44(0)(0)1174960123",
   "ok": true,
   "stored": "+44(0)(0)1174960123"
  },
  {
   "field": "phone",
+  "ukOnly": true,
   "input": "07700   900123",
   "ok": true,
   "stored": "07700 900123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "07700   900123",
+  "ok": true,
+  "stored": "07700 900123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "  0117 496 0123  ",
   "ok": true,
   "stored": "0117 496 0123"
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "  0117 496 0123  ",
+  "ok": true,
+  "stored": "0117 496 0123"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "",
   "ok": true,
   "stored": null
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "  ",
   "ok": true,
   "stored": null
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "  ",
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": null,
   "ok": true,
   "stored": null
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": null,
+  "ok": true,
+  "stored": null
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "abc",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "abc",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "0770",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "0770",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "07700 900123 ext 5",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "07700 900123 ext 5",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "07700.900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "07700.900123",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "+44 770",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+44 770",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "0044 7700 900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "0044 7700 900123",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "+0 123 456 789 0",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+0 123 456 789 0",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "+12 34",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+12 34",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "12345678",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "12345678",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "++447700900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "++447700900123",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "07700+900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "07700+900123",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "(+44) 7700 900123",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "(+44) 7700 900123",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "\u0660\u0667\u0667\u0660\u0660\u0669\u0660\u0660\u0661\u0662\u0663",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "\u0660\u0667\u0667\u0660\u0660\u0669\u0660\u0660\u0661\u0662\u0663",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "07700 9001234567",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "07700 9001234567",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "+",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "+",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "()",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "()",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "- - -",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "- - -",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
+  "input": "0 1 2 3 4 5 6 7 8",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "0 1 2 3 4 5 6 7 8",
   "ok": false,
   "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
  },
  {
   "field": "phone",
+  "ukOnly": true,
   "input": "0000000000000000000000000000000",
   "ok": false,
   "message": "Use 30 characters or fewer."
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "0000000000000000000000000000000",
+  "ok": false,
+  "message": "Use 30 characters or fewer."
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
   "input": "07700 900123\t",
   "ok": false,
   "message": "Remove control characters."
  },
  {
   "field": "phone",
+  "ukOnly": false,
+  "input": "07700 900123\t",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "07700\u200b900123",
+  "ok": false,
+  "message": "Remove control characters."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
   "input": "07700\u200b900123",
   "ok": false,
   "message": "Remove control characters."
@@ -823,218 +1135,884 @@
  },
  {
   "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5QA",
   "ok": true,
   "stored": "BS6 5QA"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5QA",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "bs65qa",
   "ok": true,
   "stored": "BS6 5QA"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "bs65qa",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "bs6   5qa",
   "ok": true,
   "stored": "BS6 5QA"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "bs6   5qa",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "  bs6 5qa ",
   "ok": true,
   "stored": "BS6 5QA"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "  bs6 5qa ",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "EC1A 1BB",
   "ok": true,
   "stored": "EC1A 1BB"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "EC1A 1BB",
+  "ok": true,
+  "stored": "EC1A 1BB"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "ec1a 1bb",
   "ok": true,
   "stored": "EC1A 1BB"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "ec1a 1bb",
+  "ok": true,
+  "stored": "EC1A 1BB"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "M1 1AE",
   "ok": true,
   "stored": "M1 1AE"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "M1 1AE",
+  "ok": true,
+  "stored": "M1 1AE"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "m11ae",
   "ok": true,
   "stored": "M1 1AE"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "m11ae",
+  "ok": true,
+  "stored": "M1 1AE"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "SW1A 2AA",
   "ok": true,
   "stored": "SW1A 2AA"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "SW1A 2AA",
+  "ok": true,
+  "stored": "SW1A 2AA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "B33 8TH",
   "ok": true,
   "stored": "B33 8TH"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "B33 8TH",
+  "ok": true,
+  "stored": "B33 8TH"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "CR2 6XH",
   "ok": true,
   "stored": "CR2 6XH"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "CR2 6XH",
+  "ok": true,
+  "stored": "CR2 6XH"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "DN55 1PT",
   "ok": true,
   "stored": "DN55 1PT"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "DN55 1PT",
+  "ok": true,
+  "stored": "DN55 1PT"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "W1A 0AX",
   "ok": true,
   "stored": "W1A 0AX"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "W1A 0AX",
+  "ok": true,
+  "stored": "W1A 0AX"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "bs14sb",
   "ok": true,
   "stored": "BS1 4SB"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "bs14sb",
+  "ok": true,
+  "stored": "BS1 4SB"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6    5QA",
   "ok": true,
   "stored": "BS6 5QA"
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6    5QA",
+  "ok": true,
+  "stored": "BS6 5QA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "GIR 0AA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "GIR 0AA",
+  "ok": true,
+  "stored": "GIR 0AA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "   ",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "   ",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": null,
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": null,
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6",
+  "ok": true,
+  "stored": "BS6"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5Q",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5Q",
+  "ok": true,
+  "stored": "BS6 5Q"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5QAA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5QAA",
+  "ok": true,
+  "stored": "BS6 5QAA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "1BS 5QA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "1BS 5QA",
+  "ok": true,
+  "stored": "1BS 5QA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5QA9",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5QA9",
+  "ok": true,
+  "stored": "BS6 5QA9"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "ABC1 2DE",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "ABC1 2DE",
+  "ok": true,
+  "stored": "ABC1 2DE"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6-5QA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6-5QA",
+  "ok": true,
+  "stored": "BS6-5QA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6\u00a05QA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6\u00a05QA",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "B S 6 5 Q A",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "B S 6 5 Q A",
+  "ok": true,
+  "stored": "B S 6 5 Q A"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "\u0131\u01311 1AA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "\u0131\u01311 1AA",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5QA\u00df",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5QA\u00df",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6  5QA  extra",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6  5QA  extra",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS\uff16 5QA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS\uff16 5QA",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5Q\u0410",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5Q\u0410",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5QA\n",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5QA\n",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5\u200bQA",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
  },
  {
   "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5\u200bQA",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
   "input": "BS6 5QA     X",
   "ok": false,
   "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "BS6 5QA     X",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "+33 1 23 45 67 89",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
+  "input": "+33 1 23 45 67 89",
+  "ok": true,
+  "stored": "+33 1 23 45 67 89"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "+4930123456",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
+  "input": "+4930123456",
+  "ok": true,
+  "stored": "+4930123456"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "+1234567",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
+  "input": "+1234567",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "+1234567890123456",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
+  "input": "+1234567890123456",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "+123456789012345",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
+  "input": "+123456789012345",
+  "ok": true,
+  "stored": "+123456789012345"
+ },
+ {
+  "field": "phone",
+  "ukOnly": true,
+  "input": "00 1 202 555 0100",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123."
+ },
+ {
+  "field": "phone",
+  "ukOnly": false,
+  "input": "00 1 202 555 0100",
+  "ok": false,
+  "message": "Enter a UK phone number such as 07700 900123, or an international number starting with +."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "10001",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "10001",
+  "ok": true,
+  "stored": "10001"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "K1A 0B1",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "K1A 0B1",
+  "ok": true,
+  "stored": "K1A 0B1"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "k1a0b1",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "k1a0b1",
+  "ok": true,
+  "stored": "K1A0B1"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "D02 X285",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "D02 X285",
+  "ok": true,
+  "stored": "D02 X285"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "75008",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "75008",
+  "ok": true,
+  "stored": "75008"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "SW1A  2AA",
+  "ok": true,
+  "stored": "SW1A 2AA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "SW1A  2AA",
+  "ok": true,
+  "stored": "SW1A 2AA"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "12-345",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "12-345",
+  "ok": true,
+  "stored": "12-345"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "1",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "1",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "AB",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "AB",
+  "ok": true,
+  "stored": "AB"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "ABCDEFGHIJKL",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "ABCDEFGHIJKL",
+  "ok": true,
+  "stored": "ABCDEFGHIJKL"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "ABCDEFGHIJKLM",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "ABCDEFGHIJKLM",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "A B C D E F G H",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "A B C D E F G H",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "  d02 x285 ",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "  d02 x285 ",
+  "ok": true,
+  "stored": "D02 X285"
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "-12345",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "-12345",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "12345-",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "12345-",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "1234 \u00e9",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "1234 \u00e9",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "12\u200b34",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "12\u200b34",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "12\n34",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "12\n34",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "12\u202e34",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "12\u202e34",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "12.345",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "12.345",
+  "ok": false,
+  "message": "Enter a postcode."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": true,
+  "input": "1234\ud800",
+  "ok": false,
+  "message": "Enter a UK postcode such as BS6 5QA."
+ },
+ {
+  "field": "postcode",
+  "ukOnly": false,
+  "input": "1234\ud800",
+  "ok": false,
+  "message": "Enter a postcode."
  }
 ]

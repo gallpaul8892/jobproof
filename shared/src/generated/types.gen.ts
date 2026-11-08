@@ -395,11 +395,22 @@ export type Theme = {
 export type Branding = {
     company_name: string;
     theme: Theme;
+    /**
+     * When true, customer postcodes must be UK postcodes and phone numbers UK numbers. When
+     * false, any 2-12 character postcode and an international phone number (`+`, 8-15
+     * digits) are accepted too. Clients use it for validation messages; the server enforces it.
+     *
+     */
+    uk_only_contact_details: boolean;
 };
 
 export type AdminSettings = {
     company_name: string;
     theme: Theme;
+    /**
+     * Same meaning as in `Branding`
+     */
+    uk_only_contact_details: boolean;
     /**
      * Null until the first change
      */
@@ -423,6 +434,10 @@ export type AdminSettingsUpdate = {
         primary: string;
         accent: string;
     };
+    /**
+     * Admin only, like every field here. A real boolean; null and strings are rejected.
+     */
+    uk_only_contact_details?: boolean;
 };
 
 export type ReviewRequest = {
@@ -580,7 +595,7 @@ export type CustomerVersionConflictProblem = Problem & {
  */
 export type AuditAction = 'report.reviewed' | 'report.reopened' | 'report.edited' | 'settings.changed' | 'customer.edited';
 
-export type AuditField = 'review_status' | 'reviewed_by' | 'reviewed_at' | 'painter_notes' | 'manager_notes' | 'checklist_done' | 'checklist_note' | 'company_name' | 'theme_primary' | 'theme_accent' | 'customer_name' | 'customer_contact_name' | 'customer_email' | 'customer_phone' | 'customer_billing_line1' | 'customer_billing_line2' | 'customer_billing_town' | 'customer_billing_county' | 'customer_billing_postcode';
+export type AuditField = 'review_status' | 'reviewed_by' | 'reviewed_at' | 'painter_notes' | 'manager_notes' | 'checklist_done' | 'checklist_note' | 'company_name' | 'theme_primary' | 'theme_accent' | 'uk_only_contact_details' | 'customer_name' | 'customer_contact_name' | 'customer_email' | 'customer_phone' | 'customer_billing_line1' | 'customer_billing_line2' | 'customer_billing_town' | 'customer_billing_county' | 'customer_billing_postcode';
 
 export type AuditChange = {
     field: AuditField;

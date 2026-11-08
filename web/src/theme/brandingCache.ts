@@ -15,7 +15,11 @@ export function parseSnapshot(raw: string | null): Branding | undefined {
   try {
     const value: unknown = JSON.parse(raw);
     if (typeof value !== "object" || value === null) return undefined;
-    const { company_name: name, theme } = value as { company_name?: unknown; theme?: unknown };
+    const {
+      company_name: name,
+      theme,
+      uk_only_contact_details: ukOnly,
+    } = value as { company_name?: unknown; theme?: unknown; uk_only_contact_details?: unknown };
     if (typeof name !== "string" || name.length === 0 || Array.from(name).length > COMPANY_NAME_MAX || CONTROL.test(name)) {
       return undefined;
     }
@@ -31,6 +35,8 @@ export function parseSnapshot(raw: string | null): Branding | undefined {
         surface: t.surface as string,
         text: t.text as string,
       },
+      // A snapshot saved before T-002p has no flag: the strict default until the next fetch.
+      uk_only_contact_details: ukOnly !== false,
     };
   } catch {
     return undefined;

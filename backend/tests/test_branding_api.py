@@ -12,7 +12,8 @@ def test_anonymous_branding_is_public_minimal_and_uncached(client: TestClient) -
     assert_contract(response, "getBranding")
     assert response.headers["cache-control"] == "no-cache"
     body = response.json()
-    assert set(body) == {"company_name", "theme"}
+    assert set(body) == {"company_name", "theme", "uk_only_contact_details"}
+    assert body["uk_only_contact_details"] is True
     assert set(body["theme"]) == {"primary", "accent", "background", "surface", "text"}
     assert body["company_name"] == DEFAULT_COMPANY_NAME
     assert body["theme"] == {
@@ -55,3 +56,15 @@ def test_cors_allows_patch_for_the_web_origin(client: TestClient) -> None:
     )
     assert response.status_code == 200
     assert "PATCH" in response.headers["access-control-allow-methods"]
+
+
+def test_branding_exposes_the_uk_only_flag_to_everyone(
+    client: TestClient, admin_headers: dict[str, str], restore_settings: None
+) -> None:
+    assert client.get("/api/v1/branding").json()["uk_only_contact_details"] is True
+    client.patch(
+        "/api/v1/admin/settings", json={"uk_only_contact_details": False}, headers=admin_headers
+    )
+    response = client.get("/api/v1/branding")
+    assert_contract(response, "getBranding")
+    assert response.json()["uk_only_contact_details"] is False

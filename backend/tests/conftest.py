@@ -199,6 +199,7 @@ def restore_settings(db_engine: Any) -> Iterator[None]:
             text(
                 "UPDATE company_settings SET company_name = :name, theme_primary = :p, "
                 "theme_accent = :a, theme_background = :b, theme_surface = :s, theme_text = :t, "
+                "uk_only_contact_details = true, "
                 "updated_at = NULL, updated_by_id = NULL, updated_by_name = NULL"
             ),
             {

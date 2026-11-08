@@ -428,6 +428,20 @@ def test_report_history_merges_report_and_customer_events_in_order(
 # ---- scenarios 5, 6, 7: validation, driven by the shared case table --------------------------
 
 
+def set_uk_only(db_engine: Engine, value: bool) -> None:
+    with db_engine.begin() as connection:
+        connection.execute(
+            text("UPDATE company_settings SET uk_only_contact_details = :value"), {"value": value}
+        )
+
+
+@pytest.fixture
+def uk_only_default(db_engine: Engine) -> Iterator[None]:
+    yield
+    set_uk_only(db_engine, True)
+
+
+@pytest.mark.usefixtures("uk_only_default")
 @pytest.mark.parametrize("case", CASES, ids=[f"{c['field']}-{i}" for i, c in enumerate(CASES)])
 def test_validation_cases_through_the_api(
     client: TestClient,
@@ -438,6 +452,7 @@ def test_validation_cases_through_the_api(
     case: dict[str, Any],
 ) -> None:
     cid = harbourside(ds).id
+    set_uk_only(db_engine, case.get("ukOnly", True))
     current = get(client, manager_headers, cid)
     events_before = customer_events(db_engine)
     row_before = customer_row(db_engine, cid)
@@ -462,6 +477,31 @@ def test_validation_cases_through_the_api(
         assert customer_row(db_engine, cid) == row_before
 
 
+@pytest.mark.usefixtures("uk_only_default")
+def test_phone_and_postcode_problems_come_together_once_the_rest_is_valid(
+    client: TestClient, manager_headers: dict[str, str], ds: Any, table_data: None
+) -> None:
+    """They depend on the company setting, so they are checked after body validation (T-002p)."""
+    response = patch(
+        client,
+        manager_headers,
+        harbourside(ds).id,
+        {"version": 1, "phone": "abc", "billing_address": {"postcode": "nope"}},
+    )
+    assert response.status_code == 422
+    assert_contract(response, "updateManagerCustomer")
+    assert response.json()["errors"] == [
+        {
+            "loc": ["body", "phone"],
+            "message": "Enter a UK phone number such as 07700 900123.",
+        },
+        {
+            "loc": ["body", "billing_address", "postcode"],
+            "message": "Enter a UK postcode such as BS6 5QA.",
+        },
+    ]
+
+
 def test_a_blank_required_field_is_a_message_not_a_type_error(
     client: TestClient, manager_headers: dict[str, str], ds: Any, table_data: None
 ) -> None:
@@ -481,7 +521,7 @@ def test_several_problems_give_one_entry_each(
             "version": 1,
             "name": "",
             "email": "x",
-            "billing_address": {"postcode": "nope", "town": " "},
+            "billing_address": {"town": " "},
         },
     )
     assert response.status_code == 422
@@ -490,7 +530,6 @@ def test_several_problems_give_one_entry_each(
     assert errors == {
         ("body", "name"): "Enter a name.",
         ("body", "email"): "Enter an email address such as name@example.co.uk.",
-        ("body", "billing_address", "postcode"): "Enter a UK postcode such as BS6 5QA.",
         ("body", "billing_address", "town"): "Enter a town or city.",
     }
 

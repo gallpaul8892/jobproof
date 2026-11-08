@@ -21,12 +21,16 @@ LINE_MAX = 100
 TOWN_MAX = 60
 COUNTY_MAX = 60
 POSTCODE_RAW_MAX = 10
+POSTCODE_ANY_MIN = 2
+POSTCODE_ANY_MAX = 12
 
 MSG_NAME = "Enter a name."
 MSG_EMAIL = "Enter an email address such as name@example.co.uk."
 MSG_PHONE = (
     "Enter a UK phone number such as 07700 900123, or an international number starting with +."
 )
+MSG_PHONE_UK = "Enter a UK phone number such as 07700 900123."
+MSG_POSTCODE_ANY = "Enter a postcode."
 MSG_LINE1 = "Enter the first line of the address."
 MSG_TOWN = "Enter a town or city."
 MSG_POSTCODE = "Enter a UK postcode such as BS6 5QA."
@@ -40,6 +44,9 @@ _UK_INTL = re.compile(r"\+44[0-9]{9,10}")
 _INTL = re.compile(r"\+[1-9][0-9]{7,14}")
 # ASCII only: `str.upper()` would turn a dotless i or a sharp s into ASCII letters.
 _POSTCODE = re.compile(r"[A-Za-z]{1,2}[0-9][A-Za-z0-9]?[0-9][A-Za-z]{2}")
+# Any-country postcode (setting `uk_only_contact_details` off): ASCII letters, digits, spaces and
+# hyphens, starting and ending with a letter or digit.
+_POSTCODE_ANY = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9 \-]*[A-Za-z0-9])?")
 
 
 def validate_name(raw: str | None) -> str:
@@ -70,15 +77,18 @@ def normalise_phone(value: str) -> str:
     return re.sub(" {2,}", " ", value)
 
 
-def validate_phone(raw: str | None) -> str | None:
+def validate_phone(raw: str | None, *, uk_only: bool = True) -> str | None:
+    """`uk_only`: a UK number only (0xxxxxxxxxx or +44 form). Otherwise also `+` and 8-15 digits."""
+    message = MSG_PHONE_UK if uk_only else MSG_PHONE
     value = clean_text(raw, required_message=None, max_length=PHONE_MAX)
     if value is None:
         return None
     if not _PHONE_CHARS.fullmatch(value):
-        raise ValueError(MSG_PHONE)
+        raise ValueError(message)
     digits = phone_digits(value)
-    if not (_UK_LOCAL.fullmatch(digits) or _UK_INTL.fullmatch(digits) or _INTL.fullmatch(digits)):
-        raise ValueError(MSG_PHONE)
+    uk = _UK_LOCAL.fullmatch(digits) or _UK_INTL.fullmatch(digits)
+    if not (uk or (not uk_only and _INTL.fullmatch(digits))):
+        raise ValueError(message)
     return normalise_phone(value)
 
 
@@ -104,8 +114,20 @@ def normalise_postcode(compact: str) -> str:
     return f"{upper[:-3]} {upper[-3:]}"
 
 
-def validate_postcode(raw: str | None) -> str:
+def validate_postcode(raw: str | None, *, uk_only: bool = True) -> str:
+    """UK rules when `uk_only`. Otherwise any 2-12 character value of ASCII letters, digits,
+    spaces and hyphens: upper-cased, runs of spaces collapsed; a value the UK rules accept still
+    gets the UK form (`bs65qa` -> `BS6 5QA`)."""
     value = trim(raw) if raw is not None else ""
+    if not uk_only:
+        if not (POSTCODE_ANY_MIN <= len(value) <= POSTCODE_ANY_MAX) or not _POSTCODE_ANY.fullmatch(
+            value
+        ):
+            raise ValueError(MSG_POSTCODE_ANY)
+        try:
+            return validate_postcode(value, uk_only=True)  # a valid UK postcode keeps the UK form
+        except ValueError:
+            return re.sub(" {2,}", " ", value).upper()
     if not value or len(value) > POSTCODE_RAW_MAX or contains_forbidden_character(value):
         raise ValueError(MSG_POSTCODE)
     compact = value.replace(" ", "")
@@ -115,7 +137,11 @@ def validate_postcode(raw: str | None) -> str:
 
 
 class AddressUpdate(BaseModel):
-    """Partial billing address: only the parts sent change."""
+    """Partial billing address: only the parts sent change.
+
+    `postcode` is not validated here: its rules depend on the company setting
+    `uk_only_contact_details`, so the service validates it (`validate_contact_fields`).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -145,11 +171,6 @@ class AddressUpdate(BaseModel):
     def _county(cls, value: str | None) -> str | None:
         return validate_county(value)
 
-    @field_validator("postcode")
-    @classmethod
-    def _postcode(cls, value: str | None) -> str:
-        return validate_postcode(value)
-
     @model_validator(mode="after")
     def _at_least_one(self) -> Self:
         if not self.model_fields_set:
@@ -158,6 +179,8 @@ class AddressUpdate(BaseModel):
 
 
 class CustomerUpdate(BaseModel):
+    """`phone` is validated by the service too (see `AddressUpdate`)."""
+
     model_config = ConfigDict(extra="forbid")
 
     version: Version
@@ -181,11 +204,6 @@ class CustomerUpdate(BaseModel):
     @classmethod
     def _email(cls, value: str | None) -> str | None:
         return validate_email(value)
-
-    @field_validator("phone")
-    @classmethod
-    def _phone(cls, value: str | None) -> str | None:
-        return validate_phone(value)
 
     @field_validator("billing_address")
     @classmethod

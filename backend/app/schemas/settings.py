@@ -52,11 +52,13 @@ class Theme(BaseModel):
 class Branding(BaseModel):
     company_name: str
     theme: Theme
+    uk_only_contact_details: bool
 
 
 class AdminSettings(BaseModel):
     company_name: str
     theme: Theme
+    uk_only_contact_details: bool
     updated_at: UtcDatetime | None
     updated_by: PersonRef | None
 
@@ -73,6 +75,7 @@ class AdminSettingsUpdate(BaseModel):
 
     company_name: str | None = None
     theme: ThemeUpdate | None = None
+    uk_only_contact_details: bool | None = None
 
     @field_validator("company_name")
     @classmethod
@@ -88,8 +91,15 @@ class AdminSettingsUpdate(BaseModel):
             raise ValueError("Send both colours, primary and accent.")
         return value
 
+    @field_validator("uk_only_contact_details", mode="before")
+    @classmethod
+    def _flag_is_a_real_boolean(cls, value: object) -> bool:
+        if not isinstance(value, bool):
+            raise ValueError("Send true or false.")
+        return value
+
     @model_validator(mode="after")
     def _at_least_one(self) -> "AdminSettingsUpdate":
         if not self.model_fields_set:
-            raise ValueError("Send company_name, theme or both.")
+            raise ValueError("Send company_name, theme, uk_only_contact_details or a combination.")
         return self

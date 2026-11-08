@@ -72,9 +72,10 @@ export const getAdminSettings = <ThrowOnError extends boolean = false>(options?:
 });
 
 /**
- * Change the company name and/or colour scheme
+ * Change the company name, colour scheme and/or contact-detail rules
  *
- * Partial update. Send `company_name`, `theme` or both. A field that is omitted is
+ * Partial update. Send `company_name`, `theme`, `uk_only_contact_details` (T-002p) or any
+ * combination. A field that is omitted is
  * unchanged. A save that changes nothing returns 200 with the current settings, leaves
  * `updated_at`/`updated_by` alone and records no audit event. Last write wins (single
  * settings record, no version). Colours are accepted in either case and stored upper case.
@@ -228,12 +229,21 @@ export const getManagerCustomer = <ThrowOnError extends boolean = false>(options
  * bidi formatting characters (U+200B-200F, U+202A-202E, U+2066-2069, U+FEFF) and no lone
  * surrogates: the company-name rule. Nullable fields: empty or space-only is stored as
  * null. Required fields (`name`, `billing_address.line1`, `town`, `postcode`) cannot be
- * null or blank. `postcode` must be a UK postcode in any case and spacing and is stored
- * upper case as outward code, one space, inward code (`bs65qa` -> `BS6 5QA`). `phone` may
- * contain digits, spaces, `-`, `(`, `)` and a leading `+`, and must be a UK number (`0`
- * then 9 or 10 digits, or `+44`, optionally `(0)`, then 9 or 10 digits) or an
- * international number (`+`, then 8 to 15 digits); stored trimmed with runs of spaces
- * collapsed. `email` is trimmed and must look like `local@domain.tld` (no spaces, one
+ * null or blank.
+ *
+ * Postcode and phone depend on the company setting `uk_only_contact_details` (T-002p,
+ * `GET /branding`). When true (the default): `postcode` must be a UK postcode in any case
+ * and spacing and is stored upper case as outward code, one space, inward code (`bs65qa`
+ * -> `BS6 5QA`); `phone` may contain digits, spaces, `-`, `(`, `)` and a leading `+`, and
+ * must be a UK number (`0` then 9 or 10 digits, or `+44`, optionally `(0)`, then 9 or 10
+ * digits). When false: `postcode` is any 2 to 12 characters of letters A-Z, digits, spaces
+ * and hyphens, starting and ending with a letter or digit, stored upper case with runs of
+ * spaces collapsed (a valid UK postcode still gets the UK form); `phone` may also be an
+ * international number (`+`, then 8 to 15 digits). Phone is stored trimmed with runs of
+ * spaces collapsed. Errors are 422 `errors` entries as for every other field; because the
+ * two rules need the setting they are checked after the rest of the body validates, so a
+ * body with other errors reports phone and postcode problems on the next attempt.
+ * Existing stored values are never revalidated by the setting. `email` is trimmed and must look like `local@domain.tld` (no spaces, one
  * `@`); stored as entered. Only the keys sent are validated, so an unusual stored value
  * that the manager did not touch never blocks a save.
  *

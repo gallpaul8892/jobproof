@@ -46,7 +46,11 @@ def _theme(row: CompanySettings) -> schemas.Theme:
 
 def get_branding(session: Session) -> schemas.Branding:
     row = get_company_settings(session)
-    return schemas.Branding(company_name=row.company_name, theme=_theme(row))
+    return schemas.Branding(
+        company_name=row.company_name,
+        theme=_theme(row),
+        uk_only_contact_details=row.uk_only_contact_details,
+    )
 
 
 def _admin_settings(row: CompanySettings) -> schemas.AdminSettings:
@@ -58,6 +62,7 @@ def _admin_settings(row: CompanySettings) -> schemas.AdminSettings:
     return schemas.AdminSettings(
         company_name=row.company_name,
         theme=_theme(row),
+        uk_only_contact_details=row.uk_only_contact_details,
         updated_at=row.updated_at,
         updated_by=updated_by,
     )
@@ -116,6 +121,8 @@ def update_settings(
     if update.theme is not None:
         wanted["theme_primary"] = update.theme.primary
         wanted["theme_accent"] = update.theme.accent
+    if update.uk_only_contact_details is not None:
+        wanted["uk_only_contact_details"] = update.uk_only_contact_details
     changes: list[Change] = [
         (field, getattr(row, field), value)
         for field, value in wanted.items()

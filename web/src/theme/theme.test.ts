@@ -105,7 +105,7 @@ describe("applyTheme", () => {
 });
 
 describe("branding snapshot", () => {
-  const good = { company_name: "Oak Ltd", theme: { ...DEFAULT_THEME } };
+  const good = { company_name: "Oak Ltd", theme: { ...DEFAULT_THEME }, uk_only_contact_details: true };
 
   it("round-trips a valid snapshot", () => {
     localStorage.clear();

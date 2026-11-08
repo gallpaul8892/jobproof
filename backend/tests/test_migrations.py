@@ -86,8 +86,9 @@ def test_upgrade_downgrade_upgrade_and_no_drift() -> None:
 
 def test_history_is_linear_with_one_head() -> None:
     script = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL))
-    assert script.get_heads() == ["0007"]
+    assert script.get_heads() == ["0008"]
     assert [r.revision for r in script.walk_revisions()] == [
+        "0008",
         "0007",
         "0006",
         "0005",
@@ -493,8 +494,44 @@ def test_0007_downgrade_is_refused_while_a_customer_event_exists() -> None:
             }
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == "0007"
+                == "0008"
             )
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        engine.dispose()
+        command.upgrade(config, "head")
+
+
+def test_0008_adds_the_uk_only_flag_defaulting_to_true_and_downgrades() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0007")
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            assert "uk_only_contact_details" not in {
+                c["name"] for c in inspect(connection).get_columns("company_settings")
+            }
+        command.upgrade(config, "0008")
+        with engine.connect() as connection:
+            # the existing settings row (made by 0002) becomes TRUE, the strict default
+            assert (
+                connection.execute(
+                    text("SELECT uk_only_contact_details FROM company_settings")
+                ).scalar_one()
+                is True
+            )
+        command.downgrade(config, "0007")
+        with engine.connect() as connection:
+            assert "uk_only_contact_details" not in {
+                c["name"] for c in inspect(connection).get_columns("company_settings")
+            }
+        command.upgrade(config, "head")
+        command.check(config)
     finally:
         with engine.begin() as connection:
             connection.execute(text("DROP SCHEMA public CASCADE"))

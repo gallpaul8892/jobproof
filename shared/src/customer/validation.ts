@@ -20,6 +20,10 @@ export const MSG_PHONE = "Enter a UK phone number such as 07700 900123, or an in
 export const MSG_LINE1 = "Enter the first line of the address.";
 export const MSG_TOWN = "Enter a town or city.";
 export const MSG_POSTCODE = "Enter a UK postcode such as BS6 5QA.";
+export const MSG_PHONE_UK = "Enter a UK phone number such as 07700 900123.";
+export const MSG_POSTCODE_ANY = "Enter a postcode.";
+export const POSTCODE_ANY_MIN = 2;
+export const POSTCODE_ANY_MAX = 12;
 
 export type ValidationResult = { ok: true; value: string | null } | { ok: false; message: string };
 
@@ -40,6 +44,7 @@ const UK_LOCAL = /^0[0-9]{9,10}$/;
 const UK_INTL = /^\+44[0-9]{9,10}$/;
 const INTL = /^\+[1-9][0-9]{7,14}$/;
 const POSTCODE = /^[A-Za-z]{1,2}[0-9][A-Za-z0-9]?[0-9][A-Za-z]{2}$/;
+const POSTCODE_ANY = /^[A-Za-z0-9]([A-Za-z0-9 -]*[A-Za-z0-9])?$/;
 
 const fail = (message: string): ValidationResult => ({ ok: false, message });
 const pass = (value: string | null): ValidationResult => ({ ok: true, value });
@@ -78,12 +83,15 @@ export function normalisePhone(value: string): string {
   return value.replace(/ {2,}/g, " ");
 }
 
-export function validatePhone(raw: string | null): ValidationResult {
+/** `ukOnly` (the company setting `uk_only_contact_details`, default true): UK numbers only. */
+export function validatePhone(raw: string | null, ukOnly = true): ValidationResult {
+  const message = ukOnly ? MSG_PHONE_UK : MSG_PHONE;
   const r = cleanText(raw, null, PHONE_MAX);
   if (!r.ok || r.value === null) return r;
-  if (!PHONE_CHARS.test(r.value)) return fail(MSG_PHONE);
+  if (!PHONE_CHARS.test(r.value)) return fail(message);
   const digits = phoneDigits(r.value);
-  if (!(UK_LOCAL.test(digits) || UK_INTL.test(digits) || INTL.test(digits))) return fail(MSG_PHONE);
+  const uk = UK_LOCAL.test(digits) || UK_INTL.test(digits);
+  if (!(uk || (!ukOnly && INTL.test(digits)))) return fail(message);
   return pass(normalisePhone(r.value));
 }
 
@@ -93,8 +101,16 @@ export function normalisePostcode(compact: string): string {
   return `${upper.slice(0, -3)} ${upper.slice(-3)}`;
 }
 
-export function validatePostcode(raw: string | null): ValidationResult {
+export function validatePostcode(raw: string | null, ukOnly = true): ValidationResult {
   const value = trimSpaces(raw ?? "");
+  if (!ukOnly) {
+    // Any 2-12 character value of ASCII letters, digits, spaces and hyphens (UK form kept for UK codes).
+    if (value.length < POSTCODE_ANY_MIN || value.length > POSTCODE_ANY_MAX || !POSTCODE_ANY.test(value)) {
+      return fail(MSG_POSTCODE_ANY);
+    }
+    const uk = validatePostcode(raw, true);
+    return uk.ok ? uk : pass(value.replace(/ {2,}/g, " ").toUpperCase());
+  }
   if (value === "" || codePointLength(value) > POSTCODE_RAW_MAX || containsForbiddenCharacter(value)) {
     return fail(MSG_POSTCODE);
   }
@@ -102,7 +118,8 @@ export function validatePostcode(raw: string | null): ValidationResult {
   return POSTCODE.test(compact) ? pass(normalisePostcode(compact)) : fail(MSG_POSTCODE);
 }
 
-export const VALIDATORS: Record<CustomerField, (raw: string | null) => ValidationResult> = {
+/** Every validator takes the raw value; phone and postcode also take `ukOnly` (default true). */
+export const VALIDATORS: Record<CustomerField, (raw: string | null, ukOnly?: boolean) => ValidationResult> = {
   name: validateName,
   contact_name: validateContactName,
   email: validateEmail,

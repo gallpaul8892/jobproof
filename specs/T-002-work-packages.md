@@ -13,11 +13,11 @@ Each ticket is done (tests green, review APPROVE) before the next starts.
 |---|---|---|---|
 | 1 | Branding and Admin | T-002a, T-002b, T-002c, T-002d, T-002e | 0002 company_settings, 0003 admin role |
 | 2 | Review, edit, audit | T-002k, T-002g, T-002h, T-002f, T-002i, T-002j | 0004 report versioning, 0005 audit_events, 0006 manager_notes |
-| 3 | Neutral wording, tree-surgery data | T-002l, T-002m (optional) | 0008 job_types (T-002m only; renumbered from 0007) |
-| 4 | Customer edits and conflict merge (added 2026-11-08) | T-002n, T-002o | 0007 customer_versioning |
+| 3 | Neutral wording, tree-surgery data | T-002l, T-002m (optional) | 0009 job_types (T-002m only; renumbered again because T-002p took 0008) |
+| 4 | Customer edits and conflict merge (added 2026-11-08) | T-002n, T-002o, T-002p | 0007 customer_versioning, 0008 uk_only_contact_details (T-002p) |
 
 Packages 1 to 3 (except T-002m) are built. Package 4 can be built before T-002m; if T-002m is
-ever built first, it still takes 0008 and T-002n's 0007 must land first (renumber nothing else).
+ever built first, it takes the next free number (0009 since T-002p) after 0007 and 0008 (renumber nothing else).
 
 Order inside package 2 differs from the epic's numbering on purpose: T-002f (audit) depends on
 T-002g (review writes the first event) and must exist before T-002i (edit writes events).
@@ -186,6 +186,6 @@ T-002o (frontend-engineer; no backend, contract or migration change)
 - T-002l edits only: `shared/src/format/labels.ts` (role and field-worker labels),
   `web/src/pages/*.tsx` text, `web/src/app/Shell.tsx` text, e2e text expectations; new
   `web/src/wording.test.ts`. No backend, contract or generated-client change.
-- T-002m: see [T-002m.md](T-002m.md) (contract delta, migration 0008, seed profile files).
+- T-002m: see [T-002m.md](T-002m.md) (contract delta, migration 0009, seed profile files).
 </content>
 </invoke>
