@@ -34,7 +34,8 @@ function DemoAccounts({ onUse }: { onUse: (account: DemoAccount) => void }) {
               <code>{a.password}</code>
             </div>
             <button type="button" className="btn" onClick={() => onUse(a)}>
-              Use<span className="sr-only"> {a.role} account</span>
+              Use
+              <span className="sr-only"> {roleLabel(a.role).toLowerCase()} account</span>
             </button>
           </li>
         ))}

@@ -6,6 +6,7 @@ import {
   formatPence,
   useDashboard,
   type Dashboard,
+  WORDING,
 } from "@jobproof/shared";
 import { EmptyState, QueryBoundary } from "../components/QueryBoundary";
 import { ReviewQueue } from "./dashboard/ReviewQueue";
@@ -88,7 +89,7 @@ function DashboardView({ d }: { d: Dashboard }) {
         </div>
         {d.recent_reports.length === 0 ? (
           <EmptyState title="No reports yet">
-            <p className="muted">Reports appear here when painters submit them.</p>
+            <p className="muted">Reports appear here when {WORDING.fieldWorkers.toLowerCase()} submit them.</p>
           </EmptyState>
         ) : (
           <TableWrap label="Recent reports">
@@ -98,7 +99,7 @@ function DashboardView({ d }: { d: Dashboard }) {
                   <th scope="col">Job ref</th>
                   <th scope="col">Customer</th>
                   <th scope="col">Site</th>
-                  <th scope="col">Painter</th>
+                  <th scope="col">{WORDING.fieldWorker}</th>
                   <th scope="col">Submitted</th>
                   <th scope="col">Review</th>
                   <th scope="col">Billing</th>

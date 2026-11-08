@@ -18,7 +18,7 @@ function setup(handler: Parameters<typeof mockApi>[0], r = report()) {
 }
 
 const saveButton = () => screen.getByTestId("save-changes") as HTMLButtonElement;
-const painter = () => screen.getByLabelText("Painter notes") as HTMLTextAreaElement;
+const painter = () => screen.getByLabelText("Operative notes") as HTMLTextAreaElement;
 
 describe("EditReportForm", () => {
   it("starts with the saved values, labelled controls, and Save disabled", () => {

@@ -31,7 +31,7 @@ test.describe("5. List job reports", () => {
       "Job ref",
       "Customer",
       "Site address",
-      "Painter",
+      "Operative",
       "Completed",
       "Photos",
       "Review",
@@ -123,7 +123,7 @@ test.describe("6. Filter and search reports", () => {
     await expect(count).toHaveText("Showing 1-20 of 60 reports");
     await expect(page).toHaveURL(/\/reports$/);
 
-    await page.getByLabel("Painter").selectOption({ label: "Dan Hughes" });
+    await page.getByLabel("Operative").selectOption({ label: "Dan Hughes" });
     expected = await api.get<Page_<ReportItem>>("reports", { painter_id: dan.id });
     await expect(count).toHaveText(showing(1, expected.total, 20, "reports"));
     expect(expected.total).toBeGreaterThan(0);
@@ -131,7 +131,7 @@ test.describe("6. Filter and search reports", () => {
 
     const all = await api.allReports();
     const day = all[10].completed_on;
-    await page.getByLabel("Painter").selectOption("");
+    await page.getByLabel("Operative").selectOption("");
     await page.getByLabel("Completed from").fill(day);
     await page.getByLabel("Completed to").fill(day);
     expected = await api.get<Page_<ReportItem>>("reports", { date_from: day, date_to: day });

@@ -1,5 +1,5 @@
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
-import { useLogout, useMe, type Role } from "@jobproof/shared";
+import { WORDING, useLogout, useMe, type Role } from "@jobproof/shared";
 import { currentToken } from "../auth/sessionTokenStore";
 import { loginUrl } from "../auth/redirect";
 import { BrandName } from "../app/Shell";
@@ -33,8 +33,8 @@ function Message({ role, name }: { role: Role; name: string }) {
     <>
       <h1>This app is for head-office managers</h1>
       <p>
-        You are signed in as {name}, a painter. Managers review job reports and billing here. Painters use the
-        mobile app, so there is nothing for you to see on this site.
+        You are signed in as {name}, an {WORDING.fieldWorker.toLowerCase()}. Managers review job reports and billing
+        here. {WORDING.fieldWorkers} use the mobile app, so there is nothing for you to see on this site.
       </p>
     </>
   );

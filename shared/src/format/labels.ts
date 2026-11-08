@@ -9,6 +9,14 @@ import type {
   Role,
 } from "../generated";
 
+/** The only place trade-specific wording for the field worker lives. */
+export const WORDING = {
+  fieldWorker: "Operative",
+  fieldWorkers: "Operatives",
+  fieldWorkerNotes: "Operative notes",
+  allFieldWorkers: "All operatives",
+} as const;
+
 type Label<T extends string> = Record<T, string>;
 
 const REVIEW: Label<ReviewStatus> = { awaiting_review: "Awaiting review", reviewed: "Reviewed" };
@@ -41,7 +49,7 @@ const CUSTOMER_TYPE: Label<CustomerType> = {
   business: "Business",
 };
 const STAGE: Label<PhotoStage> = { before: "Before", during: "During", after: "After" };
-const ROLE: Label<Role> = { manager: "Manager", painter: "Painter", admin: "Admin" };
+const ROLE: Label<Role> = { manager: "Manager", painter: WORDING.fieldWorker, admin: "Admin" };
 const METHOD: Record<string, string> = { card: "Card", bank_transfer: "Bank transfer", cash: "Cash" };
 const PAYMENT_KIND: Record<string, string> = { deposit: "Deposit", invoice: "Invoice payment" };
 const QUOTE_STATUS: Record<string, string> = {

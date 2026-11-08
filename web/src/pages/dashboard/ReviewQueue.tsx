@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { formatAddressShort, formatDateTime, waitingLabel, type ReportSummary } from "@jobproof/shared";
+import { WORDING, formatAddressShort, formatDateTime, waitingLabel, type ReportSummary } from "@jobproof/shared";
 import { TableWrap } from "../../components/ui";
 
 /**
@@ -36,7 +36,7 @@ export function ReviewQueue({
                   Site
                 </th>
                 <th scope="col" className="col-wide">
-                  Painter
+                  {WORDING.fieldWorker}
                 </th>
                 <th scope="col" className="col-wide">
                   Submitted

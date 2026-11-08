@@ -44,7 +44,7 @@ test.describe("T-002f: History panel", () => {
     await expect(rows.nth(0).getByTestId("history-sentence")).toHaveText(
       `Report returned to Awaiting review (previously reviewed by Sarah Whitfield on ${londonDateTime(reviewedAt)})`,
     );
-    await expect(rows.nth(1).getByTestId("history-sentence")).toHaveText("Priya Nair changed Painter notes");
+    await expect(rows.nth(1).getByTestId("history-sentence")).toHaveText("Priya Nair changed Operative notes");
     await expect(rows.nth(2).getByTestId("history-sentence")).toHaveText("Sarah Whitfield marked the report as reviewed");
     for (const [i, e] of events.entries()) await expect(rows.nth(i)).toContainText(londonDateTime(e.occurred_at));
 

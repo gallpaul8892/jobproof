@@ -17,6 +17,7 @@ import {
   type FormValues,
   type ReportDetail,
   type ReportUpdate,
+  WORDING,
 } from "@jobproof/shared";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
@@ -234,7 +235,7 @@ export function EditReportForm({
 
         <NotesField
           id={`${idBase}-painter`}
-          label="Painter notes"
+          label={WORDING.fieldWorkerNotes}
           testId="painter-notes"
           value={form.painter_notes}
           max={NOTES_MAX}

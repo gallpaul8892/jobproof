@@ -39,7 +39,7 @@ describe("HistoryPanel", () => {
     const sentences = screen.getAllByTestId("history-sentence").map((e) => e.textContent);
     expect(sentences).toEqual([
       "Report returned to Awaiting review (previously reviewed by Sarah Whitfield on 12 Oct 2026, 09:15)",
-      "Priya Nair changed Painter notes, Checklist: Skirting boards gloss",
+      "Priya Nair changed Operative notes, Checklist: Skirting boards gloss",
       "Sarah Whitfield marked the report as reviewed",
     ]);
     expect(events[0]!.textContent).toContain("15 Oct 2026, 11:42");

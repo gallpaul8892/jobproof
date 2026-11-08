@@ -14,6 +14,7 @@ import {
   useReport,
   useRefreshReport,
   type ReportDetail,
+  WORDING,
 } from "@jobproof/shared";
 import { ApiError } from "@jobproof/shared";
 import { useThrottledRefetch } from "../components/useThrottledRefetch";
@@ -103,22 +104,22 @@ function Detail({
         </dl>
       </Section>
 
-      <Section title="Painter" id="painter">
+      <Section title={WORDING.fieldWorker} id="painter">
         <dl className="kv">
-          <Row label="Painter">{r.painter.name}</Row>
+          <Row label="Submitted by">{r.painter.name}</Row>
           <Row label="Submitted">{formatDateTime(r.submitted_at)}</Row>
         </dl>
         <h3>Review</h3>
         <ReviewPanel report={r} editing={edit.editing} />
         {!edit.editing && (
           <>
-            <h3>Painter notes</h3>
+            <h3>{WORDING.fieldWorkerNotes}</h3>
             {r.painter_notes ? (
               <p className="prewrap" data-testid="painter-notes">
                 {r.painter_notes}
               </p>
             ) : (
-              <p className="muted">The painter left no notes.</p>
+              <p className="muted">The {WORDING.fieldWorker.toLowerCase()} left no notes.</p>
             )}
             <h3>Manager notes (internal)</h3>
             {r.manager_notes ? (

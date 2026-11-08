@@ -1,11 +1,12 @@
 import type { AuditChange, AuditEvent, AuditField } from "./generated";
 import { formatDateTime } from "./format/dates";
+import { WORDING } from "./format/labels";
 
 const FIELD_LABELS: Record<AuditField, string> = {
   review_status: "Review status",
   reviewed_by: "Reviewed by",
   reviewed_at: "Reviewed at",
-  painter_notes: "Painter notes",
+  painter_notes: WORDING.fieldWorkerNotes,
   manager_notes: "Manager notes",
   checklist_done: "Checklist",
   checklist_note: "Checklist note",

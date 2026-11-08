@@ -29,7 +29,7 @@ async function reportWithOpenItem(api: ManagerApi): Promise<{ report: ReportFull
   throw new Error("no awaiting report with an open checklist item");
 }
 
-const painterNotes = (page: Page) => page.getByLabel("Painter notes");
+const painterNotes = (page: Page) => page.getByLabel("Operative notes");
 const managerNotes = (page: Page) => page.getByLabel("Manager notes (internal)");
 const save = (page: Page) => page.getByRole("button", { name: "Save changes" });
 
@@ -87,7 +87,7 @@ test.describe("T-002j: edit a report", () => {
     await expect(page.getByTestId("edit-form")).toHaveCount(0);
     await expect(page.getByTestId("painter-notes")).toHaveText("Ceilings redone after the leak.");
     await expect(page.getByTestId("history-sentence").first()).toHaveText(
-      `Sarah Whitfield changed Painter notes, Checklist: ${open.label}`,
+      `Sarah Whitfield changed Operative notes, Checklist: ${open.label}`,
     );
     const saved = await api.get<ReportFull>(`reports/${report.id}`);
     expect(saved.version).toBe(report.version + 1);

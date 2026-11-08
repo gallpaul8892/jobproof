@@ -149,9 +149,9 @@ describe("describeEvent", () => {
         ],
       }),
     );
-    expect(d.sentence).toBe("Priya Nair changed Painter notes, Checklist: Skirting boards gloss");
+    expect(d.sentence).toBe("Priya Nair changed Operative notes, Checklist: Skirting boards gloss");
     expect(d.changes).toEqual([
-      { label: "Painter notes", old: "(empty)", new: "New" },
+      { label: "Operative notes", old: "(empty)", new: "New" },
       { label: "Checklist: Skirting boards gloss", old: "Not done", new: "Done" },
       { label: "Checklist note: Skirting boards gloss", old: "a", new: "(empty)" },
     ]);

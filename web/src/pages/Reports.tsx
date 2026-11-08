@@ -15,6 +15,7 @@ import {
   usePainters,
   useReports,
   type ReportFilters,
+  WORDING,
 } from "@jobproof/shared";
 import { EmptyState, QueryBoundary } from "../components/QueryBoundary";
 import {
@@ -87,7 +88,8 @@ export function ReportsPage() {
   return (
     <>
       <PageHeader title="Reports">
-        Completion reports submitted by painters, {filters.sort === "submitted_asc" ? "oldest first" : "newest first"}.
+        Completion reports submitted by {WORDING.fieldWorkers.toLowerCase()},{" "}
+        {filters.sort === "submitted_asc" ? "oldest first" : "newest first"}.
       </PageHeader>
 
       <form className="filters" role="search" aria-label="Filter reports" onSubmit={(e) => e.preventDefault()}>
@@ -115,9 +117,9 @@ export function ReportsPage() {
           </select>
         </div>
         <div className="field">
-          <label htmlFor="painter_id">Painter</label>
+          <label htmlFor="painter_id">{WORDING.fieldWorker}</label>
           <select id="painter_id" value={filters.painter_id ?? ""} onChange={set("painter_id")}>
-            <option value="">All</option>
+            <option value="">{WORDING.allFieldWorkers}</option>
             {painters.data?.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -172,7 +174,7 @@ export function ReportsPage() {
                 </EmptyState>
               ) : (
                 <EmptyState title="No reports yet">
-                  <p className="muted">Reports appear here when painters submit them.</p>
+                  <p className="muted">Reports appear here when {WORDING.fieldWorkers.toLowerCase()} submit them.</p>
                 </EmptyState>
               )
             ) : (
@@ -185,7 +187,7 @@ export function ReportsPage() {
                         <th scope="col">Customer</th>
                         <th scope="col">Site address</th>
                         <th scope="col" className="col-wide">
-                          Painter
+                          {WORDING.fieldWorker}
                         </th>
                         <th scope="col" className="col-wide">
                           Completed
