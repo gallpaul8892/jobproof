@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: JobProof API
-  version: 0.2.0
+  version: 0.3.0
   summary: Contract between the JobProof backend and its web and mobile clients.
   description: |
     Source of truth for the JobProof API (see ARCHITECTURE.md section 5 for conventions).
@@ -15,12 +15,17 @@ info:
       and every `/api/v1/admin/*` operation requires role `admin`. No token or an invalid/expired
       token gives 401 `unauthenticated`; a valid token with any other role gives 403 `forbidden`.
       An admin gets 403 on manager operations and a manager gets 403 on admin operations.
-    - Writes (Phase 2a, T-002): Admin settings, marking a report reviewed and editing a report.
-      Report writes use optimistic concurrency: the body carries the `version` the client loaded;
-      a mismatch is 409 `version_conflict` and nothing is saved.
+    - Writes (Phase 2a, T-002): Admin settings, marking a report reviewed, editing a report and
+      (T-002n) editing a customer's contact details. Report and customer writes use optimistic
+      concurrency: the body carries the `version` the client loaded; a mismatch is 409
+      `version_conflict` and nothing is saved.
+    - Admin and Manager are separate roles. An Admin may be technical staff rather than a
+      manager, so an Admin never reads or changes reports, customers or billing (403).
     - `x-ticket` marks operations, parameters and properties added by a T-002 ticket. Backend
       contract tests ignore items whose ticket is listed in `PENDING_TICKETS`
-      (`backend/tests/contract.py`) until that ticket is built.
+      (`backend/tests/contract.py`) until that ticket is built; the ticket's last step removes
+      its id. Component schemas are never marked (only the operations, parameters and
+      properties that use them), so nothing visible ever references a hidden schema.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -37,7 +42,7 @@ tags:
   - name: admin
     description: Admin-only company settings.
   - name: manager
-    description: Manager-only endpoints (reports, review, edit, history, billing).
+    description: Manager-only endpoints (reports, review, edit, history, customers, billing).
   - name: photos
     description: Signed photo image delivery.
 security:
@@ -258,6 +263,11 @@ paths:
         - name: painter_id
           in: query
           schema: { type: string, format: uuid }
+        - name: customer_id
+          in: query
+          x-ticket: T-002n
+          description: Only reports for this customer's jobs (the customer page list). Unknown id gives an empty page.
+          schema: { type: string, format: uuid }
         - name: date_from
           in: query
           description: Inclusive lower bound on `completed_on`.
@@ -392,6 +402,10 @@ paths:
       operationId: listManagerReportHistory
       x-ticket: T-002f
       summary: Audit events for one report, newest first (latest 100)
+      description: |
+        The report's own events plus (T-002n) every `customer.edited` event of the customer of
+        the report's job, merged in `seq` order, so a change of customer details shows in the
+        history of every report that uses that customer. `total` counts both kinds.
       parameters:
         - name: report_id
           in: path
@@ -400,6 +414,109 @@ paths:
       responses:
         "200":
           description: History
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditHistory" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/manager/customers/{customer_id}:
+    get:
+      tags: [manager]
+      operationId: getManagerCustomer
+      x-ticket: T-002n
+      summary: One customer's details, version and how many records use them
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerRecord" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    patch:
+      tags: [manager]
+      operationId: updateManagerCustomer
+      x-ticket: T-002n
+      summary: Correct a customer's name, contact name, email, phone or billing address
+      description: |
+        Partial update with optimistic concurrency, manager only (admin and painter 403).
+        `version` is the customer version the client loaded and is required. Editable: `name`,
+        `contact_name`, `email`, `phone` and the parts of `billing_address`. Anything else
+        (`id`, `customer_type`, `payment_terms_days`, `notes`, job, report, photo or checklist
+        data, unknown keys) is 422 naming the key. A customer is shared by all its jobs: the
+        change shows on every job, report and invoice of the customer.
+
+        Text rules (code points, after trimming the ordinary space U+0020 only): no control
+        characters U+0000-001F and U+007F-009F (so no tabs or line breaks), no zero-width or
+        bidi formatting characters (U+200B-200F, U+202A-202E, U+2066-2069, U+FEFF) and no lone
+        surrogates: the company-name rule. Nullable fields: empty or space-only is stored as
+        null. Required fields (`name`, `billing_address.line1`, `town`, `postcode`) cannot be
+        null or blank. `postcode` must be a UK postcode in any case and spacing and is stored
+        upper case as outward code, one space, inward code (`bs65qa` -> `BS6 5QA`). `phone` may
+        contain digits, spaces, `-`, `(`, `)` and a leading `+`, and must be a UK number (`0`
+        then 9 or 10 digits, or `+44`, optionally `(0)`, then 9 or 10 digits) or an
+        international number (`+`, then 8 to 15 digits); stored trimmed with runs of spaces
+        collapsed. `email` is trimmed and must look like `local@domain.tld` (no spaces, one
+        `@`); stored as entered. Only the keys sent are validated, so an unusual stored value
+        that the manager did not touch never blocks a save.
+
+        Order of checks: body validation (422), customer exists (404), version matches (409
+        `version_conflict`). If every sent value (after normalising) equals the stored one,
+        the response is 200 with the same `version`, nothing is written and no event is
+        recorded. Otherwise `version` increases by 1, `last_changed_at`/`last_changed_by` are
+        set and one `customer.edited` event with old and new values is recorded, all in one
+        transaction. Report versions and review status are not changed: a reviewed report
+        stays reviewed, and the change appears in its history.
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerUpdate" }
+      responses:
+        "200":
+          description: Saved (or unchanged); the full, current customer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerRecord" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The customer changed since the client loaded it (code `version_conflict`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/CustomerVersionConflictProblem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/manager/customers/{customer_id}/history:
+    get:
+      tags: [manager]
+      operationId: listManagerCustomerHistory
+      x-ticket: T-002n
+      summary: Changes to one customer's details, newest first (latest 100)
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: History (only `customer.edited` events)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuditHistory" }
@@ -1157,9 +1274,111 @@ components:
             reviewed_at: { type: string, format: date-time }
             reviewed_by: { $ref: "#/components/schemas/PersonRef" }
 
+    CustomerImpact:
+      type: object
+      description: How many records show this customer's details (computed when read)
+      required: [job_count, report_count, reviewed_report_count, issued_invoice_count]
+      properties:
+        job_count: { type: integer, minimum: 0 }
+        report_count: { type: integer, minimum: 0 }
+        reviewed_report_count: { type: integer, minimum: 0, description: Stay reviewed after a customer edit }
+        issued_invoice_count:
+          type: integer
+          minimum: 0
+          description: Issued (not draft, not void) invoices; they show the current billing address (no snapshot yet)
+
+    CustomerRecord:
+      type: object
+      required:
+        - id
+        - name
+        - customer_type
+        - contact_name
+        - email
+        - phone
+        - billing_address
+        - version
+        - last_changed_at
+        - last_changed_by
+        - impact
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        customer_type: { $ref: "#/components/schemas/CustomerType" }
+        contact_name: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        billing_address: { $ref: "#/components/schemas/Address" }
+        version: { type: integer, minimum: 1, description: Starts at 1; +1 on every real change. Send it back on PATCH }
+        last_changed_at: { type: [string, "null"], format: date-time, description: Null if never edited }
+        last_changed_by:
+          oneOf:
+            - $ref: "#/components/schemas/PersonRef"
+            - type: "null"
+        impact: { $ref: "#/components/schemas/CustomerImpact" }
+
+    AddressUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Only the parts sent are changed
+      properties:
+        line1: { type: string, minLength: 1, maxLength: 100 }
+        line2: { type: [string, "null"], maxLength: 100 }
+        town: { type: string, minLength: 1, maxLength: 60 }
+        county: { type: [string, "null"], maxLength: 60 }
+        postcode: { type: string, minLength: 5, maxLength: 10, examples: ["BS6 5QA"] }
+
+    CustomerUpdate:
+      type: object
+      additionalProperties: false
+      required: [version]
+      minProperties: 2
+      description: "`version` plus at least one editable field. Rules: `updateManagerCustomer`."
+      properties:
+        version: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        contact_name: { type: [string, "null"], maxLength: 120 }
+        email: { type: [string, "null"], maxLength: 254 }
+        phone: { type: [string, "null"], maxLength: 30 }
+        billing_address: { $ref: "#/components/schemas/AddressUpdate" }
+
+    CustomerEditableValues:
+      type: object
+      description: Current values of the fields the client tried to change (billing address parts as sent)
+      properties:
+        name: { type: string }
+        contact_name: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        billing_address:
+          type: object
+          properties:
+            line1: { type: string }
+            line2: { type: [string, "null"] }
+            town: { type: string }
+            county: { type: [string, "null"] }
+            postcode: { type: string }
+
+    CustomerVersionConflictProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [code, current_version, last_changed_at, last_changed_by, current]
+          properties:
+            code: { const: version_conflict }
+            current_version: { type: integer, minimum: 1 }
+            last_changed_at: { type: [string, "null"], format: date-time }
+            last_changed_by:
+              oneOf:
+                - $ref: "#/components/schemas/PersonRef"
+                - type: "null"
+            current: { $ref: "#/components/schemas/CustomerEditableValues" }
+
     AuditAction:
       type: string
-      enum: [report.reviewed, report.reopened, report.edited, settings.changed]
+      description: "`customer.edited` added by T-002n."
+      enum: [report.reviewed, report.reopened, report.edited, settings.changed, customer.edited]
 
     AuditField:
       type: string
@@ -1174,6 +1393,15 @@ components:
         - company_name
         - theme_primary
         - theme_accent
+        - customer_name
+        - customer_contact_name
+        - customer_email
+        - customer_phone
+        - customer_billing_line1
+        - customer_billing_line2
+        - customer_billing_town
+        - customer_billing_county
+        - customer_billing_postcode
 
     AuditChange:
       type: object
@@ -1195,6 +1423,11 @@ components:
           $ref: "#/components/schemas/PersonRef"
           description: Name as it was when the event happened
         action: { $ref: "#/components/schemas/AuditAction" }
+        customer_id:
+          type: [string, "null"]
+          format: uuid
+          x-ticket: T-002n
+          description: Set for `customer.edited` events (the customer whose details changed), else null
         changes:
           type: array
           items: { $ref: "#/components/schemas/AuditChange" }

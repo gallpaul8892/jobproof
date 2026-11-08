@@ -1,8 +1,9 @@
 # T-002 work packages (build plan for the engineers)
 
 Epic: [tickets/T-002-admin-branding-review-workflow.md](../tickets/T-002-admin-branding-review-workflow.md).
-Contract: [api/openapi.yaml](../api/openapi.yaml) v0.2.0 (already contains every T-002 change
-except T-002m's, which is a delta inside [T-002m.md](T-002m.md)). Architecture:
+Contract: [api/openapi.yaml](../api/openapi.yaml) v0.3.0 (contains every T-002 change, including
+T-002n's customer operations, except T-002m's, which is a delta inside [T-002m.md](T-002m.md)).
+ Architecture:
 [ARCHITECTURE.md](../ARCHITECTURE.md) section 16 (decisions D1 to D7).
 
 Three packages, built **in order**. Inside a package, build the tickets in the order listed.
@@ -12,7 +13,11 @@ Each ticket is done (tests green, review APPROVE) before the next starts.
 |---|---|---|---|
 | 1 | Branding and Admin | T-002a, T-002b, T-002c, T-002d, T-002e | 0002 company_settings, 0003 admin role |
 | 2 | Review, edit, audit | T-002k, T-002g, T-002h, T-002f, T-002i, T-002j | 0004 report versioning, 0005 audit_events, 0006 manager_notes |
-| 3 | Neutral wording, tree-surgery data | T-002l, T-002m (optional) | 0007 job_types (T-002m only) |
+| 3 | Neutral wording, tree-surgery data | T-002l, T-002m (optional) | 0008 job_types (T-002m only; renumbered from 0007) |
+| 4 | Customer edits and conflict merge (added 2026-11-08) | T-002n, T-002o | 0007 customer_versioning |
+
+Packages 1 to 3 (except T-002m) are built. Package 4 can be built before T-002m; if T-002m is
+ever built first, it still takes 0008 and T-002n's 0007 must land first (renumber nothing else).
 
 Order inside package 2 differs from the epic's numbering on purpose: T-002f (audit) depends on
 T-002g (review writes the first event) and must exist before T-002i (edit writes events).
@@ -28,8 +33,14 @@ it is built ticket by ticket, `backend/tests/contract.py` (changed once, in T-00
   `x-ticket` is in `PENDING_TICKETS` removed (properties are also removed from `required`).
   `contract_operations()` therefore excludes pending operations; `NOT_YET_IMPLEMENTED` stays
   for anything else and stays empty.
-- Each ticket's last step: delete its id from `PENDING_TICKETS`. After T-002i the set is empty.
+- Each ticket's last step: delete its id from `PENDING_TICKETS`. After T-002i the set was empty.
   Keep the mechanism (it is how later epics stage contracts).
+- Package 4: the architect set `PENDING_TICKETS = {"T-002n", "T-002o"}` when writing the
+  contract (2026-11-08); backend tests are green with it. T-002n removes its id; T-002o (no
+  contract items) removes its id last, leaving the set empty.
+- Never put `x-ticket` on a component schema, only on the operations, parameters and properties
+  that use it: `strip_pending` deletes marked nodes, and a hidden schema still referenced from a
+  visible place would break `$ref` resolution.
 
 The generated client (`shared/src/generated/`) is regenerated **once at the start of T-002a**
 (`npm run gen`) and committed; it then already has every T-002 type and SDK function. If a
@@ -123,11 +134,58 @@ E2E
 - New: `e2e/tests/review-queue.spec.ts`, `review.spec.ts`, `history.spec.ts`,
   `edit-report.spec.ts`. Edit: `support.ts` (reseed helper), `report-detail.spec.ts`.
 
+### Package 4 (T-002n, T-002o)
+
+**Generated client:** `npm run gen:check` (part of `make lint`) fails from the contract commit
+until T-002n's first step runs `npm run gen`. That regeneration must land in the same commit as
+the new `FIELD_LABELS` entries in `shared/src/history.ts` (it is `Record<AuditField, string>`, so
+new audit fields break the type-check otherwise).
+
+T-002n backend (backend-engineer)
+- New: `backend/migrations/versions/0007_customer_versioning.py`; `backend/app/schemas/text.py`,
+  `schemas/customer_write.py`; `backend/app/services/customers.py`.
+- Edit: `models/people.py` (Customer version columns), `models/audit.py` (customer_id, check,
+  index), `models/enums.py` (`customer_edited`, `AuditEntity.customer`), `schemas/settings.py`
+  (import the forbidden set from `text.py`; behaviour unchanged), `schemas/manager.py`
+  (`CustomerRecord`, `CustomerImpact`), `schemas/audit.py` (`customer_id`), `services/audit.py`
+  (`record_event` customer_id, report history includes customer events, `customer_history`),
+  `services/reports.py` (`customer_id` filter), `routers/manager.py` (three routes, param).
+- Tests new: `test_customer_edit_api.py`, `test_customer_validation.py` (reads
+  `shared/src/customer/validationCases.json`). Edit: `contract.py` (remove T-002n),
+  `test_concurrency.py`, `test_audit_store.py`, `test_report_history_api.py`,
+  `test_reports_list_api.py`, `test_migrations.py` (0007 down refusal),
+  `test_performance_logging.py`.
+
+T-002n shared and web (frontend-engineer)
+- New: `shared/src/text/forbidden.ts`, `shared/src/customer/validation.ts`,
+  `validationCases.json`, `customerEdit.ts`, `index.ts`, tests beside them;
+  `shared/src/hooks/useCustomer.ts`; `web/src/pages/Customer.tsx`,
+  `web/src/pages/customer/CustomerDetails.tsx`, `EditCustomerForm.tsx`, `CustomerHistory.tsx`,
+  tests beside them.
+- Edit: `shared/src/generated/*` (regenerated), `shared/src/history.ts`,
+  `shared/src/branding/companyName.ts` (import the moved set), `shared/src/conflict.ts`,
+  `shared/src/api/queryKeys.ts` (`customer`, `customerHistory`), `shared/src/filters.ts`
+  (`customer_id`), `shared/src/hooks/useManager.ts`, `shared/src/index.ts`;
+  `web/src/app/router.tsx`, `web/src/pages/ReportDetail.tsx` (customer link),
+  `web/src/pages/report/HistoryPanel.tsx` (customer tag and link, query injectable),
+  `web/src/styles/app.css` (append a `/* customer */` block).
+- E2E new: `e2e/tests/customer-edit.spec.ts`. Edit: `support.ts` only if a helper is needed.
+
+T-002o (frontend-engineer; no backend, contract or migration change)
+- New: `shared/src/merge.ts`, `merge.test.ts`; `web/src/components/ConflictMerge.tsx` and test;
+  `e2e/tests/edit-conflict-merge.spec.ts`.
+- Edit: `shared/src/reportEdit.ts` (`reportMergeAdapter`, export `blankToNull`),
+  `shared/src/customer/customerEdit.ts` (`customerMergeAdapter`), `shared/src/index.ts`,
+  `web/src/pages/report/EditReportForm.tsx` (replaceable `original`, the new button and clash
+  UI), `web/src/pages/customer/EditCustomerForm.tsx` (same), `edit.test.tsx`,
+  `web/src/styles/app.css` (append a `/* merge */` block), `backend/tests/contract.py` (remove
+  T-002o).
+
 ### Package 3 (T-002l, T-002m)
 
 - T-002l edits only: `shared/src/format/labels.ts` (role and field-worker labels),
   `web/src/pages/*.tsx` text, `web/src/app/Shell.tsx` text, e2e text expectations; new
   `web/src/wording.test.ts`. No backend, contract or generated-client change.
-- T-002m: see [T-002m.md](T-002m.md) (contract delta, migration 0007, seed profile files).
+- T-002m: see [T-002m.md](T-002m.md) (contract delta, migration 0008, seed profile files).
 </content>
 </invoke>

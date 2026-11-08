@@ -19,6 +19,8 @@ editing report text and checklist. Photos stay read-only. Still out of scope: pa
 | 4 | Managers edit job reports, audit trail, optimistic concurrency | T-002f, T-002i, T-002j |
 | 5 | Review workflow: awaiting review -> reviewed (who, when) | T-002g, T-002h |
 | 6 | Dashboard queue of next 5 reports to review | T-002k |
+| 7 | (2026-11-08) Managers correct customer contact details, audited | T-002n |
+| 8 | (2026-11-08) After a conflict, re-apply my edits on top of the latest version | T-002o |
 
 ## Decisions (product owner; the architect designs the "how")
 
@@ -41,6 +43,8 @@ Trade-off accepted: each new company costs a deployment (infra ticket in the AWS
 One role per user (`manager`, `painter`, plus new `admin`). **Admin is a separate persona that
 sees Settings only; it does not get manager data.** A person who needs both has two accounts.
 Least privilege now; widening later is easy, narrowing is not.
+**Confirmed by Paul 2026-11-08:** Admin and Manager stay separate because an Admin may be
+technical staff, not a manager. Admin never reads or changes reports, customers or billing.
 
 ### D3. Review workflow
 A report is `awaiting_review` or `reviewed` (already in the data model). A manager marks it
@@ -55,6 +59,10 @@ Editable: `painter_notes`, each checklist item's `done` and `note`, and a new in
 `manager_notes` field (so a manager can annotate without rewriting the painter's words).
 Not editable: checklist labels, adding or removing checklist items, photos (read-only for now),
 job details, customer, billing, completion date. Every change is audited with old and new values.
+**Amended by Paul 2026-11-08 (T-002n):** managers may also correct a customer's contact details
+(name, contact name, email, phone, billing address), audited with who/when/old/new. Ids, customer
+type, payment terms and job/photo/checklist data stay read-only. A customer edit does not reopen
+reviewed reports; it shows in each affected report's history.
 
 ### D5. Concurrency
 Optimistic: each report has an integer `version` (starts at 1, +1 on every real change including
@@ -83,6 +91,7 @@ not block anything.
 7. T-002g review API (adds `version`), then T-002h review UI
 8. T-002f audit trail foundation (before edit), then T-002i edit API, then T-002j edit UI
 9. T-002l neutral wording; T-002m tree-surgery mock data (deferrable)
+10. T-002n manager edits customer details, then T-002o "Apply my changes on top" (Package 4)
 
 Branding (1-5) and the review/edit stream (6-8) touch different code and can be built in parallel
 by two engineers after T-002a/T-002b. T-002f also records Admin settings changes, so it follows

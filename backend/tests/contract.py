@@ -20,7 +20,9 @@ NOT_YET_IMPLEMENTED: set[tuple[str, str]] = set()
 # Tickets whose contract items (operations, parameters, schema properties marked `x-ticket`) are
 # not built yet. load_spec() hides them so the contract tests stay green while a package is built
 # ticket by ticket. Delete a ticket's id from this set as the last step of that ticket.
-PENDING_TICKETS: set[str] = set()
+# T-002n: customer read/edit/history operations, `customer_id` report filter and AuditEvent field.
+# T-002o: client-only (no contract items); listed so the package's bookkeeping is uniform.
+PENDING_TICKETS: set[str] = {"T-002n", "T-002o"}
 
 
 def _is_pending(node: Any, pending: set[str]) -> bool:
