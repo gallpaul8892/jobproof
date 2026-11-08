@@ -5,10 +5,11 @@ import { BillingPage } from "./pages/Billing";
 import { DashboardPage } from "./pages/Dashboard";
 import { LoginPage } from "./pages/Login";
 import { NotAuthorisedPage } from "./pages/NotAuthorised";
+import { CustomerPage } from "./pages/Customer";
 import { ReportDetailPage } from "./pages/ReportDetail";
 import { ReportsPage } from "./pages/Reports";
 import { SettingsPage } from "./pages/Settings";
-import { dashboard, report, summary } from "./test/fixtures";
+import { customerRecord, dashboard, report, summary } from "./test/fixtures";
 import { mockApi, renderWithDataRouter } from "./test/mockApi";
 
 /** Trade words that must not appear in chrome. Fixtures below contain none, so any hit is chrome. */
@@ -91,6 +92,7 @@ function api(over: (path: string) => Api | undefined = () => undefined, role = "
         },
       };
     if (path.endsWith("/history")) return { body: { items: [], total: 0 } };
+    if (path.includes("/manager/customers/")) return { body: customerRecord() };
     if (path.includes("/manager/reports/")) return { body: neutralReport() };
     return { body: {} };
   });
@@ -187,6 +189,19 @@ describe("neutral wording", () => {
     await noTradeWords(<ReportDetailPage />, () => screen.getByTestId("not-found"));
     api(failing(500));
     await noTradeWords(<ReportDetailPage />, () => screen.getAllByRole("alert"));
+  });
+
+  it("customer page, view, edit and error", async () => {
+    api();
+    const { container } = renderWithDataRouter(<CustomerPage />);
+    await waitFor(() => screen.getByTestId("edit-customer"));
+    expect(chromeText(container)).not.toMatch(TRADE);
+    fireEvent.click(screen.getByTestId("edit-customer"));
+    await waitFor(() => screen.getByTestId("impact-notice"));
+    expect(chromeText(container)).not.toMatch(TRADE);
+    cleanup();
+    api(failing(500));
+    await noTradeWords(<CustomerPage />, () => screen.getAllByRole("alert"));
   });
 
   it("billing and settings, including errors", async () => {

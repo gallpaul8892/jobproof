@@ -1,7 +1,7 @@
 import { ApiError } from "./api/errors";
-import type { PersonRef, ReportEditableValues } from "./generated";
+import type { CustomerEditableValues, PersonRef, ReportEditableValues } from "./generated";
 
-export interface Conflict {
+export interface Conflict<C = ReportEditableValues> {
   /** "already_reviewed": someone reviewed it. "stale": the report changed since it was loaded. */
   kind: "already_reviewed" | "stale";
   currentVersion?: number;
@@ -10,7 +10,7 @@ export interface Conflict {
   lastChangedBy?: PersonRef;
   lastChangedAt?: string;
   /** PATCH only: the current values of the fields that were sent. */
-  current?: ReportEditableValues;
+  current?: C;
 }
 
 function person(v: unknown): PersonRef | undefined {
@@ -45,4 +45,21 @@ export function parseConflict(error: unknown): Conflict | null {
     return { kind: reviewedLast ? "already_reviewed" : "stale", ...base };
   }
   return null;
+}
+
+/**
+ * Reads a 409 from the customer PATCH: a `version_conflict` is always "stale" (customer edits have no
+ * review state). Anything else returns null.
+ */
+export function parseCustomerConflict(error: unknown): Conflict<CustomerEditableValues> | null {
+  if (!(error instanceof ApiError) || error.status !== 409 || !error.problem) return null;
+  if (error.code !== "version_conflict") return null;
+  const p = error.problem;
+  return {
+    kind: "stale",
+    currentVersion: typeof p.current_version === "number" ? p.current_version : undefined,
+    lastChangedBy: person(p.last_changed_by),
+    lastChangedAt: str(p.last_changed_at),
+    current: typeof p.current === "object" && p.current !== null ? (p.current as CustomerEditableValues) : undefined,
+  };
 }

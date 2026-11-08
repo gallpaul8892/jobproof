@@ -1,15 +1,18 @@
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ApiError,
   CHECKLIST_NOTE_MAX,
   NOTES_MAX,
   buildReportUpdate,
+  checklistKey,
   currentMatchesUpdate,
   formFromReport,
   formatTime,
   hasProblems,
   parseConflict,
+  reportMergeAdapter,
   textLength,
+  useFetchLatestReport,
   useMe,
   useUpdateReport,
   validateForm,
@@ -20,6 +23,8 @@ import {
   WORDING,
 } from "@jobproof/shared";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { CLASH_HINT, ClashChoice, MergeNotice, NothingLeftNotice, ReappliedTag } from "../../components/ConflictMerge";
+import { useMergeOnTop } from "../../components/useMergeOnTop";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
 
 type Failure =
@@ -47,6 +52,9 @@ function NotesField({
   problem,
   currentValue,
   testId,
+  readOnly,
+  tag,
+  clash,
   onChange,
 }: {
   id: string;
@@ -56,15 +64,23 @@ function NotesField({
   problem: string | undefined;
   currentValue: string | null | undefined;
   testId: string;
+  readOnly?: boolean;
+  tag?: boolean;
+  clash?: ReactNode;
   onChange: (value: string) => void;
 }) {
   return (
     <div className="field">
-      <label htmlFor={id}>{label}</label>
+      <div className="label-row">
+        <label htmlFor={id}>{label}</label>
+        {tag && <ReappliedTag />}
+      </div>
+      {clash}
       <textarea
         id={id}
         rows={5}
         value={value}
+        readOnly={readOnly}
         data-testid={`${testId}-input`}
         aria-invalid={problem ? "true" : undefined}
         aria-describedby={`${id}-meta`}
@@ -101,7 +117,7 @@ export function EditReportForm({
   /** Loads the latest report and restarts the form from it. Rejects if the report cannot be loaded. */
   onReload: () => Promise<void>;
 }) {
-  const [original] = useState(report);
+  const [original, setOriginal] = useState(report);
   const [form, setForm] = useState<FormValues>(() => formFromReport(report));
   const [failure, setFailure] = useState<Failure | null>(null);
   const [lastBody, setLastBody] = useState<ReportUpdate | null>(null);
@@ -109,6 +125,11 @@ export function EditReportForm({
   const [reloadFailed, setReloadFailed] = useState(false);
   const [reloading, setReloading] = useState(false);
   const mutation = useUpdateReport(original.id);
+  const fetchLatest = useFetchLatestReport(original.id);
+  const adapter = reportMergeAdapter(original.checklist);
+  const mergeFlow = useMergeOnTop({ adapter, original, form, setForm, setOriginal, fetchLatest, toForm: formFromReport });
+  const { merge } = mergeFlow;
+  const formRef = useRef<HTMLFormElement>(null);
   const me = useMe();
   const idBase = useId();
   const saving = useRef(false);
@@ -117,13 +138,38 @@ export function EditReportForm({
   const problems = validateForm(form);
   const dirty = update !== null;
   const blocker = useUnsavedChangesGuard(dirty);
-  const canSave = dirty && !hasProblems(problems) && !mutation.isPending;
+  const canSave = dirty && !hasProblems(problems) && !mutation.isPending && mergeFlow.unresolved === 0;
+  const nothingLeft = merge !== null && mergeFlow.unresolved === 0 && !dirty;
+
+  // After applying on top, move focus to the first field that needs a choice, else to the notice.
+  const mergeSeq = merge?.seq;
+  useEffect(() => {
+    if (mergeSeq === undefined) return;
+    const target =
+      formRef.current?.querySelector<HTMLElement>("[data-clash]") ??
+      formRef.current?.querySelector<HTMLElement>("[data-merge-focus]");
+    target?.focus();
+  }, [mergeSeq]);
 
   const conflict = failure?.kind === "conflict" ? failure.conflict : null;
   const serverFields = failure?.kind === "fields" ? failure.fields : null;
   const currentChecklist = new Map(conflict?.current?.checklist?.map((i) => [i.id, i]));
   const sentPainter = lastBody !== null && "painter_notes" in lastBody;
   const sentManager = lastBody !== null && "manager_notes" in lastBody;
+
+  function clashView(key: string, testId: string): ReactNode {
+    const clash = mergeFlow.clashFor(key);
+    if (!clash || !merge) return null;
+    return (
+      <ClashChoice
+        clash={clash}
+        by={merge.by}
+        choice={merge.choices[key]}
+        onChoose={(c) => mergeFlow.choose(key, c)}
+        testId={testId}
+      />
+    );
+  }
 
   function change(patch: Partial<FormValues>) {
     setForm((f) => ({ ...f, ...patch }));
@@ -173,6 +219,15 @@ export function EditReportForm({
     });
   }
 
+  async function applyOnTop() {
+    if (mergeFlow.applying) return;
+    // A failed load leaves the form, the conflict view and the base exactly as they were.
+    if (await mergeFlow.apply()) {
+      setFailure(null);
+      setLastBody(null);
+    }
+  }
+
   function cancel() {
     if (dirty) setConfirm("cancel");
     else onClose();
@@ -183,6 +238,7 @@ export function EditReportForm({
   return (
     <>
       <form
+        ref={formRef}
         className="panel panel-wide edit-form"
         aria-labelledby={`${idBase}-heading`}
         onSubmit={submit}
@@ -197,6 +253,9 @@ export function EditReportForm({
           </p>
         )}
 
+        {merge && <MergeNotice by={merge.by} at={merge.at} />}
+        {nothingLeft && <NothingLeftNotice />}
+
         {failure?.kind === "conflict" && (
           <div role="alert" className="alert edit-alert" data-testid="edit-conflict">
             <p>
@@ -208,13 +267,36 @@ export function EditReportForm({
               Your changes were not saved.
             </p>
             <p className="small">Your text is still in the form so you can copy it. The saved values are shown beside each field.</p>
-            <button type="button" className="btn btn-small" onClick={() => setConfirm("reload")} data-testid="reload-latest" disabled={reloading}>
-              Reload latest
-            </button>
+            <div className="alert-actions">
+              <button
+                type="button"
+                className="btn btn-small btn-primary"
+                onClick={() => void applyOnTop()}
+                data-testid="apply-on-top"
+                disabled={mergeFlow.applying || reloading}
+              >
+                {mergeFlow.applying ? "Loading latest..." : "Apply my changes on top"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-small"
+                onClick={() => setConfirm("reload")}
+                data-testid="reload-latest"
+                disabled={reloading || mergeFlow.applying}
+              >
+                Reload latest
+              </button>
+            </div>
             {reloading && <p className="small">Loading the latest version...</p>}
-            {reloadFailed && (
-              <p role="alert" className="small" data-testid="reload-failed">
-                Could not load the latest version. Try again.
+            {(reloadFailed || mergeFlow.applyFailed) && (
+              <p role="alert" className="small" data-testid={mergeFlow.applyFailed ? "apply-failed" : "reload-failed"}>
+                Could not load the latest version.{" "}
+                {mergeFlow.applyFailed && (
+                  <button type="button" className="btn btn-small" onClick={() => void applyOnTop()} data-testid="apply-retry">
+                    Try again
+                  </button>
+                )}
+                {!mergeFlow.applyFailed && "Try again."}
               </p>
             )}
           </div>
@@ -249,6 +331,9 @@ export function EditReportForm({
           max={NOTES_MAX}
           problem={problems.painter_notes ?? serverFields?.get("painter_notes")}
           currentValue={conflict && sentPainter ? (conflict.current?.painter_notes ?? null) : undefined}
+          readOnly={mergeFlow.locked("painter_notes")}
+          tag={mergeFlow.reapplied("painter_notes")}
+          clash={clashView("painter_notes", "painter-notes-clash")}
           onChange={(v) => change({ painter_notes: v })}
         />
         <NotesField
@@ -259,6 +344,9 @@ export function EditReportForm({
           max={NOTES_MAX}
           problem={problems.manager_notes ?? serverFields?.get("manager_notes")}
           currentValue={conflict && sentManager ? (conflict.current?.manager_notes ?? null) : undefined}
+          readOnly={mergeFlow.locked("manager_notes")}
+          tag={mergeFlow.reapplied("manager_notes")}
+          clash={clashView("manager_notes", "manager-notes-clash")}
           onChange={(v) => change({ manager_notes: v })}
         />
 
@@ -276,10 +364,12 @@ export function EditReportForm({
                 <li key={item.id} data-testid="edit-check-item">
                   <div className="edit-check-head">
                     <span className="edit-check-label">{item.label}</span>
+                    {mergeFlow.reapplied(checklistKey(item.id, "done")) && <ReappliedTag />}
                     <label className="check-box">
                       <input
                         type="checkbox"
                         checked={value.done}
+                        disabled={mergeFlow.locked(checklistKey(item.id, "done"))}
                         aria-label={`Done, ${item.label}`}
                         data-testid="edit-check-done"
                         onChange={(e) => changeItem(item.id, { done: e.target.checked })}
@@ -287,13 +377,19 @@ export function EditReportForm({
                       Done
                     </label>
                   </div>
+                  {clashView(checklistKey(item.id, "done"), "edit-check-done-clash")}
                   <div className="field">
-                    <label htmlFor={noteId} className="sr-only">
-                      Note for {item.label}
-                    </label>
+                    <div className="label-row">
+                      <label htmlFor={noteId} className="sr-only">
+                        Note for {item.label}
+                      </label>
+                      {mergeFlow.reapplied(checklistKey(item.id, "note")) && <ReappliedTag />}
+                    </div>
+                    {clashView(checklistKey(item.id, "note"), "edit-check-note-clash")}
                     <input
                       id={noteId}
                       value={value.note}
+                      readOnly={mergeFlow.locked(checklistKey(item.id, "note"))}
                       placeholder="Note (optional)"
                       autoComplete="off"
                       data-testid="edit-check-note"
@@ -317,8 +413,13 @@ export function EditReportForm({
           </ul>
         )}
 
+        {mergeFlow.unresolved > 0 && (
+          <p className="small muted" id={`${idBase}-hint`} data-testid="clash-hint">
+            {CLASH_HINT}
+          </p>
+        )}
         <div className="form-actions">
-          <button type="submit" className="btn btn-primary" disabled={!canSave} data-testid="save-changes" aria-busy={mutation.isPending}>
+          <button type="submit" className="btn btn-primary" disabled={!canSave} data-testid="save-changes" aria-describedby={mergeFlow.unresolved > 0 ? `${idBase}-hint` : undefined} aria-busy={mutation.isPending}>
             {mutation.isPending ? "Saving..." : "Save changes"}
           </button>
           <button type="button" className="btn" onClick={cancel} disabled={mutation.isPending} data-testid="cancel-edit">

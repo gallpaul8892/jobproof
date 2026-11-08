@@ -1,4 +1,4 @@
-import type { Dashboard, ReportDetail, ReportSummary } from "@jobproof/shared";
+import type { CustomerRecord, Dashboard, ReportDetail, ReportSummary } from "@jobproof/shared";
 
 export const SARAH = { id: "u-sarah", name: "Sarah Whitfield" };
 export const PRIYA = { id: "u-priya", name: "Priya Nair" };
@@ -61,4 +61,21 @@ export function report(over: Partial<ReportDetail> = {}): ReportDetail {
     payments: [],
     ...over,
   } as unknown as ReportDetail;
+}
+
+export function customerRecord(over: Partial<CustomerRecord> = {}): CustomerRecord {
+  return {
+    id: "cust1",
+    name: "Harbourside Lettings Ltd",
+    customer_type: "landlord",
+    contact_name: "Marcus Ellery",
+    email: "marcus@harbourside.example.co.uk",
+    phone: "07700 900201",
+    billing_address: { line1: "Unit 4", line2: "Welsh Back Court", town: "Bristol", county: "City of Bristol", postcode: "BS1 4SB" },
+    version: 2,
+    last_changed_at: null,
+    last_changed_by: null,
+    impact: { job_count: 12, report_count: 12, reviewed_report_count: 9, issued_invoice_count: 7 },
+    ...over,
+  };
 }

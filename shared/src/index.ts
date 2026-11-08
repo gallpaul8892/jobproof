@@ -13,10 +13,15 @@ export {
   useInvoices,
   shouldRetry,
 } from "./hooks/useManager";
-export { useReviewReport, useUpdateReport, useReportHistory, useRefreshReport } from "./hooks/useReportWrites";
+export { useReviewReport, useUpdateReport, useReportHistory, useRefreshReport, useFetchLatestReport } from "./hooks/useReportWrites";
 export * from "./history";
 export * from "./conflict";
 export * from "./reportEdit";
+export * from "./merge";
+export * from "./text/forbidden";
+export * from "./customer/validation";
+export * from "./customer/customerEdit";
+export { useCustomer, useCustomerHistory, useUpdateCustomer, useFetchLatestCustomer } from "./hooks/useCustomer";
 export { useBranding } from "./hooks/useBranding";
 export { useAdminSettings, useUpdateAdminSettings } from "./hooks/useAdmin";
 export * from "./branding";
@@ -30,6 +35,10 @@ export type {
   BillingStatus,
   ChecklistItem,
   CustomerDetail,
+  CustomerEditableValues,
+  CustomerImpact,
+  CustomerRecord,
+  CustomerUpdate,
   CustomerType,
   Dashboard,
   DemoAccount,

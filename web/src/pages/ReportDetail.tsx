@@ -63,6 +63,7 @@ function Detail({
   edit: EditControls;
 }) {
   const { job, customer, quote, invoice } = r;
+  const location = useLocation();
   return (
     <div className="detail-grid">
       {edit.editing && (
@@ -92,7 +93,15 @@ function Detail({
 
       <Section title="Customer" id="customer">
         <dl className="kv">
-          <Row label="Name">{customer.name}</Row>
+          <Row label="Name">
+            {customer.id ? (
+              <Link to={`/customers/${customer.id}`} state={{ from: location.pathname }} data-testid="customer-link">
+                {customer.name}
+              </Link>
+            ) : (
+              customer.name
+            )}
+          </Row>
           <Row label="Type">{customerTypeLabel(customer.customer_type)}</Row>
           {customer.contact_name && <Row label="Contact">{customer.contact_name}</Row>}
           <Row label="Email">{customer.email ?? "-"}</Row>
@@ -102,6 +111,13 @@ function Detail({
             {customer.job_count} {customer.job_count === 1 ? "job" : "jobs"} with us
           </Row>
         </dl>
+        {customer.id && (
+          <p className="section-link">
+            <Link to={`/customers/${customer.id}`} state={{ from: location.pathname, edit: true }} data-testid="edit-customer-link">
+              Edit customer details
+            </Link>
+          </p>
+        )}
       </Section>
 
       <Section title={WORDING.fieldWorker} id="painter">

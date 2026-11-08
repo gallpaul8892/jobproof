@@ -85,6 +85,29 @@ export class ManagerApi {
     return (await this.get<{ items: AuditItem[] }>(`reports/${reportId}/history`)).items;
   }
 
+  /** A customer record. */
+  async customer(customerId: string): Promise<CustomerFull> {
+    return this.get<CustomerFull>(`customers/${customerId}`);
+  }
+
+  /** Edits a customer through the API at its current version (or `version` to force an old one). */
+  async editCustomer(customerId: string, changes: Record<string, unknown>, version?: number): Promise<CustomerFull> {
+    const current = await this.customer(customerId);
+    const res = await this.send("PATCH", `customers/${customerId}`, { version: version ?? current.version, ...changes });
+    expect(res.ok(), `edit customer ${customerId}`).toBe(true);
+    return (await res.json()) as CustomerFull;
+  }
+
+  /** Audit events of a customer, newest first. */
+  async customerHistory(customerId: string): Promise<AuditItem[]> {
+    return (await this.get<{ items: AuditItem[] }>(`customers/${customerId}/history`)).items;
+  }
+
+  /** Reports of one customer (all pages up to 100). */
+  async reportsOf(customerId: string): Promise<ReportItem[]> {
+    return (await this.get<{ items: ReportItem[] }>("reports", { customer_id: customerId, page_size: 100 })).items;
+  }
+
   /** Awaiting-review reports, oldest first: the order of the dashboard queue. */
   async awaiting(): Promise<ReportItem[]> {
     const page = await this.get<{ items: ReportItem[] }>("reports", {
@@ -115,7 +138,8 @@ export interface AuditItem {
   id: string;
   occurred_at: string;
   actor: { id: string; name: string };
-  action: "report.reviewed" | "report.reopened" | "report.edited" | "settings.changed";
+  action: "report.reviewed" | "report.reopened" | "report.edited" | "settings.changed" | "customer.edited";
+  customer_id?: string | null;
   changes: { field: string; item_id: string | null; item_label: string | null; old_value: unknown; new_value: unknown }[];
 }
 
@@ -132,6 +156,19 @@ export interface ReportFull {
   manager_notes: string | null;
   job: { reference: string; title: string };
   checklist: { id: string; label: string; done: boolean; note: string | null }[];
+}
+
+export interface CustomerFull {
+  id: string;
+  name: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  billing_address: { line1: string; line2: string | null; town: string; county: string | null; postcode: string };
+  version: number;
+  last_changed_at: string | null;
+  last_changed_by: { id: string; name: string } | null;
+  impact: { job_count: number; report_count: number; reviewed_report_count: number; issued_invoice_count: number };
 }
 
 export interface ReportItem {

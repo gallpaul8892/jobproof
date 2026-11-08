@@ -6,16 +6,17 @@ completion report. Head-office managers review those reports in a web app; the r
 photos are evidence used to bill customers. Customers later pay by secure Stripe link. Quotes
 work the same way, with a deposit taken before work starts.
 
-Personas: **Manager** (head office), **Painter** (field), **Customer** (pays via link), **Admin**
+Personas: **Manager** (head office; reviews reports, corrects customer details), **Painter** (field), **Customer** (pays via link), **Admin**
 (company settings: name, colour scheme).
 
 ## Current phase
 Phase 2a (ticket epic [T-002](tickets/T-002-admin-branding-review-workflow.md)): **Manager and
 Admin personas, mock data, web app only.** **This ends Phase 1's read-only constraint.** Write
 endpoints now exist for: Admin settings (company name, colour scheme), marking reports reviewed,
-and manager edits to report notes and checklist (audited, optimistic concurrency). Report photos
-stay read-only. Deployment model: one deployment per company, configured by a settings record;
-true multi-tenancy is deliberately deferred (decision D1 in T-002). Still out of scope: painter
+manager edits to report notes and checklist, and manager corrections to customer contact details
+(both audited, optimistic concurrency; after a conflict "Apply my changes on top" re-applies the
+manager's fields onto the latest version and never saves by itself). Report photos stay read-only.
+Deployment model: one deployment per company, configured by a settings record; true multi-tenancy is deliberately deferred (decision D1 in T-002). Still out of scope: painter
 capture (Expo), customer payment (Stripe), quotes and deposits, AWS deployment. The mock data is
 still painting and decorating; UI wording is industry-neutral (T-002l).
 

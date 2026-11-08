@@ -33,6 +33,8 @@ export interface ReportFilters {
   review_status?: ReviewStatus;
   billing_status?: BillingStatus;
   painter_id?: string;
+  /** Not read from the URL: the customer page sets it. */
+  customer_id?: string;
   date_from?: string;
   date_to?: string;
 }

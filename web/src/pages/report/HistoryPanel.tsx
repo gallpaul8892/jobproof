@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { Link } from "react-router";
+import type { UseQueryResult } from "@tanstack/react-query";
 import {
   describeEvent,
   formatDateTime,
   truncate,
   useReportHistory,
   type AuditEvent,
+  type AuditHistory,
   type DescribedChange,
 } from "@jobproof/shared";
 import { ErrorState, Loading } from "../../components/QueryBoundary";
@@ -48,7 +51,7 @@ function ChangeRow({ change }: { change: DescribedChange }) {
   );
 }
 
-function EventRow({ event }: { event: AuditEvent }) {
+function EventRow({ event, customerLinks }: { event: AuditEvent; customerLinks: boolean }) {
   const described = describeEvent(event);
   return (
     <li className="history-event" data-testid="history-event">
@@ -59,6 +62,18 @@ function EventRow({ event }: { event: AuditEvent }) {
         <p className="history-sentence" data-testid="history-sentence">
           {described.sentence}
         </p>
+        {customerLinks && described.isCustomerEvent && (
+          <p className="history-customer">
+            <span className="history-tag-pill" data-testid="history-customer-tag">
+              Customer
+            </span>
+            {described.customerId && (
+              <Link to={`/customers/${described.customerId}`} data-testid="history-customer-link">
+                View customer
+              </Link>
+            )}
+          </p>
+        )}
         {described.changes.length > 0 && (
           <ul className="history-changes">
             {described.changes.map((c, i) => (
@@ -73,7 +88,14 @@ function EventRow({ event }: { event: AuditEvent }) {
 
 /** Newest first. Has its own query, so a failure here leaves the rest of the report untouched. */
 export function HistoryPanel({ reportId }: { reportId: string }) {
-  const query = useReportHistory(reportId);
+  return <HistoryView query={useReportHistory(reportId)} customerLinks />;
+}
+
+/**
+ * The History section for any entity: pass its history query. `customerLinks` adds the "Customer" tag
+ * and "View customer" link to customer events (on a report; on the customer page they are redundant).
+ */
+export function HistoryView({ query, customerLinks }: { query: UseQueryResult<AuditHistory, unknown>; customerLinks: boolean }) {
   const data = query.data;
   return (
     <section className="panel panel-wide" aria-labelledby="history-heading" data-testid="history">
@@ -92,7 +114,7 @@ export function HistoryPanel({ reportId }: { reportId: string }) {
         <>
           <ol className="history-list">
             {data.items.map((e) => (
-              <EventRow key={e.id} event={e} />
+              <EventRow key={e.id} event={e} customerLinks={customerLinks} />
             ))}
           </ol>
           {data.total > HISTORY_LIMIT && (

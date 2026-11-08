@@ -38,6 +38,9 @@ export interface DescribedChange {
 export interface DescribedEvent {
   sentence: string;
   changes: DescribedChange[];
+  /** A customer.edited event: shown on a report's History with a tag and a link to the customer. */
+  isCustomerEvent?: boolean;
+  customerId?: string;
 }
 
 export const EMPTY_VALUE = "(empty)";
@@ -90,6 +93,13 @@ export function describeEvent(event: AuditEvent): DescribedEvent {
           old: show(c, c.old_value),
           new: show(c, c.new_value),
         })),
+      };
+    case "customer.edited":
+      return {
+        sentence: `${actor} changed customer details: ${sentenceLabels(event.changes).join(", ")}`,
+        changes: event.changes.map((c) => ({ label: changeLabel(c), old: show(c, c.old_value), new: show(c, c.new_value) })),
+        isCustomerEvent: true,
+        customerId: event.customer_id ?? undefined,
       };
     default:
       return { sentence: `${actor} made a change`, changes: [] };

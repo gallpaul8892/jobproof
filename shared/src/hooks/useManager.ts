@@ -38,12 +38,12 @@ export function usePainters() {
   });
 }
 
-export function useReports(filters: ReportFilters) {
+export function useReports(filters: ReportFilters, pageSize: number = PAGE_SIZE) {
   const { page, ...rest } = filters;
   return useQuery({
-    queryKey: queryKeys.reports(filters),
+    queryKey: queryKeys.reports(filters, pageSize),
     queryFn: ({ signal }) =>
-      callApi(() => listManagerReports({ query: { ...rest, page, page_size: PAGE_SIZE }, signal })),
+      callApi(() => listManagerReports({ query: { ...rest, page, page_size: pageSize }, signal })),
     placeholderData: keepPreviousData,
     retry: shouldRetry,
     retryDelay,

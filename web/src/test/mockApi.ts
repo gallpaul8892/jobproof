@@ -6,16 +6,16 @@ import { configureApiClient } from "@jobproof/shared";
 import { vi } from "vitest";
 import { BrandingProvider } from "../theme/BrandingProvider";
 
-export type Handler = (req: { method: string; path: string; body: unknown }) => { status?: number; body?: unknown } | Promise<{ status?: number; body?: unknown }>;
+export type Handler = (req: { method: string; path: string; body: unknown; search?: string }) => { status?: number; body?: unknown } | Promise<{ status?: number; body?: unknown }>;
 
 /** Routes the generated client's fetch calls to a handler; returns the recorded calls. */
 export function mockApi(handler: Handler) {
-  const calls: { method: string; path: string; body: unknown }[] = [];
+  const calls: { method: string; path: string; body: unknown; search?: string }[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
     const text = request.method === "GET" ? "" : await request.text();
-    const call = { method: request.method, path: url.pathname, body: text ? (JSON.parse(text) as unknown) : undefined };
+    const call = { method: request.method, path: url.pathname, search: url.search, body: text ? (JSON.parse(text) as unknown) : undefined };
     calls.push(call);
     const result = await handler(call);
     const status = result.status ?? 200;

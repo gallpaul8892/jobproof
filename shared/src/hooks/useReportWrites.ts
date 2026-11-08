@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
+  getManagerReport,
   listManagerReportHistory,
   reviewManagerReport,
   updateManagerReport,
@@ -61,5 +62,20 @@ export function useRefreshReport(id: string) {
     // By default a failed refetch is swallowed (the page shows its own error state); with `strict`
     // it throws, so a caller that is about to discard local state can refuse to.
     await queryClient.refetchQueries({ queryKey: queryKeys.report(id) }, { throwOnError: options?.strict === true });
+  };
+}
+
+/**
+ * Loads the newest saved report right now (never from cache) and puts it in the cache; used by
+ * "Apply my changes on top". Rejects if it cannot be loaded. It calls the API directly rather than
+ * through the report query, so a failure leaves the page's own query (and its error banner) alone.
+ */
+export function useFetchLatestReport(id: string) {
+  const queryClient = useQueryClient();
+  return async (): Promise<ReportDetail> => {
+    const latest = await callApi(() => getManagerReport({ path: { report_id: id } }));
+    queryClient.setQueryData(queryKeys.report(id), latest);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.reportHistory(id) });
+    return latest;
   };
 }

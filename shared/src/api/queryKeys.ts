@@ -8,8 +8,10 @@ export const queryKeys = {
   adminSettings: ["admin-settings"] as const,
   dashboard: ["dashboard"] as const,
   painters: ["painters"] as const,
-  reports: (filters: ReportFilters) => ["reports", filters] as const,
+  reports: (filters: ReportFilters, pageSize?: number) => ["reports", filters, pageSize] as const,
   report: (id: string) => ["report", id] as const,
   reportHistory: (id: string) => ["report-history", id] as const,
+  customer: (id: string) => ["customer", id] as const,
+  customerHistory: (id: string) => ["customer-history", id] as const,
   invoices: (filters: InvoiceFilters) => ["invoices", filters] as const,
 };

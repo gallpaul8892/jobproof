@@ -1,4 +1,6 @@
 import type { ChecklistItemUpdate, ReportDetail, ReportEditableValues, ReportUpdate } from "./generated";
+import { WORDING } from "./format/labels";
+import type { Flat, FlatValue, MergeAdapter } from "./merge";
 
 export const NOTES_MAX = 5000;
 export const CHECKLIST_NOTE_MAX = 500;
@@ -30,7 +32,7 @@ export function textLength(value: string): number {
 }
 
 /** The server stores a blank string as null and keeps anything else exactly as sent. */
-function blankToNull(value: string): string | null {
+export function blankToNull(value: string): string | null {
   return value.trim() === "" ? null : value;
 }
 
@@ -125,4 +127,49 @@ export function currentMatchesUpdate(current: ReportEditableValues | undefined, 
     if ("note" in sent && !sameText(now.note, sent.note)) return false;
   }
   return true;
+}
+
+/** Keys used by the merge: `painter_notes`, `manager_notes`, `checklist:<id>:done`, `checklist:<id>:note`. */
+export const checklistKey = (id: string, part: "done" | "note") => `checklist:${id}:${part}`;
+
+/**
+ * Merge adapter for the report form (T-002o). `labels` names checklist items; pass the report's
+ * checklist so "Checklist: Ceilings (note)" can be built.
+ */
+export function reportMergeAdapter(items: { id: string; label: string }[]): MergeAdapter<FormValues> {
+  const names = new Map(items.map((i) => [i.id, i.label]));
+  return {
+    flatten(form) {
+      const flat: Flat = { painter_notes: form.painter_notes, manager_notes: form.manager_notes };
+      for (const [id, v] of Object.entries(form.checklist)) {
+        flat[checklistKey(id, "done")] = v.done;
+        flat[checklistKey(id, "note")] = v.note;
+      }
+      return flat;
+    },
+    unflatten(flat, like) {
+      const checklist: FormValues["checklist"] = {};
+      for (const id of Object.keys(like.checklist)) {
+        checklist[id] = {
+          done: Boolean(flat[checklistKey(id, "done")]),
+          note: String(flat[checklistKey(id, "note")] ?? ""),
+        };
+      }
+      return {
+        painter_notes: String(flat.painter_notes ?? ""),
+        manager_notes: String(flat.manager_notes ?? ""),
+        checklist,
+      };
+    },
+    normalise(_key: string, value: FlatValue) {
+      return typeof value === "boolean" ? value : blankToNull(value);
+    },
+    label(key) {
+      if (key === "painter_notes") return WORDING.fieldWorkerNotes;
+      if (key === "manager_notes") return "Manager notes";
+      const [, id, part] = key.split(":");
+      const name = names.get(id ?? "") ?? "item";
+      return `Checklist: ${name} (${part === "done" ? "done" : "note"})`;
+    },
+  };
 }

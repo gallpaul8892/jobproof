@@ -4,7 +4,7 @@ import { defineConfig } from "@playwright/test";
 // Playwright's own Chromium (`npx playwright install chromium`).
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
 
-const WRITES = /(settings-writes|review|edit-report|history)\.spec\.ts/;
+const WRITES = /(settings-writes|review|edit-report|history|customer-edit|edit-conflict-merge)\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./tests",
@@ -30,12 +30,14 @@ export default defineConfig({
     { name: "reviews", use: { browserName: "chromium" }, testMatch: /review\.spec\.ts/, fullyParallel: false, dependencies: ["chromium"] },
     { name: "edits", use: { browserName: "chromium" }, testMatch: /edit-report\.spec\.ts/, fullyParallel: false, dependencies: ["reviews"] },
     { name: "histories", use: { browserName: "chromium" }, testMatch: /history\.spec\.ts/, fullyParallel: false, dependencies: ["edits"] },
+    { name: "customers", use: { browserName: "chromium" }, testMatch: /customer-edit\.spec\.ts/, fullyParallel: false, dependencies: ["histories"] },
+    { name: "merges", use: { browserName: "chromium" }, testMatch: /edit-conflict-merge\.spec\.ts/, fullyParallel: false, dependencies: ["customers"] },
     {
       name: "settings-writes",
       use: { browserName: "chromium" },
       testMatch: /settings-writes\.spec\.ts/,
       fullyParallel: false,
-      dependencies: ["histories"],
+      dependencies: ["merges"],
     },
   ],
 });

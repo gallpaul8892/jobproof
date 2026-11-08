@@ -4,6 +4,7 @@ import type { AuditEvent } from "@jobproof/shared";
 import { describe, expect, it } from "vitest";
 import { mockApi, problem, renderApp } from "../../test/mockApi";
 import { PRIYA, SARAH } from "../../test/fixtures";
+import { CustomerHistory } from "../customer/CustomerHistory";
 import { HistoryPanel } from "./HistoryPanel";
 
 const ev = (n: number, over: Partial<AuditEvent> = {}): AuditEvent => ({
@@ -92,5 +93,35 @@ describe("HistoryPanel", () => {
     fail = false;
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(screen.getByTestId("history-empty")).toBeTruthy());
+  });
+
+  it("tags a customer event on a report with a link to the customer", async () => {
+    mockApi(() => ({
+      body: {
+        total: 1,
+        items: [
+          ev(1, {
+            action: "customer.edited",
+            customer_id: "cust1",
+            changes: [{ field: "customer_email", item_id: null, item_label: null, old_value: "a@x.test", new_value: "b@x.test" }],
+          }),
+        ],
+      },
+    }));
+    renderApp(<HistoryPanel reportId="r1" />);
+    expect((await screen.findByTestId("history-sentence")).textContent).toBe("Priya Nair changed customer details: Email");
+    expect(screen.getByTestId("history-customer-tag").textContent).toBe("Customer");
+    expect(screen.getByTestId("history-customer-link").getAttribute("href")).toBe("/customers/cust1");
+    expect(screen.getByTestId("history-before").textContent).toBe("a@x.test");
+    expect(screen.getByTestId("history-after").textContent).toBe("b@x.test");
+  });
+
+  it("the customer's own history has no tag or link", async () => {
+    mockApi(() => ({
+      body: { total: 1, items: [ev(1, { action: "customer.edited", customer_id: "cust1", changes: [] })] },
+    }));
+    renderApp(<CustomerHistory customerId="cust1" />);
+    await screen.findByTestId("history-event");
+    expect(screen.queryByTestId("history-customer-tag")).toBeNull();
   });
 });

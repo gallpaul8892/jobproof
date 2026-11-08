@@ -53,6 +53,16 @@ for (const size of sizes) {
     await page.getByLabel("Manager notes (internal)").fill("Chase the customer for sign-off before invoicing.");
     await shot("report-edit");
 
+    // the customer page: details, reports, History and the edit form with the impact notice
+    const customerId = withPhotos.customer.id;
+    await page.goto(`/customers/${customerId}`);
+    await expect(page.getByTestId("customer-report-row").first()).toBeVisible();
+    await expect(page.getByTestId("history-empty")).toBeVisible();
+    await shot("customer");
+    await page.getByTestId("edit-customer").click();
+    await expect(page.getByTestId("impact-notice")).toBeVisible();
+    await shot("customer-edit");
+
     await page.goto(`/reports/${withPhotos.id}`);
     await page.getByTestId("photo-thumb").first().click();
     await expect(page.getByTestId("lightbox")).toBeVisible();
