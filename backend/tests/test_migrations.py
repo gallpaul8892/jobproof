@@ -20,6 +20,7 @@ TABLES = {
     "invoices",
     "payments",
     "company_settings",
+    "audit_events",
 }
 ENUMS = {
     "user_role": ["manager", "painter", "admin"],
@@ -39,6 +40,8 @@ ENUMS = {
     "invoice_state": ["draft", "issued", "void"],
     "payment_kind": ["deposit", "invoice"],
     "payment_method": ["card", "bank_transfer", "cash"],
+    "audit_action": ["report.reviewed", "report.reopened", "report.edited", "settings.changed"],
+    "audit_entity": ["report", "settings"],
 }
 SCRATCH = make_url(TEST_DATABASE_URL).set(database="jobproof_migrations_scratch")
 
@@ -77,8 +80,15 @@ def test_upgrade_downgrade_upgrade_and_no_drift() -> None:
 
 def test_history_is_linear_with_one_head() -> None:
     script = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL))
-    assert script.get_heads() == ["0003"]
-    assert [r.revision for r in script.walk_revisions()] == ["0003", "0002", "0001"]
+    assert script.get_heads() == ["0006"]
+    assert [r.revision for r in script.walk_revisions()] == [
+        "0006",
+        "0005",
+        "0004",
+        "0003",
+        "0002",
+        "0001",
+    ]
 
 
 def test_schema_has_the_nine_tables_and_enums(scratch_engine: Engine) -> None:
@@ -191,3 +201,101 @@ def test_admin_role_downgrade_is_refused_while_an_admin_exists_then_restores_the
         engine.dispose()
         command.downgrade(config, "base")
         command.upgrade(config, "head")
+
+
+def test_package_2_migrations_keep_existing_rows_and_downgrade_cleanly() -> None:
+    """0004 to 0006 on a database that already holds reports: every report becomes version 1."""
+    from app.seed.dataset import build_dataset
+    from tests.conftest import ANCHOR
+
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0003")
+    engine = create_engine(url)
+    try:
+        # Load the seed with the 0003 schema: no versioning columns, no audit table yet.
+        from sqlalchemy import insert
+
+        from app.models import Base
+
+        dataset = build_dataset(ANCHOR)
+        legacy = {"manager_notes"}
+        with engine.begin() as connection:
+            for name, rows in dataset.tables():
+                if not rows:
+                    continue
+                table = Base.metadata.tables[name]
+                import dataclasses
+
+                payload = [
+                    {k: v for k, v in dataclasses.asdict(r).items() if k not in legacy}  # type: ignore[call-overload]
+                    for r in rows
+                ]
+                connection.execute(insert(table).execution_options(), payload)
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            reports = connection.execute(text("SELECT count(*) FROM job_reports")).scalar()
+            at_one = connection.execute(
+                text(
+                    "SELECT count(*) FROM job_reports WHERE version = 1 "
+                    "AND last_changed_at IS NULL AND last_changed_by_id IS NULL "
+                    "AND manager_notes IS NULL"
+                )
+            ).scalar()
+            events = connection.execute(text("SELECT count(*) FROM audit_events")).scalar()
+        assert reports == 60 and at_one == 60 and events == 0
+        command.downgrade(config, "0003")
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            columns = {c["name"] for c in inspector.get_columns("job_reports")}
+            assert not columns & {
+                "version",
+                "last_changed_at",
+                "last_changed_by_id",
+                "manager_notes",
+            }
+            assert "audit_events" not in inspector.get_table_names()
+            leftovers = connection.execute(
+                text(
+                    "SELECT (SELECT count(*) FROM pg_type WHERE typname IN "
+                    "('audit_action', 'audit_entity')), "
+                    "(SELECT count(*) FROM pg_proc WHERE proname LIKE 'audit_events_%')"
+                )
+            ).one()
+            assert tuple(leftovers) == (0, 0)
+            assert connection.execute(text("SELECT count(*) FROM job_reports")).scalar() == 60
+        command.upgrade(config, "head")
+        command.check(config)
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM job_reports WHERE version = 1")
+                ).scalar()
+                == 60
+            )
+    finally:
+        # The scratch database holds seed users (including an admin), which a downgrade to base
+        # refuses to drop: wipe it and rebuild an empty head schema for the other tests.
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        engine.dispose()
+        command.upgrade(config, "head")
+
+
+def test_version_and_last_changed_constraints(db_engine: Engine) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    with db_engine.connect() as connection:
+        for assignment in (
+            "version = 0",
+            "version = -3",
+            "last_changed_at = now()",
+            "last_changed_by_id = (SELECT id FROM users LIMIT 1)",
+        ):
+            transaction = connection.begin()
+            with pytest.raises(IntegrityError):
+                connection.execute(text(f"UPDATE job_reports SET {assignment}"))  # noqa: S608
+            transaction.rollback()

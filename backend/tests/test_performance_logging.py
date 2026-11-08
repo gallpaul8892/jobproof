@@ -17,6 +17,7 @@ from app.logging import JsonFormatter
 from tests.conftest import MANAGER_LOGIN, PAINTER_LOGIN, login_token
 
 MAX_QUERIES = 6
+MAX_WRITE_QUERIES = 12  # lock, items, auth user, updates, events, then the detail read
 MAX_SECONDS = 0.3
 
 
@@ -45,6 +46,8 @@ def urls(ds: Any) -> dict[str, str]:
             "/api/v1/manager/reports?q=road&billing_status=paid&review_status=reviewed"
         ),
         "report detail": f"/api/v1/manager/reports/{busiest.id}",
+        "reports oldest first": "/api/v1/manager/reports?sort=submitted_asc",
+        "report history": f"/api/v1/manager/reports/{busiest.id}/history",
         "invoices": "/api/v1/manager/invoices",
         "invoices filtered": "/api/v1/manager/invoices?status=overdue",
     }
@@ -58,6 +61,51 @@ def test_each_manager_endpoint_uses_a_bounded_number_of_queries(
             response = client.get(url, headers=manager_headers)
         assert response.status_code == 200, name
         assert 1 <= len(statements) <= MAX_QUERIES, (name, len(statements), statements)
+
+
+def test_write_endpoints_use_a_bounded_number_of_queries(
+    client: TestClient, manager_headers: dict[str, str], ds: Any, reseed: None
+) -> None:
+    from tests.write_helpers import awaiting_reports, checklist_report, detail
+
+    target = checklist_report(ds)
+    others = [r for r in awaiting_reports(ds) if r.id != target.id]
+    item = detail(client, manager_headers, target.id)["checklist"][0]
+    base = f"/api/v1/manager/reports/{target.id}"
+    measured: dict[str, int] = {}
+
+    def run(name: str, method: str, url: str, body: Any, expected: int) -> None:
+        with count_queries(client) as statements:
+            response = client.request(method, url, json=body, headers=manager_headers)
+        assert response.status_code == expected, (name, response.text)
+        measured[name] = len(statements)
+
+    run("edit notes", "PATCH", base, {"version": 1, "painter_notes": "n"}, 200)
+    run(
+        "edit all",
+        "PATCH",
+        base,
+        {
+            "version": 2,
+            "manager_notes": "m",
+            "checklist": [{"id": item["id"], "done": not item["done"], "note": "x"}],
+        },
+        200,
+    )
+    run("edit no-op", "PATCH", base, {"version": 3, "manager_notes": "m"}, 200)
+    run("edit stale", "PATCH", base, {"version": 1, "manager_notes": "m"}, 409)
+    run("review", "POST", f"{base}/review", {"version": 3}, 200)
+    run("reopen by edit", "PATCH", base, {"version": 4, "manager_notes": "again"}, 200)
+    run(
+        "review conflict",
+        "POST",
+        f"/api/v1/manager/reports/{others[0].id}/review",
+        {"version": 5},
+        409,
+    )
+    run("history", "GET", f"{base}/history", None, 200)
+    assert all(1 <= n <= MAX_WRITE_QUERIES for n in measured.values()), measured
+    assert measured["history"] <= MAX_QUERIES
 
 
 @pytest.mark.parametrize("path", ["/api/v1/manager/reports", "/api/v1/manager/invoices"])

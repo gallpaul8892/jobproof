@@ -11,7 +11,7 @@ from app.models.enums import InvoiceState, ReviewStatus
 from app.schemas.manager import Dashboard
 from app.services.billing import InvoiceStatus
 from app.services.billing_sql import balance_expr, invoice_status_expr, paid_expr
-from app.services.reports import recent_reports
+from app.services.reports import recent_reports, review_queue
 
 
 def month_bounds(today: dt.date) -> tuple[dt.date, dt.date]:
@@ -61,5 +61,6 @@ def get_dashboard(session: Session, *, now: dt.datetime, today: dt.date) -> Dash
         invoiced_this_month_pence=int(row[2]),
         outstanding_pence=int(row[3]),
         overdue_invoice_count=row[4],
+        review_queue=review_queue(session, today=today, limit=5),
         recent_reports=recent_reports(session, today=today, limit=5),
     )

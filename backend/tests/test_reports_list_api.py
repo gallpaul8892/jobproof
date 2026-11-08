@@ -139,7 +139,7 @@ def test_a_page_far_beyond_the_end_is_empty_not_an_error(
 def test_unknown_query_parameters_are_ignored(
     client: TestClient, manager_headers: dict[str, str]
 ) -> None:
-    response = get(client, manager_headers, colour="red", sort="oldest")
+    response = get(client, manager_headers, colour="red", shape="wide")
     assert response.status_code == 200
     assert response.json()["total"] == 60
 

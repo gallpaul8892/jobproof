@@ -16,6 +16,16 @@ MANAGER_OPERATIONS = sorted(
     for (method, path), operation_id in contract_operations().items()
     if path.startswith("/api/v1/manager/")
 )
+WRITE_OPERATIONS = {"updateManagerReport", "reviewManagerReport"}
+READ_OPERATIONS = {
+    "getManagerDashboard",
+    "listManagerPainters",
+    "listManagerReports",
+    "getManagerReport",
+    "listManagerInvoices",
+    "listManagerReportHistory",
+}
+GET_OPERATIONS = sorted(op for op in MANAGER_OPERATIONS if op[0] == "GET")
 UNAUTHENTICATED_CASES = [
     "no token",
     "malformed token",
@@ -33,12 +43,20 @@ UNAUTHENTICATED_CASES = [
 
 
 def test_the_contract_has_manager_operations() -> None:
-    assert len(MANAGER_OPERATIONS) == 5
-    assert all(method == "GET" for method, _, _ in MANAGER_OPERATIONS)
+    assert len(MANAGER_OPERATIONS) == 8
+    assert {m for m, _, _ in MANAGER_OPERATIONS} == {"GET", "PATCH", "POST"}
+    assert {i for _, _, i in MANAGER_OPERATIONS if i not in READ_OPERATIONS} == WRITE_OPERATIONS
 
 
 def _url(path: str, ds: Any) -> str:
     return path.replace("{report_id}", str(ds.reports[0].id))
+
+
+def _call(client: TestClient, method: str, url: str, headers: dict[str, str]) -> Any:
+    """Writes get an (invalid) JSON body: authorisation must win over validation."""
+    if method == "GET":
+        return client.request(method, url, headers=headers)
+    return client.request(method, url, headers=headers, json={})
 
 
 @pytest.fixture
@@ -80,7 +98,7 @@ def test_unauthenticated_requests_get_401(
     assert set(bad_headers) == set(UNAUTHENTICATED_CASES)
     details = set()
     for case, headers in bad_headers.items():
-        response = client.request(method, _url(path, ds), headers=headers)
+        response = _call(client, method, _url(path, ds), headers)
         assert response.status_code == 401, f"{operation_id}: {case}"
         assert response.headers["www-authenticate"] == "Bearer", case
         assert response.headers["content-type"].startswith("application/problem+json"), case
@@ -99,7 +117,7 @@ def test_painter_token_gets_403(
     path: str,
     operation_id: str,
 ) -> None:
-    response = client.request(method, _url(path, ds), headers=painter_headers)
+    response = _call(client, method, _url(path, ds), painter_headers)
     assert response.status_code == 403
     assert response.headers["content-type"].startswith("application/problem+json")
     assert "www-authenticate" not in response.headers
@@ -116,14 +134,14 @@ def test_admin_token_gets_403(
     path: str,
     operation_id: str,
 ) -> None:
-    response = client.request(method, _url(path, ds), headers=admin_headers)
+    response = _call(client, method, _url(path, ds), admin_headers)
     assert response.status_code == 403
     assert response.headers["content-type"].startswith("application/problem+json")
     assert response.json()["code"] == "forbidden"
     assert_contract(response, operation_id)
 
 
-@pytest.mark.parametrize(("method", "path", "operation_id"), MANAGER_OPERATIONS)
+@pytest.mark.parametrize(("method", "path", "operation_id"), GET_OPERATIONS)
 def test_second_manager_token_gets_200(
     client: TestClient,
     ds: Any,
@@ -135,7 +153,7 @@ def test_second_manager_token_gets_200(
     assert client.request(method, _url(path, ds), headers=manager2_headers).status_code == 200
 
 
-@pytest.mark.parametrize(("method", "path", "operation_id"), MANAGER_OPERATIONS)
+@pytest.mark.parametrize(("method", "path", "operation_id"), GET_OPERATIONS)
 def test_manager_token_gets_200(
     client: TestClient,
     ds: Any,
@@ -146,6 +164,26 @@ def test_manager_token_gets_200(
 ) -> None:
     response = client.request(method, _url(path, ds), headers=manager_headers)
     assert response.status_code == 200
+    assert_contract(response, operation_id)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "operation_id"), [op for op in MANAGER_OPERATIONS if op[0] != "GET"]
+)
+@pytest.mark.parametrize("who", ["manager_headers", "manager2_headers"])
+def test_managers_pass_the_guard_on_write_operations(
+    client: TestClient,
+    ds: Any,
+    request: pytest.FixtureRequest,
+    who: str,
+    method: str,
+    path: str,
+    operation_id: str,
+) -> None:
+    """An empty body is rejected by validation (422): the manager got past authorisation."""
+    headers = request.getfixturevalue(who)
+    response = _call(client, method, _url(path, ds), headers)
+    assert response.status_code == 422
     assert_contract(response, operation_id)
 
 

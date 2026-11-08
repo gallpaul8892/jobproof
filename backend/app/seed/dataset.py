@@ -178,6 +178,7 @@ class ReportRow:
     reviewed_by_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    manager_notes: str | None = None  # T-002i: never set by the seed
 
 
 @dataclass(frozen=True)

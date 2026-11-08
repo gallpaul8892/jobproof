@@ -51,6 +51,7 @@ class Dashboard(BaseModel):
     outstanding_pence: int
     overdue_invoice_count: int
     currency: Currency = "GBP"
+    review_queue: list[ReportSummary] = Field(max_length=5)
     recent_reports: list[ReportSummary] = Field(max_length=5)
 
 
@@ -137,7 +138,11 @@ class ReportDetail(BaseModel):
     submitted_at: UtcDatetime
     reviewed_at: UtcDatetime | None
     reviewed_by: PersonRef | None
+    version: int
+    last_changed_at: UtcDatetime | None
+    last_changed_by: PersonRef | None
     painter_notes: str | None
+    manager_notes: str | None
     billing_status: BillingStatus
     job: JobDetail
     customer: CustomerDetail

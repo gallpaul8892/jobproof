@@ -210,3 +210,13 @@ def restore_settings(db_engine: Any) -> Iterator[None]:
                 "t": DEFAULT_THEME.text,
             },
         )
+
+
+@pytest.fixture
+def reseed(db_engine: Any) -> Iterator[None]:
+    """Reload the dataset before and after a test that writes (also clears the audit trail)."""
+    from app.seed.loader import load
+
+    load(db_engine, build_dataset(ANCHOR))
+    yield
+    load(db_engine, build_dataset(ANCHOR))

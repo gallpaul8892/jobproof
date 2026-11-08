@@ -176,6 +176,8 @@ def non_user_tables_checksum(ds: Dataset) -> str:
         normalised = []
         for row in rows:
             fields = dataclasses.asdict(row)  # type: ignore[call-overload]
+            if fields.get("manager_notes", "") is None:
+                del fields["manager_notes"]  # T-002i column, null in the seed: hash as before
             normalised.append(
                 sorted(
                     (

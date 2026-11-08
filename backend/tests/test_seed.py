@@ -39,6 +39,8 @@ def _snapshot(engine: Engine) -> dict[str, list[tuple[Any, ...]]]:
     snapshot = {}
     with engine.connect() as connection:
         for name, table in Base.metadata.tables.items():
+            if name == "audit_events":
+                continue  # not seeded: the seed clears it (see test_seed_clears_the_audit_trail)
             columns = ", ".join(c.name for c in table.columns)
             rows = connection.execute(text(f"SELECT {columns} FROM {name} ORDER BY id"))  # noqa: S608
             snapshot[name] = [tuple(row) for row in rows]
@@ -241,3 +243,18 @@ def test_new_users_have_stable_ids_and_are_appended_last() -> None:
     assert [u.email for u in ds.users][-2:] == ["manager2@jobproof.test", "admin@jobproof.test"]
     painter_ids = {u.id for u in ds.users if u.role.value == "painter"}
     assert {j.painter_id for j in ds.jobs} == painter_ids
+
+
+def test_seed_clears_the_audit_trail_through_the_truncate_guard(engine: Engine) -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO audit_events (occurred_at, actor_id, actor_name, action, entity_type) "
+                "SELECT now(), id, full_name, 'settings.changed', 'settings' FROM users LIMIT 1"
+            )
+        )
+    assert _scalar(engine, "SELECT count(*) FROM audit_events") >= 1
+    main()
+    assert _scalar(engine, "SELECT count(*) FROM audit_events") == 0
+    assert _scalar(engine, "SELECT count(*) FROM job_reports WHERE version <> 1") == 0
+    assert _scalar(engine, "SELECT count(*) FROM job_reports WHERE manager_notes IS NOT NULL") == 0

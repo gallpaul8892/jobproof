@@ -16,6 +16,9 @@ def load(engine: Engine, dataset: Dataset) -> dict[str, int]:
     tables = [(name, rows) for name, rows in dataset.tables() if name not in SEED_PRESERVED_TABLES]
     counts: dict[str, int] = {}
     with engine.begin() as connection:
+        # audit_events is append-only; the cascade from users/job_reports truncates it, which the
+        # guard trigger allows only when this transaction-local setting is on (T-002f).
+        connection.execute(text("SET LOCAL jobproof.allow_audit_truncate = 'on'"))
         names = ", ".join(name for name, _ in reversed(tables))
         connection.execute(text(f"TRUNCATE TABLE {names} RESTART IDENTITY CASCADE"))  # noqa: S608
         for name, rows in tables:

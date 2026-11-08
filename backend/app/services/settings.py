@@ -14,8 +14,10 @@ from app.branding.contrast import REQUIRED_RATIO, meets_aa, report_ratio, weakes
 from app.branding.defaults import DEFAULT_THEME
 from app.errors import ProblemError
 from app.models import CompanySettings, User
+from app.models.enums import AuditAction
 from app.schemas import settings as schemas
 from app.schemas.common import PersonRef
+from app.services.audit import FieldChange, record_event
 
 SETTINGS_ID = 1
 _THEME_FIELDS = ("primary", "accent")
@@ -128,5 +130,12 @@ def update_settings(
     row.updated_at = now
     row.updated_by_id = user.id
     row.updated_by_name = user.full_name
+    record_event(
+        session,
+        actor=user,
+        action=AuditAction.settings_changed,
+        changes=[FieldChange(field, old, new) for field, old, new in changes],
+        now=now,
+    )
     session.commit()
     return _admin_settings(row), changes

@@ -113,6 +113,11 @@ class JobReport(TimestampMixin, Base):
             " AND (reviewed_at IS NULL) = (reviewed_by_id IS NULL)",
             name="review_fields_match_status",
         ),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint(
+            "(last_changed_at IS NULL) = (last_changed_by_id IS NULL)",
+            name="last_changed_fields_together",
+        ),
         Index("ix_job_reports_submitted_at", text("submitted_at DESC")),
     )
 
@@ -125,6 +130,12 @@ class JobReport(TimestampMixin, Base):
     )
     submitted_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
     painter_notes: Mapped[str | None] = mapped_column(Text)
+    manager_notes: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    last_changed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    last_changed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
     review_status: Mapped[ReviewStatus] = mapped_column(
         pg_enum(ReviewStatus, "review_status"), index=True
     )
@@ -136,6 +147,7 @@ class JobReport(TimestampMixin, Base):
     job: Mapped[Job] = relationship(back_populates="report")
     painter: Mapped[User] = relationship(foreign_keys=[painter_id])
     reviewed_by: Mapped[User | None] = relationship(foreign_keys=[reviewed_by_id])
+    last_changed_by: Mapped[User | None] = relationship(foreign_keys=[last_changed_by_id])
     checklist_items: Mapped[list["ReportChecklistItem"]] = relationship(
         back_populates="report", order_by="ReportChecklistItem.position"
     )

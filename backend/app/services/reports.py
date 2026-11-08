@@ -27,7 +27,14 @@ from app.models import (
     ReportPhoto,
     User,
 )
-from app.models.enums import InvoiceState, PaymentKind, PhotoStage, QuoteStatus, ReviewStatus
+from app.models.enums import (
+    InvoiceState,
+    PaymentKind,
+    PhotoStage,
+    QuoteStatus,
+    ReportSort,
+    ReviewStatus,
+)
 from app.photos.store import PhotoStore
 from app.schemas import manager as schemas
 from app.schemas.common import Address, PersonRef
@@ -48,6 +55,7 @@ from app.services.billing_sql import (
 
 Painter = aliased(User)
 Reviewer = aliased(User)
+ChangedBy = aliased(User)
 LiveInvoice = aliased(Invoice)
 
 _STAGE_ORDER = case(
@@ -65,6 +73,7 @@ class ReportFilters:
     date_from: dt.date | None = None
     date_to: dt.date | None = None
     q: str | None = None
+    sort: ReportSort = ReportSort.default
 
 
 def _summary_from(stmt: Select[Any]) -> Select[Any]:
@@ -188,6 +197,12 @@ def _to_summary(row: Any, today: dt.date) -> schemas.ReportSummary:
     )
 
 
+def _list_order(sort: ReportSort) -> tuple[Any, ...]:
+    if sort == ReportSort.submitted_asc:
+        return (JobReport.submitted_at.asc(), Job.reference.asc())
+    return (Job.completed_on.desc(), JobReport.submitted_at.desc(), Job.reference.desc())
+
+
 def list_reports(
     session: Session,
     filters: ReportFilters,
@@ -204,7 +219,7 @@ def list_reports(
         stmt = (
             _summary_from(select(*_summary_columns()))
             .where(*where)
-            .order_by(Job.completed_on.desc(), JobReport.submitted_at.desc(), Job.reference.desc())
+            .order_by(*_list_order(filters.sort))
             .limit(page_size)
             .offset(offset)
         )
@@ -216,6 +231,19 @@ def recent_reports(session: Session, *, today: dt.date, limit: int) -> list[sche
     stmt = (
         _summary_from(select(*_summary_columns()))
         .order_by(JobReport.submitted_at.desc(), Job.reference.desc())
+        .limit(limit)
+    )
+    return [_to_summary(row, today) for row in session.execute(stmt)]
+
+
+def review_queue(
+    session: Session, *, today: dt.date, limit: int = 5
+) -> list[schemas.ReportSummary]:
+    """Reports awaiting review that have waited longest (T-002k)."""
+    stmt = (
+        _summary_from(select(*_summary_columns()))
+        .where(JobReport.review_status == ReviewStatus.awaiting_review)
+        .order_by(*_list_order(ReportSort.submitted_asc))
         .limit(limit)
     )
     return [_to_summary(row, today) for row in session.execute(stmt)]
@@ -277,12 +305,23 @@ def get_report_detail(
     InvoiceAlias = aliased(Invoice)  # noqa: N806
     QuoteAlias = aliased(Quote)  # noqa: N806
     stmt = (
-        select(JobReport, Job, Customer, Painter, Reviewer, InvoiceAlias, QuoteAlias, job_count)
+        select(
+            JobReport,
+            Job,
+            Customer,
+            Painter,
+            Reviewer,
+            ChangedBy,
+            InvoiceAlias,
+            QuoteAlias,
+            job_count,
+        )
         .select_from(JobReport)
         .join(Job, Job.id == JobReport.job_id)
         .join(Customer, Customer.id == Job.customer_id)
         .join(Painter, Painter.id == JobReport.painter_id)
         .outerjoin(Reviewer, Reviewer.id == JobReport.reviewed_by_id)
+        .outerjoin(ChangedBy, ChangedBy.id == JobReport.last_changed_by_id)
         .outerjoin(InvoiceAlias, InvoiceAlias.id == _chosen_invoice_id())
         .outerjoin(QuoteAlias, QuoteAlias.id == _chosen_quote_id())
         .where(JobReport.id == report_id)
@@ -290,7 +329,7 @@ def get_report_detail(
     row = session.execute(stmt).one_or_none()
     if row is None:
         raise ProblemError(404, "not_found", "Report not found.")
-    report, job, customer, painter, reviewer, invoice, quote, customers_jobs = row
+    report, job, customer, painter, reviewer, changed_by, invoice, quote, customers_jobs = row
 
     checklist = session.scalars(
         select(ReportChecklistItem)
@@ -356,7 +395,13 @@ def get_report_detail(
         submitted_at=report.submitted_at,
         reviewed_at=report.reviewed_at,
         reviewed_by=PersonRef(id=reviewer.id, name=reviewer.full_name) if reviewer else None,
+        version=report.version,
+        last_changed_at=report.last_changed_at,
+        last_changed_by=(
+            PersonRef(id=changed_by.id, name=changed_by.full_name) if changed_by else None
+        ),
         painter_notes=report.painter_notes,
+        manager_notes=report.manager_notes,
         billing_status=status,
         job=schemas.JobDetail(
             id=job.id,

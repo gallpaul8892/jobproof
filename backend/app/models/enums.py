@@ -65,3 +65,20 @@ class PaymentMethod(StrEnum):
     card = "card"
     bank_transfer = "bank_transfer"
     cash = "cash"
+
+
+class ReportSort(StrEnum):
+    default = "default"
+    submitted_asc = "submitted_asc"
+
+
+class AuditAction(StrEnum):
+    report_reviewed = "report.reviewed"
+    report_reopened = "report.reopened"
+    report_edited = "report.edited"
+    settings_changed = "settings.changed"
+
+
+class AuditEntity(StrEnum):
+    report = "report"
+    settings = "settings"

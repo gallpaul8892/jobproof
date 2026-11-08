@@ -143,5 +143,7 @@ def test_no_foreign_key_into_users_so_truncate_cascade_spares_the_row(conn: Conn
 
 
 def test_truncating_users_cascade_does_not_touch_the_row(conn: Connection) -> None:
+    # The cascade also reaches audit_events, whose guard trigger needs the seed's setting.
+    conn.execute(text("SET LOCAL jobproof.allow_audit_truncate = 'on'"))
     conn.execute(text("TRUNCATE TABLE users CASCADE"))
     assert conn.execute(text("SELECT count(*) FROM company_settings")).scalar() == 1
