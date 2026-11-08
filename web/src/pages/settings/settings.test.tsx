@@ -99,7 +99,7 @@ describe("ColourSchemeForm", () => {
     expect((screen.getByTestId("colour-primary-input") as HTMLInputElement).value).toBe(navy.primary);
     expect((screen.getByTestId("colour-accent-input") as HTMLInputElement).value).toBe(navy.accent);
     expect(screen.getByTestId("theme-preview").getAttribute("data-primary")).toBe(navy.primary);
-    expect(screen.getByTestId("colour-primary-ratio").textContent).toMatch(/:1 against white, passes$/);
+    expect(screen.getByTestId("colour-primary-ratio").textContent).toMatch(/:1 against the surface colour, passes$/);
     expect((screen.getByTestId("colour-save") as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -109,7 +109,7 @@ describe("ColourSchemeForm", () => {
     const input = screen.getByTestId("colour-primary-input");
     await userEvent.clear(input);
     await userEvent.type(input, "#FFD400");
-    expect(screen.getByTestId("colour-primary-ratio").textContent).toBe("1.43:1, needs 4.5:1");
+    expect(screen.getByTestId("colour-primary-ratio").textContent).toBe("1.32:1 against the surface colour, needs 4.5:1");
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect((screen.getByTestId("colour-save") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("theme-preview").getAttribute("data-primary")).toBe(DEFAULT_THEME.primary);
@@ -119,31 +119,47 @@ describe("ColourSchemeForm", () => {
     expect(screen.getByTestId("colour-primary-ratio").textContent).toBe("Use a colour in the form #RRGGBB.");
   });
 
+  it("shows the lower of the two ratios and names the background that fails", async () => {
+    mockApi(() => ok());
+    renderApp(<ColourSchemeForm settings={settings} />);
+    const accent = screen.getByTestId("colour-accent-input");
+    // #767676 is 4.54:1 on white (passes) but 4.20:1 on the surface colour (fails).
+    await userEvent.clear(accent);
+    await userEvent.type(accent, "#767676");
+    expect(screen.getByTestId("colour-accent-ratio").textContent).toBe("4.20:1 against the surface colour, needs 4.5:1");
+    expect(accent.getAttribute("aria-invalid")).toBe("true");
+    expect((screen.getByTestId("colour-save") as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.clear(accent);
+    await userEvent.type(accent, "#717171");
+    expect(screen.getByTestId("colour-accent-ratio").textContent).toBe("4.52:1 against the surface colour, passes");
+    expect(accent.getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("accepts lower case and sends upper case", async () => {
-    const calls = mockApi(() => ok({ theme: { ...DEFAULT_THEME, primary: "#767676", accent: "#2B4C7E" } }));
+    const calls = mockApi(() => ok({ theme: { ...DEFAULT_THEME, primary: "#717171", accent: "#2B4C7E" } }));
     renderApp(<ColourSchemeForm settings={settings} />);
     const primary = screen.getByTestId("colour-primary-input");
     await userEvent.clear(primary);
-    await userEvent.type(primary, "#767676");
+    await userEvent.type(primary, "#717171");
     const accent = screen.getByTestId("colour-accent-input");
     await userEvent.clear(accent);
     await userEvent.type(accent, "#2b4c7e");
     await userEvent.click(screen.getByTestId("colour-save"));
     await screen.findByTestId("colour-saved");
-    expect(calls[0]!.body).toEqual({ theme: { primary: "#767676", accent: "#2B4C7E" } });
+    expect(calls[0]!.body).toEqual({ theme: { primary: "#717171", accent: "#2B4C7E" } });
   });
 
   it("shows the server's contrast message beside the field", async () => {
     mockApi(() =>
       problem(422, "contrast_too_low", {
-        errors: [{ loc: ["body", "theme", "primary"], message: "Contrast 2.78:1 is below the required 4.5:1.", measured_ratio: 2.78, required_ratio: 4.5 }],
+        errors: [{ loc: ["body", "theme", "primary"], message: "Contrast 2.57:1 against the surface colour is below the required 4.5:1.", measured_ratio: 2.57, required_ratio: 4.5 }],
       }),
     );
     renderApp(<ColourSchemeForm settings={settings} />);
     await userEvent.click(screen.getByTestId("preset-navy"));
     await userEvent.click(screen.getByTestId("colour-save"));
     await waitFor(() =>
-      expect(screen.getByTestId("colour-primary-ratio").textContent).toBe("Contrast 2.78:1 is below the required 4.5:1."),
+      expect(screen.getByTestId("colour-primary-ratio").textContent).toBe("Contrast 2.57:1 against the surface colour is below the required 4.5:1."),
     );
   });
 

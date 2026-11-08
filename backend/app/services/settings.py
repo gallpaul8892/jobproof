@@ -10,7 +10,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.branding.contrast import REQUIRED_RATIO, contrast_against_white, meets_aa, report_ratio
+from app.branding.contrast import REQUIRED_RATIO, meets_aa, report_ratio, weakest_contrast
+from app.branding.defaults import DEFAULT_THEME
 from app.errors import ProblemError
 from app.models import CompanySettings, User
 from app.schemas import settings as schemas
@@ -18,6 +19,7 @@ from app.schemas.common import PersonRef
 
 SETTINGS_ID = 1
 _THEME_FIELDS = ("primary", "accent")
+_BACKGROUND_NAMES = {"white": "white", "surface": "the surface colour"}
 
 Change = tuple[str, Any, Any]  # (field, old value, new value), for the audit trail (T-002f)
 
@@ -66,13 +68,17 @@ def get_admin_settings(session: Session) -> schemas.AdminSettings:
 def _check_contrast(theme: schemas.ThemeUpdate) -> None:
     failures: list[dict[str, Any]] = []
     for field in _THEME_FIELDS:
-        ratio = contrast_against_white(getattr(theme, field))
+        # Surface is fixed (not editable), so the default is the stored value.
+        ratio, background = weakest_contrast(getattr(theme, field), DEFAULT_THEME.surface)
         if not meets_aa(ratio):
             shown = report_ratio(ratio)
             failures.append(
                 {
                     "loc": ["body", "theme", field],
-                    "message": f"Contrast {shown:.2f}:1 is below the required {REQUIRED_RATIO}:1.",
+                    "message": (
+                        f"Contrast {shown:.2f}:1 against {_BACKGROUND_NAMES[background]} "
+                        f"is below the required {REQUIRED_RATIO}:1."
+                    ),
                     "measured_ratio": shown,
                     "required_ratio": REQUIRED_RATIO,
                 }
@@ -81,7 +87,8 @@ def _check_contrast(theme: schemas.ThemeUpdate) -> None:
         raise ProblemError(
             422,
             "contrast_too_low",
-            f"Colours must have at least {REQUIRED_RATIO}:1 contrast against white.",
+            f"Colours must have at least {REQUIRED_RATIO}:1 contrast against both white and "
+            "the surface colour.",
             errors=failures,
         )
 

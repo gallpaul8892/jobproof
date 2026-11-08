@@ -1,0 +1,50 @@
+{
+  "id": "review-t002-pkg1",
+  "title": "Code review report: T-002 Package 1 (T-002a to T-002e)",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-08",
+  "summary": "Round 1: CHANGES REQUESTED with 1 major issue (an accent colour the server accepts can fail WCAG AA on the light surface colour, so 'AA enforced' does not fully hold) and 7 minor ones. No blockers. Admin authorisation, PATCH validation and atomicity, both migrations, CSP-safe theming and escaping of the company name are sound. Backend 472 passed (1 environment skip), Vitest 216 passed, lint, type-check, contract and generated-client checks clean, npm audit and pip-audit report no vulnerabilities.",
+  "blocks": [
+    {
+      "heading": "Round 1 (1 MAJOR, 7 MINOR)",
+      "type": "table",
+      "columns": ["Severity", "Finding", "Resolution"],
+      "rows": [
+        ["MAJOR", "The colour rule checks the accent only against white, but the CSS also puts accent text on the surface colour (#F4F7F2): the demo-account role labels on the sign-in page, links in hovered table rows and the selected preset card. #767676 is accepted as an accent (spec scenario 2) yet measures 4.20:1 on the surface, below 4.5:1. The axe check only runs with Navy, so it does not catch this. Owner: architect (rule), web (CSS)", "Open. Either check the accent against the surface colour as well as white (server and shared contrast.ts, same table of cases, add a #767676 accent row), or stop putting accent text on the surface (for example .demo-role in --jp-text). Then add an a11y run with the lowest-contrast accepted accent"],
+        ["MINOR", "Trimming differs between Python strip() and JS trim(). A leading U+001F is stripped and accepted by the server but rejected by the web form. A leading U+FEFF is stripped by the web but stored by the server as an invisible character. Bidi overrides (U+202E, category Cf) are accepted and can reverse the header and tab title", "Open (backend, architect). Trim only the characters both platforms agree on, or reject Cf format characters as well as Cc. Add these cases to both test tables"],
+        ["MINOR", "create-admin rejects full names with characters below U+0020 but accepts U+007F to U+009F, unlike the company-name rule (category Cc)", "Open (backend). Use unicodedata.category == 'Cc'"],
+        ["MINOR", "If the company name is invalid and the colours fail contrast, only the name error is returned. The contrast check runs after Pydantic validation, so the admin has to fix the errors in two rounds", "Open (backend), low. Optionally collect both before responding. Nothing is saved either way, so the request stays atomic"],
+        ["MINOR", "The demo-accounts list now includes the admin password. The setting is still blocked only when APP_ENV is production (open since T-001), so staging could list admin credentials", "Open (architect). Block DEMO_ACCOUNTS_ENABLED outside local and test"],
+        ["MINOR", "The README does not document create-admin (the spec requires it). ARCHITECTURE.md line 54 still marks the branding, admin, settings and CLI files as planned", "Open (backend for the README, architect for ARCHITECTURE.md)"],
+        ["MINOR", "Screenshots are at 1280px and 768px only. T-002d A1 asks for 1280px and 360px for login, dashboard, report and settings", "Open (tests). Add the 360px set"],
+        ["MINOR", "Existing outdated package: fastapi 0.162.1, latest 0.162.2 (patch). TypeScript 7 and @types/node 26 are deliberate deferrals (ARCHITECTURE.md 13.2), so they are not raised", "Open (architect), next ticket"]
+      ]
+    },
+    {
+      "heading": "Checks run by the reviewer",
+      "type": "list",
+      "items": [
+        {"label": "Tests.", "text": "scripts/dev.sh test: pytest 472 passed, 1 skipped (sandbox network check). Vitest: shared 58 passed, web 158 passed. The 2 Vitest skips are the opt-in screenshot spec."},
+        {"label": "Lint.", "text": "ruff, ruff format, mypy, eslint and tsc, redocly lint and gen:check are all clean."},
+        {"label": "Dependencies.", "text": "The diff adds only @axe-core/playwright 4.14.0 (e2e dev dependency, MPL-2.0, latest, exact pin, lockfile in sync). npm audit: 0 vulnerabilities. pip-audit on the hashed uv export: none."},
+        {"label": "Live API probe.", "text": "Against the local backend: admin to /manager/dashboard 403; manager to /admin/settings 403; painter PATCH 403; anonymous PATCH 401. {}, null name, non-string name, extra keys, an array body and a text/plain body all return 422. A valid name with failing colours returns 422 contrast_too_low with ratios 2.78 and 4.48, and nothing is saved. CORS preflight from a foreign origin is refused."},
+        {"label": "Not run.", "text": "Playwright e2e: no browsers are installed in this sandbox. The engineers' e2e results are relied on for scenarios 2 to 8."}
+      ]
+    },
+    {
+      "heading": "What the reviewer found sound",
+      "type": "list",
+      "items": [
+        {"text": "Admin routes sit on one router with a router-level require_roles(admin), so every /admin route is guarded. The admin token is in the manager 403 loop, and admin access tests are enumerated from the staged contract, including deactivated, expired and mis-signed tokens. The web RequireRole mounts nothing until /auth/me answers."},
+        {"text": "PATCH: extra keys are forbidden, at least one field is required, null is rejected, colours are validated then upper-cased, and contrast is checked unrounded before the row is locked. SELECT ... FOR UPDATE, then a single commit. A no-op writes nothing and leaves updated_at null. The change list is ready for T-002f."},
+        {"text": "Migrations: 0002 reads DEFAULT_COMPANY_NAME only there, trims it, refuses more than 60 characters or Cc characters, uses frozen hex codes and ON CONFLICT DO NOTHING. 0003 downgrade refuses while an admin exists and rebuilds the enum (tested). The seed preserves company_settings, there is no FK into users, and existing seed ids are unchanged."},
+        {"text": "Contrast maths matches WCAG 2.2 in Python and TS (sRGB threshold 0.04045, unrounded 4.5 comparison, a failing ratio never shown as 4.50), checked against the same table."},
+        {"text": "Theming: applyTheme validates each value against ^#[0-9A-F]{6}$, falls back per token and writes only through setProperty. No <style>, insertRule or style attribute strings, and the CSP is unchanged. The CSS holds no brand hex codes. The snapshot in localStorage is validated and every access is wrapped in try/catch."},
+        {"text": "The company name is rendered only as JSX text and document.title. There is no dangerouslySetInnerHTML or innerHTML in web/src or shared/src. No 'JobProof' text remains in the UI. The seed and demo credentials stay local or test only, and create-admin never logs the email or password."},
+        {"text": "Screenshots: header, login, dashboard and settings follow the dark green, minimal look. The preview and presets render correctly."}
+      ]
+    }
+  ]
+}

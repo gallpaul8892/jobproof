@@ -3,11 +3,11 @@ import {
   ApiError,
   DEFAULT_THEME,
   PRESETS,
-  contrastAgainstWhite,
   formatRatio,
   meetsAA,
   normaliseHex,
   useUpdateAdminSettings,
+  weakestContrast,
   type AdminSettings,
 } from "@jobproof/shared";
 import { ThemePreview } from "./ThemePreview";
@@ -20,13 +20,17 @@ interface Check {
   message: string;
 }
 
-function check(raw: string): Check {
+const BACKGROUND_NAMES = { white: "white", surface: "the surface colour" } as const;
+
+/** Both colours carry text on white and on the surface colour: the lower ratio is the one shown. */
+function check(raw: string, surface: string): Check {
   const hex = normaliseHex(raw);
   if (hex === null) return { hex: null, ok: false, message: "Use a colour in the form #RRGGBB." };
-  const ratio = contrastAgainstWhite(hex);
+  const { ratio, background } = weakestContrast(hex, surface);
+  const where = `${formatRatio(ratio)}:1 against ${BACKGROUND_NAMES[background]}`;
   return meetsAA(ratio)
-    ? { hex, ok: true, message: `${formatRatio(ratio)}:1 against white, passes` }
-    : { hex, ok: false, message: `${formatRatio(ratio)}:1, needs 4.5:1` };
+    ? { hex, ok: true, message: `${where}, passes` }
+    : { hex, ok: false, message: `${where}, needs 4.5:1` };
 }
 
 function ResetDialog({ open, onConfirm, onCancel }: { open: boolean; onConfirm: () => void; onCancel: () => void }) {
@@ -66,7 +70,8 @@ export function ColourSchemeForm({ settings }: { settings: AdminSettings }) {
   const [confirming, setConfirming] = useState(false);
   const update = useUpdateAdminSettings();
 
-  const checks = { primary: check(values.primary), accent: check(values.accent) };
+  const surface = settings.theme.surface;
+  const checks = { primary: check(values.primary, surface), accent: check(values.accent, surface) };
   const valid = checks.primary.ok && checks.accent.ok;
   const unchanged =
     checks.primary.hex === settings.theme.primary && checks.accent.hex === settings.theme.accent;
@@ -83,7 +88,7 @@ export function ColourSchemeForm({ settings }: { settings: AdminSettings }) {
     setValues(next);
     setSaved(false);
     update.reset();
-    const [p, a] = [check(next.primary), check(next.accent)];
+    const [p, a] = [check(next.primary, surface), check(next.accent, surface)];
     if (p.ok && a.ok) setPreview({ primary: p.hex!, accent: a.hex! });
   }
 
@@ -150,7 +155,7 @@ export function ColourSchemeForm({ settings }: { settings: AdminSettings }) {
     <section className="panel" aria-labelledby="colour-heading" data-testid="colour-section">
       <h2 id="colour-heading">Colour scheme</h2>
       <p className="muted small">
-        Colours must have at least 4.5:1 contrast against white so the text on them stays readable.
+        Colours must have at least 4.5:1 contrast against both white and the surface colour (cards, table rows and highlights) so the text on them stays readable.
       </p>
       <form className="form settings-form" onSubmit={submit} noValidate>
         <fieldset className="presets">

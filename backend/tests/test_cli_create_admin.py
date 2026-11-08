@@ -122,7 +122,19 @@ def test_mismatched_prompts_exit_without_creating(
 
 
 @pytest.mark.parametrize(
-    ("email", "name"), [("not-an-email", "A"), (EMAIL, "  "), (EMAIL, "x" * 101), (EMAIL, "A\nB")]
+    ("email", "name"),
+    [
+        ("not-an-email", "A"),
+        (EMAIL, "  "),
+        (EMAIL, "x" * 101),
+        (EMAIL, "A\nB"),
+        (EMAIL, "A\u0085B"),
+        (EMAIL, "A\u007fB"),
+        (EMAIL, "\ufeffAda"),
+        (EMAIL, "Ada\u202e"),
+        (EMAIL, "A\u200bda"),
+        (EMAIL, "\u001fAda"),
+    ],
 )
 def test_bad_email_or_name_is_refused(
     monkeypatch: pytest.MonkeyPatch, email: str, name: str

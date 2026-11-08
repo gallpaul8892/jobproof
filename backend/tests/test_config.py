@@ -37,6 +37,20 @@ def test_production_refuses_demo_accounts_and_fixed_now() -> None:
     )
 
 
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_demo_accounts_are_refused_outside_local_and_test(env: str) -> None:
+    with pytest.raises(ValidationError, match="DEMO_ACCOUNTS_ENABLED"):
+        Settings(**BASE, app_env=env, demo_accounts_enabled=True)  # type: ignore[arg-type]
+    assert not Settings(
+        **BASE, app_env=env, demo_accounts_enabled=False, fixed_now=None
+    ).demo_accounts_enabled  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("env", ["local", "test"])
+def test_demo_accounts_are_allowed_in_local_and_test(env: str) -> None:
+    assert Settings(**BASE, app_env=env, demo_accounts_enabled=True).demo_accounts_enabled  # type: ignore[arg-type]
+
+
 def _without_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("JWT_SECRET", raising=False)
     monkeypatch.delenv("PHOTO_URL_SECRET", raising=False)

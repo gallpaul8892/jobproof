@@ -28,7 +28,7 @@ export type FieldError = {
     loc: Array<string | number>;
     message: string;
     /**
-     * `contrast_too_low` only: the colour's contrast against white, rounded to 2 decimals (never shown as 4.50 when below 4.5)
+     * `contrast_too_low` only: the colour's lower contrast, against white or the surface colour (the message names which), rounded to 2 decimals (never shown as 4.50 when below 4.5)
      */
     measured_ratio?: number;
     /**
@@ -701,7 +701,7 @@ export type UpdateAdminSettingsErrors = {
      */
     403: Problem;
     /**
-     * Invalid body (code `validation_error`) or a colour below 4.5:1 against white (code
+     * Invalid body (code `validation_error`) or a colour below 4.5:1 against white or the surface colour (code
      * `contrast_too_low`). Format errors are reported before contrast.
      *
      */

@@ -5,7 +5,7 @@ import math
 from decimal import ROUND_HALF_UP, Decimal
 
 REQUIRED_RATIO = 4.5
-# Relative luminance of white; the contrast rule is always measured against it (D6).
+# Relative luminance of white; one of the two backgrounds the contrast rule uses (D6).
 WHITE_LUMINANCE = 1.0
 
 
@@ -27,6 +27,16 @@ def contrast_ratio(first: str, second: str) -> float:
 
 def contrast_against_white(hex_colour: str) -> float:
     return (WHITE_LUMINANCE + 0.05) / (relative_luminance(hex_colour) + 0.05)
+
+
+def weakest_contrast(hex_colour: str, surface: str) -> tuple[float, str]:
+    """The lower of the contrast against white and against the surface colour, and which one.
+
+    The second value is "white" or "surface". Accent and primary text sit on both (T-002e, D6).
+    """
+    on_white = contrast_against_white(hex_colour)
+    on_surface = contrast_ratio(hex_colour, surface)
+    return (on_white, "white") if on_white <= on_surface else (on_surface, "surface")
 
 
 def meets_aa(ratio: float) -> bool:

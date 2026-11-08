@@ -5,7 +5,7 @@ Revises: 0001
 Create Date: 2026-11-07
 """
 import os
-import unicodedata
+import re
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -30,12 +30,16 @@ _THEME = {
 _HEX = "^#[0-9A-F]{6}$"
 
 
+# Control and invisible formatting characters; frozen copy of the company-name rule.
+_FORBIDDEN = re.compile("[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+
+
 def _company_name() -> str:
     """DEFAULT_COMPANY_NAME from the environment (the only place it is read), else the fallback."""
-    name = (os.environ.get("DEFAULT_COMPANY_NAME") or "").strip() or _FALLBACK_NAME
+    name = (os.environ.get("DEFAULT_COMPANY_NAME") or "").strip(" ") or _FALLBACK_NAME
     if len(name) > 60:
         raise RuntimeError("DEFAULT_COMPANY_NAME must be 60 characters or fewer")
-    if any(unicodedata.category(ch) == "Cc" for ch in name):
+    if _FORBIDDEN.search(name):
         raise RuntimeError("DEFAULT_COMPANY_NAME must not contain control characters")
     return name
 

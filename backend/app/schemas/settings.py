@@ -1,7 +1,6 @@
 """Branding and admin settings schemas."""
 
 import re
-import unicodedata
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, field_validator, model_validator
@@ -15,17 +14,29 @@ _MSG_LONG = f"Use {COMPANY_NAME_MAX} characters or fewer."
 _MSG_CONTROL = "Remove control characters."
 
 
+# Rejected anywhere in a name: U+0000-001F, U+007F-009F, and the invisible formatting characters
+# U+200B-200F (zero width, direction marks), U+202A-202E (bidi embeddings and overrides),
+# U+2066-2069 (bidi isolates) and U+FEFF (byte order mark). Twin of `companyName.ts`.
+_FORBIDDEN = re.compile("[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+
+
+def contains_forbidden_character(value: str) -> bool:
+    return _FORBIDDEN.search(value) is not None
+
+
 def validate_company_name(raw: str) -> str:
     """Trim, then apply the three rules in order (first failure wins). Returns the trimmed name.
 
-    "Control character" is Unicode category Cc; length counts code points after trimming.
+    Only the ordinary space (U+0020) is trimmed, so Python and JavaScript agree exactly; tabs,
+    line breaks and invisible characters at either end are rejected, not stripped. Length counts
+    code points after trimming.
     """
-    value = raw.strip()
+    value = raw.strip(" ")
     if not value:
         raise ValueError(_MSG_EMPTY)
     if len(value) > COMPANY_NAME_MAX:
         raise ValueError(_MSG_LONG)
-    if any(unicodedata.category(ch) == "Cc" for ch in value):
+    if contains_forbidden_character(value):
         raise ValueError(_MSG_CONTROL)
     return value
 

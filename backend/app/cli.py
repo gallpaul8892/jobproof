@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.db import make_engine
 from app.models import User
 from app.models.enums import UserRole
+from app.schemas.settings import contains_forbidden_character
 from app.security import hash_password
 from app.services.auth import normalise_email
 
@@ -47,8 +48,8 @@ def _read_password() -> str:
 
 def create_admin(email: str, full_name: str) -> int:
     email = normalise_email(email)
-    full_name = full_name.strip()
-    if not full_name or len(full_name) > 100 or any(ord(c) < 32 for c in full_name):
+    full_name = full_name.strip(" ")
+    if not full_name or len(full_name) > 100 or contains_forbidden_character(full_name):
         print("Enter a full name of 1 to 100 characters.", file=sys.stderr)
         return 2
     if "@" not in email or len(email) > 254 or "\x00" in email:

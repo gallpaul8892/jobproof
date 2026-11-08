@@ -47,6 +47,23 @@ scripts/dev.sh down
 
 Browser tests use Chrome. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if it is not on your PATH.
 
+## Create the first administrator
+
+The Admin account is not part of the seed in staging or production. Create it once, with the
+backend environment configured (`DATABASE_URL`, `APP_ENV`):
+
+```
+cd backend
+ADMIN_INITIAL_PASSWORD='a long passphrase' \
+  uv run python -m app.cli create-admin --email admin@example.com --full-name "Ada Admin"
+```
+
+Without `ADMIN_INITIAL_PASSWORD` it asks for the password twice, without echoing it. The password
+needs 12 to 200 characters. The full name is 1 to 100 characters and follows the company-name
+rule: no control, zero-width or bidirectional formatting characters. The command refuses an email
+that already exists and prints only the new user's id (never the email or password). It works in
+every `APP_ENV`.
+
 ## Where things are
 
 | Path | What |

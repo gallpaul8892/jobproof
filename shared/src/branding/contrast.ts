@@ -2,7 +2,7 @@
 // the same table of cases.
 
 export const REQUIRED_RATIO = 4.5;
-// Relative luminance of white. No hex literal here: white is a default theme colour and only
+// Relative luminance of white, one of the two backgrounds the rule uses. No hex literal here: white is a default theme colour and only
 // defaults.ts may hold those (T-002a scenario 5).
 const WHITE_LUMINANCE = 1;
 
@@ -23,6 +23,18 @@ export function contrastRatio(a: string, b: string): number {
 
 export function contrastAgainstWhite(hex: string): number {
   return (WHITE_LUMINANCE + 0.05) / (relativeLuminance(hex) + 0.05);
+}
+
+export type Background = "white" | "surface";
+
+/**
+ * The lower of the contrast against white and against the surface colour, and which one it is.
+ * Accent and primary text sit on both, so both must reach 4.5:1 (T-002e, D6).
+ */
+export function weakestContrast(hex: string, surface: string): { ratio: number; background: Background } {
+  const onWhite = contrastAgainstWhite(hex);
+  const onSurface = contrastRatio(hex, surface);
+  return onWhite <= onSurface ? { ratio: onWhite, background: "white" } : { ratio: onSurface, background: "surface" };
 }
 
 /** Compared unrounded: 4.4999 fails even though it displays as 4.50. */

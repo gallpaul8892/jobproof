@@ -50,10 +50,10 @@ Still web only and mock data. One deployment per company (D1).
 | `e2e/` | Playwright: auth, dashboard, reports, report detail, billing, states, layout, CSP, screenshots; helpers in `tests/support.ts` |
 | `api/openapi.yaml` | The contract. Hand-written OpenAPI 3.1, v0.2.0: 17 operations (10 built, 7 planned for T-002, marked `x-ticket`). Backend conforms; clients generated from it |
 | `mobile/`, `infra/` | README only (Phase 2 and the AWS phase) |
-| **(planned, T-002)** `backend/app/branding/` | `defaults.py` (the only backend copy of the default name and theme), `contrast.py` (WCAG ratio) |
-| **(planned)** `backend/app/routers/branding.py`, `admin.py`; `services/settings.py`, `audit.py`, `review.py`, `report_edit.py`; `models/settings.py`, `audit.py`; `cli.py` | Branding (public), Admin router, the one settings accessor, audit store, review and edit writes, `create-admin` command |
-| **(planned)** `shared/src/branding/` | `defaults.ts` (only web/mobile copy of the default theme), `presets.ts`, `contrast.ts`, `companyName.ts`; hooks `useBranding`, `useAdmin`, `useReportWrites`; `history.ts`, `conflict.ts`, `reportEdit.ts` |
-| **(planned)** `web/src/theme/` | `applyTheme.ts` (CSSOM `setProperty` only), `brandingCache.ts` (localStorage snapshot), `BrandingProvider.tsx`; `pages/Settings.tsx`, `pages/report/*`, `pages/dashboard/ReviewQueue.tsx` |
+| `backend/app/branding/` | `defaults.py` (the only backend copy of the default name and theme), `contrast.py` (WCAG ratio) |
+| `backend/app/routers/branding.py`, `admin.py`; `services/settings.py`; `models/settings.py`; `cli.py` | Branding (public), Admin router, the one settings accessor, settings model, `create-admin` command. **(planned)** `services/audit.py`, `review.py`, `report_edit.py`; `models/audit.py`: audit store, review and edit writes |
+| `shared/src/branding/` | `defaults.ts` (only web/mobile copy of the default theme), `presets.ts`, `contrast.ts`, `companyName.ts`; hooks `useBranding`, `useAdmin`. **(planned)** `useReportWrites`; `history.ts`, `conflict.ts`, `reportEdit.ts` |
+| `web/src/theme/` | `applyTheme.ts` (CSSOM `setProperty` only), `brandingCache.ts` (localStorage snapshot), `BrandingProvider.tsx`; `pages/Settings.tsx`, `pages/settings/*`. **(planned)** `pages/report/*`, `pages/dashboard/ReviewQueue.tsx` |
 | `scripts/dev.sh` | No-Docker path: `up [--static] \| down \| status \| seed \| test \| e2e \| psql` |
 | `docker-compose.yml`, `Makefile`, `.env.example` | Docker stack and developer commands (see section 11 for what is unverified) |
 
@@ -89,7 +89,7 @@ security overrides (js-yaml, minimatch): section 13.1.
 | Contract | @hey-api/openapi-ts | 0.99.0 (exact) | 0.x churns: pin exactly |
 | Contract | @redocly/cli | 2.76.0 | config [api/redocly.yaml](api/redocly.yaml) |
 | E2E | @playwright/test | 1.65.0 | uses installed Chrome via `PLAYWRIGHT_CHROMIUM_EXECUTABLE` |
-| E2E | @axe-core/playwright | 4.14.0 | **(planned, T-002d)** colour-contrast checks; verified on npm 2026-11-07; e2e only, never in the bundle |
+| E2E | @axe-core/playwright | 4.14.0 | colour-contrast checks (T-002d, built); verified on npm 2026-11-07; e2e only, never in the bundle |
 | DB | PostgreSQL | 16 | `postgres:16-alpine`; RDS 16.x |
 | Web serve | nginx | `nginxinc/nginx-unprivileged:stable-alpine` | **tag not verified** (Docker Hub blocked); backlog B6 |
 | IaC | Terraform / AWS provider | 1.15.x / ~> 6.72 | not written yet |
@@ -232,7 +232,7 @@ bearer contract stays the same.
 - **Secret guard** when APP_ENV is not local/test: `JWT_SECRET` and `PHOTO_URL_SECRET` must be
   set explicitly, at least 32 chars, no surrounding whitespace, not a dev default and not
   `dev-only-` prefixed (both case-insensitive), and must differ from each other
-  (case-insensitive). Production also refuses `DEMO_ACCOUNTS_ENABLED=true` and `FIXED_NOW`.
+  (case-insensitive). `DEMO_ACCOUNTS_ENABLED=true` is refused unless APP_ENV is local or test (the list includes the admin password); production also refuses `FIXED_NOW`.
   CORS origins may not contain `*`. Tests: `backend/tests/test_config.py`.
 - **Seed guard**: `python -m app.seed` truncates and reloads, so it refuses unless APP_ENV is
   local or test (`backend/app/seed/__main__.py`). Staging gets no demo data; a staging demo
@@ -268,11 +268,11 @@ bearer contract stays the same.
 - **Account creation:** no user-management UI. Local/test: seeded `admin@jobproof.test`. Other
   environments: `python -m app.cli create-admin --email ... --full-name ...` (password from
   `ADMIN_INITIAL_PASSWORD` or a prompt, >= 12 chars, never logged; refuses existing emails).
-- **Input handling:** company name trimmed, 1 to 60 code points, no control characters; rendered
+- **Input handling:** company name: only the ordinary space is trimmed, 1 to 60 code points, no control characters (U+0000-001F, U+007F-009F) and no zero-width or bidi formatting characters (U+200B-200F, U+202A-202E, U+2066-2069, U+FEFF), identical on server and web; rendered
   only as text (JSX, `document.title`). Colours must match `#RRGGBB` before contrast is checked,
   are stored upper case under a DB check, and are validated again on the client before
-  `setProperty`, so no CSS or markup can be injected through settings. Contrast below 4.5:1 is
-  rejected server-side whatever the client does, so the app can never become unreadable.
+  `setProperty`, so no CSS or markup can be injected through settings. Contrast below 4.5:1 against white or the
+  surface colour is rejected server-side whatever the client does, so the app can never become unreadable.
 - **Public exposure:** `GET /branding` returns only name and colours (no ids, users, times).
 - **Audit:** every real settings change writes `settings.changed` (old/new) in the same
   transaction; only Admin can read it. Bearer tokens in headers (no cookies), so no CSRF surface.
@@ -467,7 +467,7 @@ them as assumptions.
 | D3 | Explicit review; editing a reviewed report reopens it | `POST /review` with version; PATCH reopens in the same transaction and records `report.reopened` with the previous reviewer |
 | D4 | Editable: painter notes, checklist done/note, new manager notes | `ReportUpdate` with `extra="forbid"` at every level; everything else 422 |
 | D5 | Optimistic concurrency | `job_reports.version`, row lock + compare, 409 with current state |
-| D6 | Default theme dark green, white page; AA enforced (reject) | Five tokens, two editable; WCAG 2.2 ratio vs white >= 4.5 (unrounded) on server and client; CSSOM theming (section 9.2); presets Forest, Navy, Charcoal, Burgundy |
+| D6 | Default theme dark green, white page; AA enforced (reject) | Five tokens, two editable; WCAG 2.2 ratio >= 4.5 (unrounded) against both white and the surface colour #F4F7F2, because accent text sits on both on server and client; CSSOM theming (section 9.2); presets Forest, Navy, Charcoal, Burgundy |
 | D7 | Neutral wording; optional tree-surgery data | "Operative" in the label module only (API names unchanged, B9); job types become data (`job_types`) only if T-002m is built |
 
 Other defaults applied: Admin cannot see manager data; text name only, no logo; queue above

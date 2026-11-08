@@ -48,7 +48,7 @@ export const getMe = <ThrowOnError extends boolean = false>(options?: Options<Ge
  * Seeded demo credentials for the dev login page
  *
  * Available only when `DEMO_ACCOUNTS_ENABLED=true` (local and test). Returns 404 when
- * disabled, and is always disabled when `APP_ENV=production`.
+ * disabled, and the service refuses to start with it enabled unless `APP_ENV` is `local` or `test`.
  *
  */
 export const listDemoAccounts = <ThrowOnError extends boolean = false>(options?: Options<ListDemoAccountsData, ThrowOnError>): RequestResult<ListDemoAccountsResponses, ListDemoAccountsErrors, ThrowOnError> => (options?.client ?? client).get<ListDemoAccountsResponses, ListDemoAccountsErrors, ThrowOnError>({ url: '/api/v1/auth/demo-accounts', ...options });
@@ -78,8 +78,9 @@ export const getAdminSettings = <ThrowOnError extends boolean = false>(options?:
  * unchanged. A save that changes nothing returns 200 with the current settings, leaves
  * `updated_at`/`updated_by` alone and records no audit event. Last write wins (single
  * settings record, no version). Colours are accepted in either case and stored upper case.
- * Each of `theme.primary` and `theme.accent` must reach 4.5:1 contrast against `#FFFFFF`
- * (WCAG 2.2 AA), else 422 `contrast_too_low` with one `errors` entry per failing colour
+ * Each of `theme.primary` and `theme.accent` must reach 4.5:1 contrast (WCAG 2.2 AA) against
+ * both `#FFFFFF` and the fixed surface colour (`theme.surface`, default `#F4F7F2`), because
+ * accent text appears on both. The lower of the two ratios is the one measured. Else 422 `contrast_too_low` with one `errors` entry per failing colour
  * carrying `measured_ratio` and `required_ratio`.
  *
  */

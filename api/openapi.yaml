@@ -106,7 +106,7 @@ paths:
       summary: Seeded demo credentials for the dev login page
       description: |
         Available only when `DEMO_ACCOUNTS_ENABLED=true` (local and test). Returns 404 when
-        disabled, and is always disabled when `APP_ENV=production`.
+        disabled, and the service refuses to start with it enabled unless `APP_ENV` is `local` or `test`.
       security: []
       responses:
         "200":
@@ -162,8 +162,9 @@ paths:
         unchanged. A save that changes nothing returns 200 with the current settings, leaves
         `updated_at`/`updated_by` alone and records no audit event. Last write wins (single
         settings record, no version). Colours are accepted in either case and stored upper case.
-        Each of `theme.primary` and `theme.accent` must reach 4.5:1 contrast against `#FFFFFF`
-        (WCAG 2.2 AA), else 422 `contrast_too_low` with one `errors` entry per failing colour
+        Each of `theme.primary` and `theme.accent` must reach 4.5:1 contrast (WCAG 2.2 AA) against
+        both `#FFFFFF` and the fixed surface colour (`theme.surface`, default `#F4F7F2`), because
+        accent text appears on both. The lower of the two ratios is the one measured. Else 422 `contrast_too_low` with one `errors` entry per failing colour
         carrying `measured_ratio` and `required_ratio`.
       requestBody:
         required: true
@@ -180,7 +181,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422":
           description: |
-            Invalid body (code `validation_error`) or a colour below 4.5:1 against white (code
+            Invalid body (code `validation_error`) or a colour below 4.5:1 against white or the surface colour (code
             `contrast_too_low`). Format errors are reported before contrast.
           content:
             application/problem+json:
@@ -564,7 +565,7 @@ components:
         measured_ratio:
           type: number
           x-ticket: T-002e
-          description: "`contrast_too_low` only: the colour's contrast against white, rounded to 2 decimals (never shown as 4.50 when below 4.5)"
+          description: "`contrast_too_low` only: the colour's lower contrast, against white or the surface colour (the message names which), rounded to 2 decimals (never shown as 4.50 when below 4.5)"
           examples: [2.78]
         required_ratio:
           type: number

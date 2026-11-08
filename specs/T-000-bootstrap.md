@@ -208,7 +208,7 @@ orchestrator workspace. On a normal machine developers run `npx playwright insta
   (401 `unauthenticated`, header `WWW-Authenticate: Bearer`). The role used for authorisation is
   the DB role, not the claim.
 - Demo credentials endpoint enabled by `DEMO_ACCOUNTS_ENABLED`; `Settings` refuses to start if it
-  is true while `APP_ENV=production`.
+  is true while `APP_ENV` is anything but `local` or `test` (the list includes the admin password).
 
 ### 6.2 Authorisation model (three personas)
 - `Role` enum: `manager`, `painter` (users table). Customers are not users; they will act via
@@ -262,7 +262,7 @@ Manager injected as ECS task env (`secrets:`), non-secrets from task definition 
 | `PHOTO_URL_TTL_SECONDS` | `900` | |
 | `PUBLIC_API_BASE_URL` | `http://localhost:8000` | used to build absolute photo URLs |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:8080` | comma separated; no wildcard |
-| `DEMO_ACCOUNTS_ENABLED` | `true` | must be false in production |
+| `DEMO_ACCOUNTS_ENABLED` | `true` | refused unless APP_ENV is local or test |
 | `LOG_LEVEL` | `INFO` | |
 | `FIXED_NOW` | unset | ISO datetime; tests only; rejected in production |
 | `SEED_ANCHOR_DATE` | unset (= today, London) | seed's "today" |

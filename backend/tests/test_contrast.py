@@ -8,30 +8,52 @@ from app.branding.contrast import (
     meets_aa,
     relative_luminance,
     report_ratio,
+    weakest_contrast,
 )
+from app.branding.defaults import DEFAULT_THEME
 
-# (colour, ratio against white as reported, passes)
+# (colour, ratio vs white as reported, ratio vs the surface colour as reported, passes both)
 CASES = [
-    ("#1F5130", 9.22, True),
-    ("#2F5D3A", 7.64, True),
-    ("#1B1F1C", 16.68, True),
-    ("#767676", 4.54, True),
-    ("#777777", 4.48, False),
-    ("#4CAF50", 2.78, False),
-    ("#FFD400", 1.43, False),
-    ("#1F3A5F", None, True),
-    ("#2B2B2B", 14.16, True),
-    ("#444444", 9.74, True),
-    ("#7A1F2B", 10.20, True),
+    ("#1F5130", 9.22, 8.53, True),
+    ("#2F5D3A", 7.64, 7.07, True),
+    ("#1B1F1C", 16.68, None, True),
+    ("#717171", 4.88, 4.52, True),  # lowest grey the rule accepts
+    ("#727272", 4.81, 4.45, False),  # passes on white, fails on the surface colour
+    ("#767676", 4.54, 4.20, False),
+    ("#777777", 4.48, 4.14, False),
+    ("#4CAF50", 2.78, 2.57, False),
+    ("#FFD400", 1.43, 1.32, False),
+    ("#1F3A5F", None, None, True),
+    ("#2B4C7E", 8.61, None, True),
+    ("#2B2B2B", 14.16, None, True),
+    ("#444444", 9.74, None, True),
+    ("#7A1F2B", 10.20, None, True),
+    ("#8A2433", 8.82, None, True),
 ]
 
 
-@pytest.mark.parametrize(("colour", "reported", "passes"), CASES)
-def test_ticket_table(colour: str, reported: float | None, passes: bool) -> None:
-    ratio = contrast_against_white(colour)
+@pytest.mark.parametrize(("colour", "on_white", "on_surface", "passes"), CASES)
+def test_ticket_table(
+    colour: str, on_white: float | None, on_surface: float | None, passes: bool
+) -> None:
+    white = contrast_against_white(colour)
+    surface = contrast_ratio(colour, DEFAULT_THEME.surface)
+    if on_white is not None:
+        assert report_ratio(white) == on_white
+    if on_surface is not None:
+        assert report_ratio(surface) == on_surface
+    ratio, background = weakest_contrast(colour, DEFAULT_THEME.surface)
     assert meets_aa(ratio) is passes
-    if reported is not None:
-        assert report_ratio(ratio) == reported
+    assert ratio == min(white, surface)
+    assert background == ("white" if white <= surface else "surface")
+
+
+def test_default_theme_and_presets_pass_on_both_backgrounds() -> None:
+    colours = [DEFAULT_THEME.primary, DEFAULT_THEME.accent, DEFAULT_THEME.text]
+    colours += ["#1F3A5F", "#2B4C7E", "#2B2B2B", "#444444", "#7A1F2B", "#8A2433"]
+    for colour in colours:
+        ratio, _ = weakest_contrast(colour, DEFAULT_THEME.surface)
+        assert meets_aa(ratio), colour
 
 
 def test_white_against_white_is_one_and_black_is_twenty_one() -> None:

@@ -6,22 +6,33 @@ export const COMPANY_NAME_MESSAGES = {
   control: "Remove control characters.",
 } as const;
 
-// Unicode category Cc: U+0000 to U+001F and U+007F to U+009F.
+// Rejected anywhere in a name: U+0000-001F, U+007F-009F, and the invisible formatting characters
+// U+200B-200F (zero width, direction marks), U+202A-202E (bidi embeddings and overrides),
+// U+2066-2069 (bidi isolates) and U+FEFF (byte order mark). Twin of backend/app/schemas/settings.py.
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+const FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/;
+
+/** Trim only the ordinary space, like the backend: String.trim() and str.strip() disagree elsewhere. */
+function trimSpaces(raw: string): string {
+  let start = 0;
+  let end = raw.length;
+  while (start < end && raw[start] === " ") start++;
+  while (end > start && raw[end - 1] === " ") end--;
+  return raw.slice(start, end);
+}
 
 export type CompanyNameResult = { value: string; error?: undefined } | { value?: undefined; error: string };
 
 /** Same rules, order and messages as the backend: trim, then empty, length, control characters. */
 export function validateCompanyName(raw: string): CompanyNameResult {
-  const value = raw.trim();
+  const value = trimSpaces(raw);
   if (value === "") return { error: COMPANY_NAME_MESSAGES.empty };
   if (Array.from(value).length > COMPANY_NAME_MAX) return { error: COMPANY_NAME_MESSAGES.long };
-  if (CONTROL.test(value)) return { error: COMPANY_NAME_MESSAGES.control };
+  if (FORBIDDEN.test(value)) return { error: COMPANY_NAME_MESSAGES.control };
   return { value };
 }
 
 /** Length in code points, for the "12 / 60" counter. */
 export function nameLength(raw: string): number {
-  return Array.from(raw.trim()).length;
+  return Array.from(trimSpaces(raw)).length;
 }

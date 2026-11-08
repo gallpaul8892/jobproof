@@ -210,6 +210,39 @@ test.describe("T-002e: Admin chooses the colour scheme", () => {
     }
   });
 
+  test("axe finds no contrast violations with the lowest-contrast accent the server accepts", async ({ page, context, request }) => {
+    // #717171: 4.88:1 on white, 4.52:1 on the surface colour. The accent colours links, demo role
+    // labels on the sign-in page, hovered table rows and the selected preset card.
+    const res = await request.patch(`${API_URL}/api/v1/admin/settings`, {
+      headers: { Authorization: `Bearer ${await adminToken(request)}` },
+      data: { theme: { primary: "#717171", accent: "#717171" } },
+    });
+    expect(res.ok()).toBe(true);
+    const report = (await (await ManagerApi.create(request)).allReports()).find((r) => r.photo_count > 0)!;
+    await page.goto("/login");
+    await expect(page.getByTestId("demo-accounts")).toBeVisible();
+    await expectNoContrastViolations(page, "login (lowest accent)");
+
+    await signInViaApi(page);
+    for (const [path, ready] of [
+      ["/", "recent-report-row"],
+      ["/reports", "reports-table"],
+      [`/reports/${report.id}`, "photo-thumb"],
+      ["/billing", "invoices-table"],
+    ] as const) {
+      await page.goto(path);
+      await expect(page.getByTestId(ready).first()).toBeVisible();
+      await page.getByTestId(ready).first().hover(); // hovered rows put the accent on the surface colour
+      await expectNoContrastViolations(page, `${path} (lowest accent)`);
+    }
+
+    const admin = await context.newPage();
+    await signInViaApi(admin, ADMIN);
+    await admin.goto("/settings");
+    await expect(admin.getByTestId("colour-accent-input")).toHaveValue("#717171");
+    await expectNoContrastViolations(admin, "settings (lowest accent)");
+  });
+
   test("every preset passes axe on the Settings page", async ({ page }) => {
     await signInViaApi(page, ADMIN);
     await page.goto("/settings");
@@ -230,16 +263,19 @@ test.describe("T-002e: Admin chooses the colour scheme", () => {
     await page.getByTestId("preset-navy").check();
     const primary = page.getByTestId("colour-primary-input");
     await primary.fill("#FFD400");
-    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("1.43:1, needs 4.5:1");
+    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("1.32:1 against the surface colour, needs 4.5:1");
     await expect(primary).toHaveAttribute("aria-invalid", "true");
     await expect(page.getByTestId("colour-save")).toBeDisabled();
     await expect(page.getByTestId("theme-preview").locator(".preview-header")).toHaveCSS("background-color", NAVY);
     await primary.fill("#4CAF50");
-    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("2.78:1, needs 4.5:1");
+    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("2.57:1 against the surface colour, needs 4.5:1");
     await primary.fill("#777777");
-    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("4.48:1, needs 4.5:1");
-    await primary.fill("#767676");
-    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("4.54:1 against white, passes");
+    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("4.14:1 against the surface colour, needs 4.5:1");
+    await primary.fill("#767676"); // 4.54:1 on white but 4.20:1 on the surface colour
+    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("4.20:1 against the surface colour, needs 4.5:1");
+    await expect(page.getByTestId("colour-save")).toBeDisabled();
+    await primary.fill("#717171");
+    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("4.52:1 against the surface colour, passes");
     await expect(page.getByTestId("colour-save")).toBeEnabled();
     await primary.fill("#12");
     await expect(page.getByTestId("colour-primary-ratio")).toHaveText("Use a colour in the form #RRGGBB.");
@@ -296,7 +332,7 @@ test.describe("T-002e: Admin chooses the colour scheme", () => {
     });
     await page.getByTestId("preset-navy").check();
     await page.getByTestId("colour-save").click();
-    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("Contrast 2.78:1 is below the required 4.5:1.");
+    await expect(page.getByTestId("colour-primary-ratio")).toHaveText("Contrast 2.57:1 against the surface colour is below the required 4.5:1.");
     expect((await getBranding(request)).theme.primary).toBe("#1F5130");
     // the colour of the real UI is unchanged
     await expect(page.locator(".topbar")).toHaveCSS("background-color", "rgb(31, 81, 48)");

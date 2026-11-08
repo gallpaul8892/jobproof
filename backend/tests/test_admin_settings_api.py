@@ -66,6 +66,16 @@ def test_changing_the_name_updates_branding_and_records_who_and_when(
     assert body["theme"]["primary"] == DEFAULT_THEME.primary  # untouched
 
 
+@pytest.mark.parametrize(
+    "name", ["Acme\u00a0Ltd", "Caf\u00e9 \u00dcber", "\u4f1a\u793e", "A\u200a"]
+)
+def test_other_unicode_is_accepted(
+    client: TestClient, admin_headers: dict[str, str], name: str
+) -> None:
+    # Ordinary text, a no-break space inside and a hair space (Zs) at the end are not forbidden.
+    assert _patch(client, admin_headers, {"company_name": name}).json()["company_name"] == name
+
+
 def test_the_name_is_trimmed_and_sixty_characters_are_accepted(
     client: TestClient, admin_headers: dict[str, str]
 ) -> None:
@@ -89,6 +99,14 @@ def test_the_name_is_trimmed_and_sixty_characters_are_accepted(
         ("A\nB", "Remove control characters."),
         ("A\u0085B", "Remove control characters."),
         ("A\u007fB", "Remove control characters."),
+        ("\u001fAcme", "Remove control characters."),  # leading U+001F is not trimmed
+        ("Acme\t", "Remove control characters."),  # only the ordinary space is trimmed
+        ("\ufeffAcme", "Remove control characters."),
+        ("Acme\u200b", "Remove control characters."),
+        ("Ac\u200dme", "Remove control characters."),
+        ("Acme\u202e", "Remove control characters."),  # bidi override
+        ("A\u2066B\u2069", "Remove control characters."),
+        ("\u200f", "Remove control characters."),
         ("\u0000" * 70, "Use 60 characters or fewer."),  # first failing rule wins
     ],
 )
@@ -184,14 +202,18 @@ def test_navy_preset_is_saved_and_published(
     assert response.json()["updated_by"]["name"] == "Tom Ashworth"
 
 
-def test_the_boundary_colour_is_accepted(client: TestClient, admin_headers: dict[str, str]) -> None:
-    response = _patch(client, admin_headers, {"theme": {"primary": "#1F3A5F", "accent": "#767676"}})
+def test_the_lowest_contrast_colour_is_accepted(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    # #717171 is 4.88:1 on white and 4.52:1 on the surface colour: the lowest grey that passes.
+    response = _patch(client, admin_headers, {"theme": {"primary": "#717171", "accent": "#717171"}})
     assert response.status_code == 200
-    assert response.json()["theme"]["accent"] == "#767676"
+    assert response.json()["theme"]["accent"] == "#717171"
 
 
 @pytest.mark.parametrize(
-    ("colour", "ratio"), [("#4CAF50", 2.78), ("#777777", 4.48), ("#FFD400", 1.43)]
+    ("colour", "ratio"),
+    [("#4CAF50", 2.57), ("#777777", 4.14), ("#FFD400", 1.32), ("#767676", 4.20), ("#727272", 4.45)],
 )
 def test_low_contrast_is_rejected_with_the_measured_ratio(
     client: TestClient, admin_headers: dict[str, str], colour: str, ratio: float
@@ -203,11 +225,15 @@ def test_low_contrast_is_rejected_with_the_measured_ratio(
     assert_contract(response, "updateAdminSettings")
     body = response.json()
     assert body["code"] == "contrast_too_low"
-    assert body["detail"] == "Colours must have at least 4.5:1 contrast against white."
+    assert body["detail"] == (
+        "Colours must have at least 4.5:1 contrast against both white and the surface colour."
+    )
     assert body["errors"] == [
         {
             "loc": ["body", "theme", "primary"],
-            "message": f"Contrast {ratio:.2f}:1 is below the required 4.5:1.",
+            "message": (
+                f"Contrast {ratio:.2f}:1 against the surface colour is below the required 4.5:1."
+            ),
             "measured_ratio": ratio,
             "required_ratio": 4.5,
         }

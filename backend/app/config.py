@@ -80,11 +80,13 @@ class Settings(BaseSettings):
                     )
             if self.jwt_secret.strip().lower() == self.photo_url_secret.strip().lower():
                 raise ValueError("JWT_SECRET and PHOTO_URL_SECRET must differ")
-        if self.app_env == "production":
-            if self.demo_accounts_enabled:
-                raise ValueError("DEMO_ACCOUNTS_ENABLED must be false when APP_ENV=production")
-            if self.fixed_now is not None:
-                raise ValueError("FIXED_NOW must not be set when APP_ENV=production")
+        if self.demo_accounts_enabled and self.app_env not in ("local", "test"):
+            raise ValueError(
+                "DEMO_ACCOUNTS_ENABLED must be false unless APP_ENV is local or test "
+                "(the list includes the admin password)"
+            )
+        if self.app_env == "production" and self.fixed_now is not None:
+            raise ValueError("FIXED_NOW must not be set when APP_ENV=production")
         return self
 
 
