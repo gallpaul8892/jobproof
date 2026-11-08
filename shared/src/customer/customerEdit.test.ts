@@ -146,3 +146,21 @@ describe("parseCustomerConflict", () => {
     expect(parseCustomerConflict(err("version_conflict", {}, 500))).toBeNull();
   });
 });
+
+describe("ukOnly (company setting)", () => {
+  const foreign = () => ({ ...formFromCustomer(customer()), postcode: "10115", phone: "+1 202 555 0123" });
+
+  it("defaults to UK only: foreign postcode and phone are problems", () => {
+    expect(Object.keys(validateCustomerForm(foreign())).sort()).toEqual(["phone", "postcode"]);
+    expect(Object.keys(validateCustomerForm(foreign(), true)).sort()).toEqual(["phone", "postcode"]);
+  });
+
+  it("off: they are accepted and sent as normalised values", () => {
+    expect(validateCustomerForm(foreign(), false)).toEqual({});
+    expect(buildCustomerUpdate(customer(), { ...foreign(), postcode: "ab  12" }, false)).toEqual({
+      version: 3,
+      phone: "+1 202 555 0123",
+      billing_address: { postcode: "AB 12" },
+    });
+  });
+});

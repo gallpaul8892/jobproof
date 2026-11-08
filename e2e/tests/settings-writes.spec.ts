@@ -6,6 +6,7 @@ import {
   DEFAULT_NAME,
   MANAGER,
   PAINTER,
+  expectNoAxeViolations,
   expectNoContrastViolations,
   getBranding,
   ManagerApi,
@@ -338,6 +339,51 @@ test.describe("T-002e: Admin chooses the colour scheme", () => {
     await expect(page.locator(".topbar")).toHaveCSS("background-color", "rgb(31, 81, 48)");
     const outline = parseRgb(await page.getByTestId("colour-primary-ratio").evaluate((e) => getComputedStyle(e).color));
     expect(ratio(outline, [255, 255, 255])).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+test.describe("T-002p: UK customers only", () => {
+  test("the admin turns it off and on; managers' customer forms follow; the setting is restored", async ({ page, context, request }) => {
+    const report = (await (await ManagerApi.create(request)).allReports())[0]!;
+    await signInViaApi(page, ADMIN);
+    await page.goto("/settings");
+    const sw = page.getByRole("switch", { name: "UK customers only" });
+    const save = page.getByTestId("uk-only-save");
+    await expect(sw).toBeChecked();
+    await expect(page.getByTestId("uk-only-help")).toHaveText(
+      "Customer postcodes and phone numbers must be UK ones. Turn off to allow other countries.",
+    );
+    await expect(save).toBeDisabled();
+    await expectNoAxeViolations(page, "settings with the UK-only switch");
+
+    await sw.focus();
+    await page.keyboard.press("Space");
+    await expect(sw).not.toBeChecked();
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(page.getByTestId("uk-only-saved")).toHaveText("Settings saved");
+    await expect(save).toBeDisabled();
+    expect((await getBranding(request)).uk_only_contact_details).toBe(false);
+    await page.reload();
+    await expect(page.getByRole("switch", { name: "UK customers only" })).not.toBeChecked();
+
+    // a manager's customer form now accepts a foreign postcode and number (nothing is saved here)
+    const manager = await context.newPage();
+    await signInViaApi(manager);
+    await manager.goto(`/customers/${report.customer.id}`);
+    await manager.getByRole("button", { name: "Edit details" }).click();
+    await manager.getByLabel("Postcode", { exact: true }).fill("10115");
+    await manager.getByLabel("Phone", { exact: true }).fill("+1 202 555 0123");
+    await expect(manager.getByTestId("postcode-error")).toHaveText("");
+    await expect(manager.getByTestId("phone-error")).toHaveText("");
+    await expect(manager.getByTestId("save-changes")).toBeEnabled();
+    await manager.close();
+
+    // turn it back on through the UI
+    await page.getByRole("switch", { name: "UK customers only" }).check();
+    await page.getByTestId("uk-only-save").click();
+    await expect(page.getByTestId("uk-only-saved")).toHaveText("Settings saved");
+    expect((await getBranding(request)).uk_only_contact_details).toBe(true);
   });
 });
 

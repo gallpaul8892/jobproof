@@ -31,9 +31,9 @@ export function NothingLeftNotice() {
 }
 
 /** A text marker (not colour alone) on a field whose value was re-applied on top of the latest version. */
-export function ReappliedTag() {
+export function ReappliedTag({ id }: { id?: string }) {
   return (
-    <span className="reapplied-tag" data-testid="reapplied-tag">
+    <span id={id} className="reapplied-tag" data-testid="reapplied-tag">
       Re-applied
     </span>
   );

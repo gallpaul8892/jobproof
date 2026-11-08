@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { mockApi, problem, renderApp } from "../../test/mockApi";
 import { ColourSchemeForm } from "./ColourSchemeForm";
 import { CompanyNameForm } from "./CompanyNameForm";
+import { ContactRulesForm } from "./ContactRulesForm";
 
 const settings: AdminSettings = {
   company_name: "Oak Ltd",
@@ -175,5 +176,70 @@ describe("ColourSchemeForm", () => {
     expect((screen.getByTestId("colour-primary-input") as HTMLInputElement).value).toBe(DEFAULT_THEME.primary);
     expect((screen.getByTestId("colour-save") as HTMLButtonElement).disabled).toBe(false);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("ContactRulesForm (UK customers only)", () => {
+  const sw = () => screen.getByRole("switch", { name: "UK customers only" }) as HTMLInputElement;
+  const saveBtn = () => screen.getByTestId("uk-only-save") as HTMLButtonElement;
+
+  it("is a labelled switch with help text, on by default, Save disabled until changed", () => {
+    mockApi(() => ok());
+    renderApp(<ContactRulesForm settings={settings} />);
+    expect(sw().checked).toBe(true);
+    expect(screen.getByTestId("uk-only-help").textContent).toBe(
+      "Customer postcodes and phone numbers must be UK ones. Turn off to allow other countries.",
+    );
+    expect(sw().getAttribute("aria-describedby")).toContain("uk-only-help");
+    expect(saveBtn().disabled).toBe(true);
+  });
+
+  it("reflects an off setting from the admin settings", () => {
+    mockApi(() => ok());
+    renderApp(<ContactRulesForm settings={{ ...settings, uk_only_contact_details: false }} />);
+    expect(sw().checked).toBe(false);
+  });
+
+  it("sends only the boolean and shows Settings saved; toggling back disables Save", async () => {
+    const calls = mockApi(() => ok({ uk_only_contact_details: false }));
+    renderApp(<ContactRulesForm settings={settings} />);
+    await userEvent.click(sw());
+    expect(saveBtn().disabled).toBe(false);
+    await userEvent.click(saveBtn());
+    expect((await screen.findByTestId("uk-only-saved")).textContent).toBe("Settings saved");
+    expect(calls[0]).toMatchObject({ method: "PATCH", path: "/api/v1/admin/settings", body: { uk_only_contact_details: false } });
+    expect(sw().checked).toBe(false);
+  });
+
+  it("shows a 422 message beside the switch", async () => {
+    mockApi(() => problem(422, "validation_error", { errors: [{ loc: ["body", "uk_only_contact_details"], message: "Send true or false." }] }));
+    renderApp(<ContactRulesForm settings={settings} />);
+    await userEvent.click(sw());
+    await userEvent.click(saveBtn());
+    await waitFor(() => expect(screen.getByTestId("uk-only-error").textContent).toBe("Send true or false."));
+    expect(sw().getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("shows a 403 message and keeps the choice", async () => {
+    mockApi(() => problem(403, "forbidden"));
+    renderApp(<ContactRulesForm settings={settings} />);
+    await userEvent.click(sw());
+    await userEvent.click(saveBtn());
+    expect((await screen.findByTestId("uk-only-forbidden")).textContent).toContain("permission");
+    expect(sw().checked).toBe(false);
+  });
+
+  it("keeps the choice on a 500 and Try again resubmits", async () => {
+    let fail = true;
+    const calls = mockApi(() => (fail ? problem(500, "internal_error") : ok({ uk_only_contact_details: false })));
+    renderApp(<ContactRulesForm settings={settings} />);
+    await userEvent.click(sw());
+    await userEvent.click(saveBtn());
+    expect((await screen.findByTestId("uk-only-failure")).textContent).toContain("Could not save");
+    expect(sw().checked).toBe(false);
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect((await screen.findByTestId("uk-only-saved")).textContent).toBe("Settings saved");
+    expect(calls).toHaveLength(2);
   });
 });

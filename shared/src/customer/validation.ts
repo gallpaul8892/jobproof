@@ -38,13 +38,13 @@ export type CustomerField =
   | "county"
   | "postcode";
 
-const EMAIL = /^[^\s@]{1,64}@[^\s@.]+(\.[^\s@.]+)+$/;
-const PHONE_CHARS = /^\+?[0-9 ()-]+$/;
-const UK_LOCAL = /^0[0-9]{9,10}$/;
-const UK_INTL = /^\+44[0-9]{9,10}$/;
-const INTL = /^\+[1-9][0-9]{7,14}$/;
-const POSTCODE = /^[A-Za-z]{1,2}[0-9][A-Za-z0-9]?[0-9][A-Za-z]{2}$/;
-const POSTCODE_ANY = /^[A-Za-z0-9]([A-Za-z0-9 -]*[A-Za-z0-9])?$/;
+const EMAIL = /^[^\s@]{1,64}@[^\s@.]+(\.[^\s@.]+)+$/u;
+const PHONE_CHARS = /^\+?[0-9 ()-]+$/u;
+const UK_LOCAL = /^0[0-9]{9,10}$/u;
+const UK_INTL = /^\+44[0-9]{9,10}$/u;
+const INTL = /^\+[1-9][0-9]{7,14}$/u;
+const POSTCODE = /^[A-Za-z]{1,2}[0-9][A-Za-z0-9]?[0-9][A-Za-z]{2}$/u;
+const POSTCODE_ANY = /^[A-Za-z0-9]([A-Za-z0-9 -]*[A-Za-z0-9])?$/u;
 
 const fail = (message: string): ValidationResult => ({ ok: false, message });
 const pass = (value: string | null): ValidationResult => ({ ok: true, value });

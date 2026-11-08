@@ -15,8 +15,12 @@ const conflict409 = (current: Record<string, unknown>, extra: Record<string, unk
     ...extra,
   });
 
-function setup(handler: Parameters<typeof mockApi>[0], c = customerRecord()) {
-  const calls = mockApi((req) => (req.path.endsWith("/auth/me") ? { body: ME } : handler(req)));
+function setup(handler: Parameters<typeof mockApi>[0], c = customerRecord(), ukOnly?: boolean) {
+  const calls = mockApi((req) => {
+    if (req.path.endsWith("/auth/me")) return { body: ME };
+    if (req.path.endsWith("/branding")) return { body: ukOnly === undefined ? {} : { company_name: "Oak Ltd", uk_only_contact_details: ukOnly } };
+    return handler(req);
+  });
   const onSaved = vi.fn();
   const onClose = vi.fn();
   const onReload = vi.fn(async () => undefined);
@@ -144,5 +148,64 @@ describe("EditCustomerForm", () => {
     fireEvent.change(input("Name"), { target: { value: "X" } });
     await userEvent.click(screen.getByTestId("cancel-edit"));
     expect(screen.getByRole("heading", { name: "Discard your changes?", hidden: true })).toBeTruthy();
+  });
+
+  describe("UK customers only setting", () => {
+    it("UK only (and a missing value): UK hints, refuses a foreign postcode and number", async () => {
+      setup(() => ({ body: {} }));
+      expect(screen.getByTestId("postcode-hint").textContent).toBe("A UK postcode, for example BS6 5QA.");
+      expect(input("Postcode").placeholder).toBe("BS6 5QA");
+      expect(input("Phone").placeholder).toBe("07700 900123");
+      fireEvent.change(input("Postcode"), { target: { value: "10115" } });
+      fireEvent.change(input("Phone"), { target: { value: "+1 202 555 0123" } });
+      expect(screen.getByTestId("postcode-error").textContent).toBe("Enter a UK postcode such as BS6 5QA.");
+      expect(screen.getByTestId("phone-error").textContent).toBe("Enter a UK phone number such as 07700 900123.");
+      expect(save().disabled).toBe(true);
+      expect(input("Postcode").getAttribute("aria-describedby")).toContain("-hint");
+    });
+
+    it("UK only explicitly on behaves the same", async () => {
+      setup(() => ({ body: {} }), customerRecord(), true);
+      fireEvent.change(input("Postcode"), { target: { value: "10115" } });
+      expect(screen.getByTestId("postcode-error").textContent).toBe("Enter a UK postcode such as BS6 5QA.");
+    });
+
+    it("off: neutral hints, accepts a foreign postcode and number and sends them normalised", async () => {
+      const { patches, onSaved } = setup(() => ({ body: customerRecord({ version: 3 }) }), customerRecord(), false);
+      await waitFor(() => expect(screen.getByTestId("postcode-hint").textContent).toContain("2 to 12 letters"));
+      expect(input("Postcode").placeholder).toBe("e.g. 10115");
+      expect(screen.getByTestId("phone-hint").textContent).toContain("international");
+      fireEvent.change(input("Postcode"), { target: { value: "sw1  1aa-x" } });
+      fireEvent.change(input("Phone"), { target: { value: "+1 202 555 0123" } });
+      expect(screen.getByTestId("postcode-error").textContent).toBe("");
+      expect(screen.getByTestId("phone-error").textContent).toBe("");
+      await userEvent.click(save());
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(patches()[0]!.body).toEqual({ version: 2, phone: "+1 202 555 0123", billing_address: { postcode: "SW1 1AA-X" } });
+    });
+
+    it("off still refuses a postcode that is too short or has odd characters", async () => {
+      setup(() => ({ body: {} }), customerRecord(), false);
+      await waitFor(() => expect(screen.getByTestId("postcode-hint").textContent).toContain("2 to 12"));
+      fireEvent.change(input("Postcode"), { target: { value: "1" } });
+      expect(screen.getByTestId("postcode-error").textContent).toBe("Enter a postcode.");
+      fireEvent.change(input("Postcode"), { target: { value: "AB!12" } });
+      expect(screen.getByTestId("postcode-error").textContent).toBe("Enter a postcode.");
+    });
+
+    it("shows a server 422 message for the postcode unchanged", async () => {
+      setup(
+        ({ method }) =>
+          method === "PATCH"
+            ? problem(422, "validation_error", { errors: [{ loc: ["body", "billing_address", "postcode"], message: "Enter a UK postcode such as BS6 5QA." }] })
+            : { body: {} },
+        customerRecord(),
+        false,
+      );
+      await waitFor(() => expect(input("Postcode").placeholder).toBe("e.g. 10115"));
+      fireEvent.change(input("Postcode"), { target: { value: "10115" } });
+      await userEvent.click(save());
+      await waitFor(() => expect(screen.getByTestId("postcode-error").textContent).toBe("Enter a UK postcode such as BS6 5QA."));
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ApiError,
   CUSTOMER_FIELDS,
@@ -6,13 +6,14 @@ import {
   FIELD_MAX,
   buildCustomerUpdate,
   customerCurrentMatchesUpdate,
-  customerMergeAdapter,
+  customerMergeAdapterFor,
   formFromCustomer,
   formatTime,
   hasCustomerProblems,
   impactNotice,
   parseCustomerConflict,
   trimmedLength,
+  useBranding,
   useFetchLatestCustomer,
   useMe,
   useUpdateCustomer,
@@ -61,6 +62,21 @@ const TEST_ID: Record<CustomerField, string> = {
   postcode: "postcode",
 };
 
+/** Placeholder and hint text for the two fields whose rules follow the company setting. */
+function modeText(f: CustomerField, ukOnly: boolean): { placeholder: string; hint: string } | null {
+  if (f === "postcode") {
+    return ukOnly
+      ? { placeholder: "BS6 5QA", hint: "A UK postcode, for example BS6 5QA." }
+      : { placeholder: "e.g. 10115", hint: "A postcode of 2 to 12 letters, digits, spaces or hyphens." };
+  }
+  if (f === "phone") {
+    return ukOnly
+      ? { placeholder: "07700 900123", hint: "A UK number, for example 07700 900123 or +44 7700 900123." }
+      : { placeholder: "+44 7700 900123", hint: "A UK number or an international number starting with +." };
+  }
+  return null;
+}
+
 /** The saved value of a field in a 409's `current`, if that field was sent. */
 function currentOf(current: CustomerEditableValues | undefined, f: CustomerField): { has: boolean; value: string | null } {
   if (!current) return { has: false, value: null };
@@ -101,8 +117,11 @@ export function EditCustomerForm({
   const [reloading, setReloading] = useState(false);
   const mutation = useUpdateCustomer(original.id);
   const fetchLatest = useFetchLatestCustomer(original.id);
+  // The company setting (missing means UK only, the default) decides the phone and postcode rules.
+  const ukOnly = useBranding().data?.uk_only_contact_details !== false;
+  const adapter = useMemo(() => customerMergeAdapterFor(ukOnly), [ukOnly]);
   const mergeFlow = useMergeOnTop({
-    adapter: customerMergeAdapter,
+    adapter,
     original,
     form,
     setForm,
@@ -116,8 +135,8 @@ export function EditCustomerForm({
   const saving = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const update = buildCustomerUpdate(original, form);
-  const problems = validateCustomerForm(form);
+  const update = buildCustomerUpdate(original, form, ukOnly);
+  const problems = validateCustomerForm(form, ukOnly);
   const dirty = update !== null;
   const blocker = useUnsavedChangesGuard(dirty);
   const canSave = dirty && !hasCustomerProblems(problems) && !mutation.isPending && mergeFlow.unresolved === 0;
@@ -152,6 +171,7 @@ export function EditCustomerForm({
             onSaved(true);
             return;
           }
+          mergeFlow.clear();
           setFailure({ kind: "conflict", conflict: found });
         } else if (error instanceof ApiError && error.status === 422) {
           const fields = new Map<string, string>();
@@ -195,13 +215,14 @@ export function EditCustomerForm({
     const problem = problems[f] ?? serverFields?.get(f);
     const max = FIELD_MAX[f];
     const clash = mergeFlow.clashFor(key);
+    const mode = modeText(f, ukOnly);
     const now = currentOf(conflict?.current, f);
     const showCurrent = conflict !== null && sent(lastBody, f) && now.has;
     return (
       <div className="field" key={f} data-testid={`field-${testId}`}>
         <div className="label-row">
           <label htmlFor={id}>{CUSTOMER_FIELD_LABELS[f]}</label>
-          {mergeFlow.reapplied(key) && <ReappliedTag />}
+          {mergeFlow.reapplied(key) && <ReappliedTag id={`${id}-reapplied`} />}
         </div>
         {clash && merge && (
           <ClashChoice
@@ -220,9 +241,10 @@ export function EditCustomerForm({
           // Someone else's data: never offer the browser's autofill suggestions.
           autoComplete="off"
           readOnly={mergeFlow.locked(key)}
+          placeholder={mode?.placeholder}
           data-testid={`${testId}-input`}
           aria-invalid={problem ? "true" : undefined}
-          aria-describedby={`${id}-meta`}
+          aria-describedby={`${id}-meta${mode ? ` ${id}-hint` : ""}${mergeFlow.reapplied(key) ? ` ${id}-reapplied` : ""}`}
           onChange={(e) => setForm((v) => ({ ...v, [f]: e.target.value }))}
         />
         <div className="field-meta" id={`${id}-meta`}>
@@ -235,6 +257,11 @@ export function EditCustomerForm({
             </span>
           )}
         </div>
+        {mode && (
+          <p className="muted small field-hint" id={`${id}-hint`} data-testid={`${testId}-hint`}>
+            {mode.hint}
+          </p>
+        )}
         {showCurrent && (
           <div className="current-value" data-testid={`${testId}-current`}>
             <span className="current-value-label">Current saved value:</span>

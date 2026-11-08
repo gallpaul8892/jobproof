@@ -271,7 +271,12 @@ input[aria-invalid="true"] { border-color: var(--status-red-ink); }
 /* ---- settings ---- */
 .settings { display: grid; gap: var(--s4); max-width: 44rem; }
 .settings-form { margin-top: var(--s3); }
-.settings-form input:not([type="color"]):not([type="radio"]) { width: 100%; }
+.switch-row { display: flex; align-items: flex-start; gap: var(--s3); }
+.switch-row label { font-weight: 600; }
+.switch-row p { margin: var(--s1) 0 0; }
+.switch-row input[type="checkbox"] { margin-top: 0.15rem; flex: none; }
+.field-hint { margin: 0; }
+.settings-form input:not([type="color"]):not([type="radio"]):not([type="checkbox"]) { width: 100%; }
 .field-meta { display: flex; justify-content: space-between; gap: var(--s3); min-height: 1.25rem; font-size: var(--t-sm); }
 .field-error { color: var(--status-red-ink); font-size: var(--t-sm); font-weight: 500; }
 .field-ok { color: var(--status-green-ink); font-size: var(--t-sm); }

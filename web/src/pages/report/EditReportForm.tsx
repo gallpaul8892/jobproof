@@ -73,7 +73,7 @@ function NotesField({
     <div className="field">
       <div className="label-row">
         <label htmlFor={id}>{label}</label>
-        {tag && <ReappliedTag />}
+        {tag && <ReappliedTag id={`${id}-reapplied`} />}
       </div>
       {clash}
       <textarea
@@ -83,7 +83,7 @@ function NotesField({
         readOnly={readOnly}
         data-testid={`${testId}-input`}
         aria-invalid={problem ? "true" : undefined}
-        aria-describedby={`${id}-meta`}
+        aria-describedby={`${id}-meta${tag ? ` ${id}-reapplied` : ""}`}
         onChange={(e) => onChange(e.target.value)}
       />
       <div className="field-meta" id={`${id}-meta`}>
@@ -195,6 +195,7 @@ export function EditReportForm({
             onSaved(true);
             return;
           }
+          mergeFlow.clear();
           setFailure({ kind: "conflict", conflict: found });
         } else if (error instanceof ApiError && error.status === 422) {
           const fields = new Map<string, string>();
@@ -364,13 +365,14 @@ export function EditReportForm({
                 <li key={item.id} data-testid="edit-check-item">
                   <div className="edit-check-head">
                     <span className="edit-check-label">{item.label}</span>
-                    {mergeFlow.reapplied(checklistKey(item.id, "done")) && <ReappliedTag />}
+                    {mergeFlow.reapplied(checklistKey(item.id, "done")) && <ReappliedTag id={`${noteId}-done-reapplied`} />}
                     <label className="check-box">
                       <input
                         type="checkbox"
                         checked={value.done}
                         disabled={mergeFlow.locked(checklistKey(item.id, "done"))}
                         aria-label={`Done, ${item.label}`}
+                        aria-describedby={mergeFlow.reapplied(checklistKey(item.id, "done")) ? `${noteId}-done-reapplied` : undefined}
                         data-testid="edit-check-done"
                         onChange={(e) => changeItem(item.id, { done: e.target.checked })}
                       />
@@ -383,7 +385,7 @@ export function EditReportForm({
                       <label htmlFor={noteId} className="sr-only">
                         Note for {item.label}
                       </label>
-                      {mergeFlow.reapplied(checklistKey(item.id, "note")) && <ReappliedTag />}
+                      {mergeFlow.reapplied(checklistKey(item.id, "note")) && <ReappliedTag id={`${noteId}-reapplied`} />}
                     </div>
                     {clashView(checklistKey(item.id, "note"), "edit-check-note-clash")}
                     <input
@@ -394,7 +396,7 @@ export function EditReportForm({
                       autoComplete="off"
                       data-testid="edit-check-note"
                       aria-invalid={problem ? "true" : undefined}
-                      aria-describedby={`${noteId}-meta`}
+                      aria-describedby={`${noteId}-meta${mergeFlow.reapplied(checklistKey(item.id, "note")) ? ` ${noteId}-reapplied` : ""}`}
                       onChange={(e) => changeItem(item.id, { note: e.target.value })}
                     />
                     <div className="field-meta" id={`${noteId}-meta`}>

@@ -61,10 +61,10 @@ export function formFromCustomer(record: Stored): CustomerFormValues {
 export type CustomerProblems = Partial<Record<CustomerField, string>>;
 
 /** Client-side checks with the same rules and messages as the server (it still has the final say). */
-export function validateCustomerForm(form: CustomerFormValues): CustomerProblems {
+export function validateCustomerForm(form: CustomerFormValues, ukOnly = true): CustomerProblems {
   const problems: CustomerProblems = {};
   for (const f of CUSTOMER_FIELDS) {
-    const r = VALIDATORS[f](form[f]);
+    const r = VALIDATORS[f](form[f], ukOnly);
     if (!r.ok) problems[f] = r.message;
   }
   return problems;
@@ -73,8 +73,8 @@ export function validateCustomerForm(form: CustomerFormValues): CustomerProblems
 export const hasCustomerProblems = (p: CustomerProblems) => Object.keys(p).length > 0;
 
 /** What the server would store for the typed text; text that fails the rules is compared as typed, trimmed. */
-export function normalisedValue(field: CustomerField, raw: string): string | null {
-  const r = VALIDATORS[field](raw);
+export function normalisedValue(field: CustomerField, raw: string, ukOnly = true): string | null {
+  const r = VALIDATORS[field](raw, ukOnly);
   if (r.ok) return r.value;
   const trimmed = trimSpaces(raw);
   return trimmed === "" ? null : trimmed;
@@ -85,14 +85,14 @@ export function normalisedValue(field: CustomerField, raw: string): string | nul
  * sent, the address as a partial object. A field the manager did not touch is never sent, even if
  * its stored value would not pass today's rules.
  */
-export function buildCustomerUpdate(original: CustomerRecord, form: CustomerFormValues): CustomerUpdate | null {
+export function buildCustomerUpdate(original: CustomerRecord, form: CustomerFormValues, ukOnly = true): CustomerUpdate | null {
   const start = formFromCustomer(original);
   const update: CustomerUpdate = { version: original.version };
   const address: AddressUpdate = {};
   let changed = false;
   for (const f of CUSTOMER_FIELDS) {
     if (form[f] === start[f]) continue;
-    const next = normalisedValue(f, form[f]);
+    const next = normalisedValue(f, form[f], ukOnly);
     if (next === storedValue(original, f)) continue;
     changed = true;
     const target: Record<string, unknown> = isAddressField(f) ? address : update;
@@ -151,8 +151,11 @@ const KEY_PREFIX = "billing_address.";
 const keyOf = (f: CustomerField) => (isAddressField(f) ? `${KEY_PREFIX}${f}` : f);
 const fieldOf = (key: string) => (key.startsWith(KEY_PREFIX) ? key.slice(KEY_PREFIX.length) : key) as CustomerField;
 
-/** Merge adapter for the customer form (T-002o). Keys: `name`, `email`, ..., `billing_address.postcode`. */
-export const customerMergeAdapter: MergeAdapter<CustomerFormValues> = {
+/**
+ * Merge adapter for the customer form (T-002o). Keys: `name`, `email`, ..., `billing_address.postcode`.
+ * `ukOnly` is the company setting; it decides how phone and postcode text is normalised for comparison.
+ */
+export const customerMergeAdapterFor = (ukOnly: boolean): MergeAdapter<CustomerFormValues> => ({
   flatten(form) {
     const flat: Flat = {};
     for (const f of CUSTOMER_FIELDS) flat[keyOf(f)] = form[f];
@@ -164,9 +167,11 @@ export const customerMergeAdapter: MergeAdapter<CustomerFormValues> = {
     return form;
   },
   normalise(key: string, value: FlatValue) {
-    return normalisedValue(fieldOf(key), String(value));
+    return normalisedValue(fieldOf(key), String(value), ukOnly);
   },
   label(key) {
     return CUSTOMER_FIELD_LABELS[fieldOf(key)];
   },
-};
+});
+
+export const customerMergeAdapter = customerMergeAdapterFor(true);

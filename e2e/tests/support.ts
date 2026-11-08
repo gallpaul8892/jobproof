@@ -236,6 +236,7 @@ export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
 export interface Branding {
   company_name: string;
   theme: { primary: string; accent: string; background: string; surface: string; text: string };
+  uk_only_contact_details: boolean;
 }
 
 export async function getBranding(request: APIRequestContext): Promise<Branding> {
@@ -251,7 +252,7 @@ export async function patchSettings(request: APIRequestContext, data: Record<str
 }
 
 export async function restoreDefaultSettings(request: APIRequestContext): Promise<void> {
-  const res = await patchSettings(request, { company_name: DEFAULT_NAME, theme: DEFAULT_THEME_COLOURS });
+  const res = await patchSettings(request, { company_name: DEFAULT_NAME, theme: DEFAULT_THEME_COLOURS, uk_only_contact_details: true });
   expect(res.ok(), "restoring default settings").toBe(true);
 }
 

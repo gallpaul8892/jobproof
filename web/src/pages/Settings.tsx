@@ -3,6 +3,7 @@ import { QueryBoundary } from "../components/QueryBoundary";
 import { PageHeader, useDocumentTitle } from "../components/ui";
 import { ColourSchemeForm } from "./settings/ColourSchemeForm";
 import { CompanyNameForm } from "./settings/CompanyNameForm";
+import { ContactRulesForm } from "./settings/ContactRulesForm";
 
 function LastChanged({ settings }: { settings: AdminSettings }) {
   if (!settings.updated_at || !settings.updated_by) {
@@ -24,12 +25,13 @@ export function SettingsPage() {
   const query = useAdminSettings();
   return (
     <>
-      <PageHeader title="Settings">The company name and colour scheme everyone in your company sees.</PageHeader>
+      <PageHeader title="Settings">The company name and colour scheme everyone in your company sees, and how customer details are checked.</PageHeader>
       <QueryBoundary query={query} what="the settings" skeletonRows={3}>
         {(settings) => (
           <div className="settings" data-testid="settings-page">
             <CompanyNameForm settings={settings} />
             <ColourSchemeForm settings={settings} />
+            <ContactRulesForm settings={settings} />
             <LastChanged settings={settings} />
           </div>
         )}

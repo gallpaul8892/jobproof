@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   mergeOnTop,
   type Choice,
@@ -49,6 +49,11 @@ export function useMergeOnTop<F, R extends Latest>({
   const [merge, setMerge] = useState<MergeState | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyFailed, setApplyFailed] = useState(false);
+  // The merge runs after an await, so it must read the form as it is then, not as it was at the click.
+  const formRef = useRef(form);
+  useLayoutEffect(() => {
+    formRef.current = form;
+  }, [form]);
 
   /** Resolves true when the merge was applied; on a failed load nothing at all changes. */
   async function apply(): Promise<boolean> {
@@ -63,7 +68,8 @@ export function useMergeOnTop<F, R extends Latest>({
     } finally {
       setApplying(false);
     }
-    const result = mergeOnTop(adapter, toForm(original), form, toForm(latest));
+    const result = mergeOnTop(adapter, toForm(original), formRef.current, toForm(latest));
+    formRef.current = result.form;
     setOriginal(latest);
     setForm(result.form);
     setMerge((previous) => ({
@@ -81,15 +87,20 @@ export function useMergeOnTop<F, R extends Latest>({
     if (!merge) return;
     const clash = merge.clashes.find((c) => c.key === key);
     if (!clash) return;
-    const flat = adapter.flatten(form);
+    const flat = adapter.flatten(formRef.current);
     flat[key] = choice === "mine" ? clash.mine : clash.theirs;
-    setForm(adapter.unflatten(flat, form));
+    const next = adapter.unflatten(flat, formRef.current);
+    formRef.current = next;
+    setForm(next);
     setMerge({ ...merge, choices: { ...merge.choices, [key]: choice } });
   }
 
+  /** Drops the merge display (notice, clash choices, Re-applied tags), e.g. when a new 409 arrives. */
+  const clear = () => setMerge(null);
+
   const clashFor = (key: string) => merge?.clashes.find((c) => c.key === key);
-  /** A clashing field stays read-only until the manager picks a version. */
-  const locked = (key: string) => clashFor(key) !== undefined && merge?.choices[key] === undefined;
+  /** Every field is read-only while the latest version loads; a clashing field stays read-only until the manager picks a version. */
+  const locked = (key: string) => applying || (clashFor(key) !== undefined && merge?.choices[key] === undefined);
   const unresolved = merge ? merge.clashes.filter((c) => merge.choices[c.key] === undefined).length : 0;
 
   return {
@@ -98,6 +109,7 @@ export function useMergeOnTop<F, R extends Latest>({
     applyFailed,
     apply,
     choose,
+    clear,
     clashFor,
     locked,
     unresolved,

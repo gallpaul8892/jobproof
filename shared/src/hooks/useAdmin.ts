@@ -20,7 +20,11 @@ export function useUpdateAdminSettings() {
     mutationFn: (body: AdminSettingsUpdate) => callApi(() => updateAdminSettings({ body })),
     onSuccess: (data: AdminSettings) => {
       queryClient.setQueryData(queryKeys.adminSettings, data);
-      queryClient.setQueryData(queryKeys.branding, { company_name: data.company_name, theme: data.theme });
+      queryClient.setQueryData(queryKeys.branding, {
+        company_name: data.company_name,
+        theme: data.theme,
+        uk_only_contact_details: data.uk_only_contact_details,
+      });
     },
   });
 }

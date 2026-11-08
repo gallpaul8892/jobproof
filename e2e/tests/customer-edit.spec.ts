@@ -165,7 +165,7 @@ test.describe("T-002n: customer page and edits", () => {
     await field(page, "Email").fill("accounts at harbourside");
     await expect(page.getByTestId("postcode-error")).toHaveText("Enter a UK postcode such as BS6 5QA.");
     await expect(page.getByTestId("phone-error")).toHaveText(
-      "Enter a UK phone number such as 07700 900123, or an international number starting with +.",
+      "Enter a UK phone number such as 07700 900123.",
     );
     await expect(page.getByTestId("email-error")).toHaveText("Enter an email address such as name@example.co.uk.");
     await expect(save(page)).toBeDisabled();

@@ -177,6 +177,10 @@ describe("Apply my changes on top (report form)", () => {
     latest = latestReport({ version: 5, manager_notes: "Sarah v4", painter_notes: "Sarah painter v5" });
     await userEvent.click(save());
     expect(await screen.findByTestId("edit-conflict")).toBeTruthy();
+    // The old merge display must not contradict the new conflict.
+    expect(screen.queryByTestId("merge-notice")).toBeNull();
+    expect(screen.queryByTestId("manager-notes-clash")).toBeNull();
+    expect(screen.queryByTestId("reapplied-tag")).toBeNull();
     expect(screen.getByTestId("apply-on-top")).toBeTruthy();
     expect(screen.getByTestId("reload-latest")).toBeTruthy();
     await userEvent.click(screen.getByTestId("apply-on-top"));
@@ -289,5 +293,96 @@ describe("Apply my changes on top (customer form)", () => {
     expect(await screen.findByTestId("apply-failed")).toBeTruthy();
     expect(email().value).toBe("priya@x.test");
     expect(screen.getByTestId("edit-conflict")).toBeTruthy();
+  });
+});
+
+describe("text typed while the latest version loads is kept", () => {
+  function gate() {
+    let release: () => void = () => undefined;
+    const promise = new Promise<void>((r) => (release = r));
+    return { promise, release };
+  }
+
+  it("report form", async () => {
+    const g = gate();
+    setupReport(async ({ method }) => {
+      if (method === "PATCH") return stale();
+      await g.promise;
+      return { body: latestReport({ checklist: report().checklist.map((i, n) => (n === 0 ? { ...i, note: "Sarah's note" } : i)) }) };
+    });
+    fireEvent.change(manager(), { target: { value: "Mine" } });
+    await userEvent.click(save());
+    await userEvent.click(await screen.findByTestId("apply-on-top"));
+    await screen.findByText("Loading latest...");
+    // The inputs are read-only while loading ...
+    expect(manager().readOnly).toBe(true);
+    expect(painter().readOnly).toBe(true);
+    // ... and even a change that gets through (paste, autofill) survives the merge.
+    fireEvent.change(manager(), { target: { value: "Mine, and more typed while loading" } });
+    fireEvent.change(painter(), { target: { value: "Typed in another field" } });
+    g.release();
+    await screen.findByTestId("merge-notice");
+    expect(manager().value).toBe("Mine, and more typed while loading");
+    expect(painter().value).toBe("Typed in another field");
+    expect(manager().readOnly).toBe(false);
+    const ids = manager().getAttribute("aria-describedby")!.split(" ");
+    const tag = ids.map((i) => document.getElementById(i)).find((e) => e?.dataset.testid === "reapplied-tag");
+    expect(tag?.textContent).toBe("Re-applied");
+  });
+
+  it("customer form", async () => {
+    const g = gate();
+    const calls = mockApi(async (req) => {
+      if (req.path.endsWith("/auth/me")) return { body: ME };
+      if (req.method === "PATCH") return stale({ email: "x" });
+      await g.promise;
+      return { body: customerRecord({ version: 3, last_changed_by: SARAH, last_changed_at: "2026-10-15T10:40:00Z", phone: "0117 496 0123" }) };
+    });
+    renderWithDataRouter(
+      <EditCustomerForm customer={customerRecord()} onSaved={vi.fn()} onClose={vi.fn()} onReload={async () => undefined} />,
+    );
+    const email = () => screen.getByLabelText("Email") as HTMLInputElement;
+    const town = () => screen.getByLabelText("Town or city") as HTMLInputElement;
+    fireEvent.change(email(), { target: { value: "priya@x.test" } });
+    await userEvent.click(save());
+    await userEvent.click(await screen.findByTestId("apply-on-top"));
+    await screen.findByText("Loading latest...");
+    expect(email().readOnly).toBe(true);
+    expect(town().readOnly).toBe(true);
+    fireEvent.change(email(), { target: { value: "priya.long@x.test" } });
+    fireEvent.change(town(), { target: { value: "Bath" } });
+    g.release();
+    await screen.findByTestId("merge-notice");
+    expect(email().value).toBe("priya.long@x.test");
+    expect(town().value).toBe("Bath");
+    expect((screen.getByLabelText("Phone") as HTMLInputElement).value).toBe("0117 496 0123");
+    expect(email().readOnly).toBe(false);
+    const tag = screen.getAllByTestId("reapplied-tag")[0]!;
+    expect(email().getAttribute("aria-describedby")).toContain(tag.id);
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+  });
+
+  it("customer form: a second 409 clears the merge notice and tags", async () => {
+    let patchCount = 0;
+    mockApi(async (req) => {
+      if (req.path.endsWith("/auth/me")) return { body: ME };
+      if (req.method === "PATCH") {
+        patchCount += 1;
+        return stale({ email: "x" });
+      }
+      return { body: customerRecord({ version: 3, last_changed_by: SARAH, last_changed_at: "2026-10-15T10:40:00Z", phone: "0117 496 0123" }) };
+    });
+    renderWithDataRouter(
+      <EditCustomerForm customer={customerRecord()} onSaved={vi.fn()} onClose={vi.fn()} onReload={async () => undefined} />,
+    );
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "priya@x.test" } });
+    await userEvent.click(save());
+    await userEvent.click(await screen.findByTestId("apply-on-top"));
+    await screen.findByTestId("merge-notice");
+    await userEvent.click(save());
+    await screen.findByTestId("edit-conflict");
+    expect(patchCount).toBe(2);
+    expect(screen.queryByTestId("merge-notice")).toBeNull();
+    expect(screen.queryByTestId("reapplied-tag")).toBeNull();
   });
 });
