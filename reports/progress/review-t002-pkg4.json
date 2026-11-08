@@ -1,0 +1,44 @@
+{
+  "id": "review-t002-pkg4",
+  "title": "Code review report: T-002 Package 4 (T-002n customer edits with audit, T-002o apply my changes on top)",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-08",
+  "summary": "Round 1 for Package 4 (476b327..cf40e51): REQUEST CHANGES, with 0 blockers, 1 major and 4 minors. The backend is sound: the manager-only guard covers all three customer operations and the customer_id filter (admin and painter get 403, tested), there is a row lock plus a version compare, the 409 current holds only the sent keys, and each save writes one append-only customer.edited event with full before and after values for the changed fields only. Report rows are untouched (D9), the impact counts are computed on read, and migration 0007 matches the spec, including the downgrade refusal. The forbidden-character set and whitespace handling are identical in Python and TypeScript, and the 173-case shared table drives pytest and Vitest. The merge rules are right and nothing auto-saves. MAJOR: Apply my changes on top merges the form value captured when the button was clicked, so text typed while the latest version loads is overwritten. Minor: an email divergence between the twins for astral characters (the JS regex lacks the u flag), a merge notice left on screen after a second 409, the Re-applied tag not announced to screen readers, and ARCHITECTURE.md still marked planned. No dependencies changed. Tests were not re-run by the reviewer; the reported results at cf40e51 were backend 1435, shared 306, web 237 and e2e 148, all green.",
+  "blocks": [
+    {
+      "heading": "Round 1 (0 BLOCKER, 1 MAJOR, 4 MINOR)",
+      "type": "table",
+      "columns": ["Severity", "Finding", "Resolution"],
+      "rows": [
+        ["MAJOR", "web/src/components/useMergeOnTop.ts:57-72 (used by EditCustomerForm.tsx and EditReportForm.tsx): apply() reads `form` and `original` from the render in which the button was clicked, awaits fetchLatest(), then calls setForm(result.form). The inputs stay editable while 'Loading latest...' is shown (readOnly only when a clash is locked), so anything typed during the fetch is silently overwritten. This is data loss, which T-002o promises cannot happen. Owner: frontend", "Open. Merge against the current form: a formRef updated every render, or the merge inside setForm(cur => ...). Also make the inputs read-only while applying. Add Vitest cases for both forms: hold the GET pending, type, resolve, then expect the typed text in the merged form"],
+        ["MINOR", "shared/src/customer/validation.ts:42: EMAIL has no `u` flag, so `{1,64}` counts UTF-16 code units in JS but code points in Python (40 emoji + '@example.co.uk' gives Python True, Node false). The client is stricter, so no bad data can be stored, but the twins differ and the case table cannot catch it. Owner: frontend", "Open. Add the u flag (to all the regexes in the file) and add cases to validationCases.json: 64 emoji local part accepted, 65 refused"],
+        ["MINOR", "EditCustomerForm.tsx and EditReportForm.tsx, onError 409 branch: after a merge, a second stale 409 shows the conflict alert while the old MergeNotice, the resolved clash fieldsets and the Re-applied tags stay on screen. The messages contradict each other. Owner: frontend", "Open. Clear the merge display state on a new 409. Assert merge-notice is gone in the two-409s test"],
+        ["MINOR", "web/src/components/ConflictMerge.tsx ReappliedTag: the 'Re-applied' text is not linked to its input, so screen-reader users do not hear it. Owner: frontend", "Open. Give the tag an id and add it to the input's aria-describedby when shown"],
+        ["MINOR", "ARCHITECTURE.md lines 32, 53, 123-124, 142, 178-186, 213-214, 226 and 497-500 still mark T-002n and T-002o as planned; line 53 still says 17 built, 3 planned and gen:check red. Owner: architect", "Open. Remove the planned markers, give the operation count as 20 built with PENDING_TICKETS empty, mark 0007 as built"]
+      ]
+    },
+    {
+      "heading": "What the reviewer found sound",
+      "type": "list",
+      "items": [
+        "Authorisation: router-level require_roles(manager); tests for 401, admin 403 and painter 403 on all three operations and the customer_id filter; row unchanged after admin and painter PATCH attempts.",
+        "Concurrency: FOR UPDATE then version compare then no-op check; race tests for 2-way, 8-way, different fields, held lock and lock release.",
+        "Audit trail: one event per save with only the changed fields and full old and new values; UPDATE and DELETE give 42501; report history includes the customer's events; report versions and review state untouched.",
+        "Migration 0007 matches the spec, including the downgrade refusal.",
+        "Hostile input: forbidden set identical in both twins; 173 shared cases read by pytest and Vitest.",
+        "Merge: four rules match the spec, nothing auto-saves (e2e request spy), Save disabled until every clash is chosen.",
+        "Accessibility and 360px: axe on customer page, forms and clash views; no horizontal overflow."
+      ]
+    },
+    {
+      "heading": "Questions for the architect",
+      "type": "list",
+      "items": [
+        "Validation order: the spec lists forbidden characters before length, but both twins check blank, then length, then control characters (same as the company name). If intended, update specs/T-002n.md.",
+        "Commit d8760c1 is labelled WIP; cf40e51 is green. Acceptable for history?"
+      ]
+    }
+  ]
+}
