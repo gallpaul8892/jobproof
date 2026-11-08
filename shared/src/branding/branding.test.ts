@@ -115,11 +115,15 @@ describe("validateCompanyName", () => {
     ["Acme\u202e", "Remove control characters."], // bidi override
     ["A\u2066B\u2069", "Remove control characters."],
     ["\u200f", "Remove control characters."],
+    ["Acme\ud800", "Remove control characters."], // lone high surrogate
+    ["\udc00Acme", "Remove control characters."], // lone low surrogate
+    ["A\ud83dB", "Remove control characters."], // high surrogate followed by a normal letter
+    ["\udfff", "Remove control characters."],
   ])("rejects %j", (raw, message) => {
     expect(validateCompanyName(raw)).toEqual({ error: message });
   });
 
-  it.each(["Acme\u00a0Ltd", "Caf\u00e9 \u00dcber", "\u4f1a\u793e", "A\u200a"])("accepts %j", (name) => {
+  it.each(["Acme\u00a0Ltd", "Caf\u00e9 \u00dcber", "\u4f1a\u793e", "A\u200a", "Acme \ud83c\udfa8", "\ud7ffAcme\ue000"])("accepts %j", (name) => {
     expect(validateCompanyName(name)).toEqual({ value: name });
   });
 

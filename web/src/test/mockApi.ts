@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, RouterProvider, createMemoryRouter } from "react-router";
 import { configureApiClient } from "@jobproof/shared";
 import { vi } from "vitest";
 import { BrandingProvider } from "../theme/BrandingProvider";
@@ -42,3 +42,17 @@ export const problem = (status: number, code: string, extra: Record<string, unkn
   status,
   body: { type: "about:blank", title: "Problem", status, code, request_id: "t", ...extra },
 });
+
+/** Like renderApp but inside a data router, which `useBlocker` needs. Returns the router for navigation. */
+export function renderWithDataRouter(ui: ReactNode, path = "/") {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const router = createMemoryRouter(
+    [
+      { path: "/", element: ui },
+      { path: "/elsewhere", element: createElement("p", null, "Elsewhere") },
+    ],
+    { initialEntries: [path] },
+  );
+  const result = render(createElement(QueryClientProvider, { client }, createElement(RouterProvider, { router })));
+  return { ...result, router, client };
+}

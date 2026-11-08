@@ -81,11 +81,14 @@ export function ReportsPage() {
     update({ [key]: e.target.value || undefined });
 
   const active = hasActiveFilters(filters);
-  const clear = () => setParams(new URLSearchParams());
+  // Clearing the filters keeps the sort order the manager arrived with.
+  const clear = () => setParams(serialiseFilters({ page: 1, sort: filters.sort }));
 
   return (
     <>
-      <PageHeader title="Reports">Completion reports submitted by painters, newest first.</PageHeader>
+      <PageHeader title="Reports">
+        Completion reports submitted by painters, {filters.sort === "submitted_asc" ? "oldest first" : "newest first"}.
+      </PageHeader>
 
       <form className="filters" role="search" aria-label="Filter reports" onSubmit={(e) => e.preventDefault()}>
         <SearchBox value={filters.q ?? ""} onCommit={commitSearch} />

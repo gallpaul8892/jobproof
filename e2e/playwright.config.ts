@@ -4,6 +4,8 @@ import { defineConfig } from "@playwright/test";
 // Playwright's own Chromium (`npx playwright install chromium`).
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
 
+const WRITES = /(settings-writes|review|edit-report|history)\.spec\.ts/;
+
 export default defineConfig({
   testDir: "./tests",
   globalSetup: "./tests/global-setup.ts",
@@ -20,16 +22,20 @@ export default defineConfig({
       args: process.getuid?.() === 0 ? ["--no-sandbox"] : [],
     },
   },
-  // Tests that change the company settings run after everything else and one at a time, so no
-  // other test can see a half-changed theme or name. Each of them restores the defaults.
+  // Tests that change data run after everything else, one project at a time and one test at a time,
+  // so no other test can see a half-changed theme, name or report. Review and edit tests reseed the mock
+  // data before each test (and once at the end); settings tests restore the defaults.
   projects: [
-    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /settings-writes\.spec\.ts/ },
+    { name: "chromium", use: { browserName: "chromium" }, testIgnore: WRITES },
+    { name: "reviews", use: { browserName: "chromium" }, testMatch: /review\.spec\.ts/, fullyParallel: false, dependencies: ["chromium"] },
+    { name: "edits", use: { browserName: "chromium" }, testMatch: /edit-report\.spec\.ts/, fullyParallel: false, dependencies: ["reviews"] },
+    { name: "histories", use: { browserName: "chromium" }, testMatch: /history\.spec\.ts/, fullyParallel: false, dependencies: ["edits"] },
     {
       name: "settings-writes",
       use: { browserName: "chromium" },
       testMatch: /settings-writes\.spec\.ts/,
       fullyParallel: false,
-      dependencies: ["chromium"],
+      dependencies: ["histories"],
     },
   ],
 });

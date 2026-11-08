@@ -22,8 +22,13 @@ export const INVOICE_STATUSES: readonly InvoiceStatus[] = [
 export const PAGE_SIZE = 20;
 export const MAX_SEARCH_LENGTH = 100;
 
+export const REPORT_SORTS = ["submitted_asc"] as const;
+export type ReportSortParam = (typeof REPORT_SORTS)[number];
+
 export interface ReportFilters {
   page: number;
+  /** Oldest submitted first. Absent means the default order; "default" is never written to the URL. */
+  sort?: ReportSortParam;
   q?: string;
   review_status?: ReviewStatus;
   billing_status?: BillingStatus;
@@ -81,6 +86,7 @@ export function parseReportFilters(params: ParamSource): ReportFilters {
   return compact({
     page: parsePage(params.get("page")),
     q: parseQuery(params.get("q")),
+    sort: oneOf(REPORT_SORTS, params.get("sort")),
     review_status: oneOf(REVIEW_STATUSES, params.get("review_status")),
     billing_status: oneOf(BILLING_STATUSES, params.get("billing_status")),
     painter_id: painter && UUID.test(painter) ? painter.toLowerCase() : undefined,
@@ -107,7 +113,7 @@ export function serialiseFilters(filters: ReportFilters | InvoiceFilters): URLSe
   return out;
 }
 
-/** True when any filter other than the page is set. */
+/** True when any filter other than the page and the sort order is set. */
 export function hasActiveFilters(filters: ReportFilters | InvoiceFilters): boolean {
-  return Object.entries(filters).some(([k, v]) => k !== "page" && v !== undefined);
+  return Object.entries(filters).some(([k, v]) => k !== "page" && k !== "sort" && v !== undefined);
 }

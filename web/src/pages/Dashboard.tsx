@@ -8,6 +8,7 @@ import {
   type Dashboard,
 } from "@jobproof/shared";
 import { EmptyState, QueryBoundary } from "../components/QueryBoundary";
+import { ReviewQueue } from "./dashboard/ReviewQueue";
 import { BillingBadge, PageHeader, ReviewBadge, TableWrap, useDocumentTitle } from "../components/ui";
 
 function Stat({
@@ -77,6 +78,8 @@ function DashboardView({ d }: { d: Dashboard }) {
           hint="View them"
         />
       </div>
+
+      <ReviewQueue items={d.review_queue} awaitingCount={d.reports_awaiting_review} asOf={d.as_of} />
 
       <section className="panel" aria-labelledby="recent-heading">
         <div className="panel-head">

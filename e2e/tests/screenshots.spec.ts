@@ -8,6 +8,7 @@ test.skip(!dir, "set SCREENSHOT_DIR to capture screenshots");
 const sizes = [
   { name: "desktop", width: 1280, height: 900 },
   { name: "tablet", width: 768, height: 1024 },
+  { name: "mobile", width: 360, height: 800 },
 ];
 
 for (const size of sizes) {
@@ -38,6 +39,21 @@ for (const size of sizes) {
       .toBe(true);
     await shot("report-detail");
 
+    // an awaiting-review report: the review panel, the history and the edit form
+    const awaiting = (await api.awaiting()).find((r) => r.photo_count >= 3)!;
+    await page.goto(`/reports/${awaiting.id}`);
+    await expect(page.getByTestId("mark-reviewed")).toBeVisible();
+    await expect(page.getByTestId("history-empty")).toBeVisible();
+    await expect
+      .poll(() => page.locator(".photo-img").evaluateAll((imgs) => imgs.every((i) => (i as HTMLImageElement).complete)))
+      .toBe(true);
+    await shot("report-awaiting");
+    await page.getByTestId("edit-report").click();
+    await expect(page.getByTestId("edit-form")).toBeVisible();
+    await page.getByLabel("Manager notes (internal)").fill("Chase the customer for sign-off before invoicing.");
+    await shot("report-edit");
+
+    await page.goto(`/reports/${withPhotos.id}`);
     await page.getByTestId("photo-thumb").first().click();
     await expect(page.getByTestId("lightbox")).toBeVisible();
     await page.screenshot({ path: `${dir}/lightbox-${size.name}.png` });

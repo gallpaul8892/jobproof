@@ -10,5 +10,6 @@ export const queryKeys = {
   painters: ["painters"] as const,
   reports: (filters: ReportFilters) => ["reports", filters] as const,
   report: (id: string) => ["report", id] as const,
+  reportHistory: (id: string) => ["report-history", id] as const,
   invoices: (filters: InvoiceFilters) => ["invoices", filters] as const,
 };

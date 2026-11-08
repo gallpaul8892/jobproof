@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import {
   customerTypeLabel,
@@ -12,6 +12,7 @@ import {
   paymentMethodLabel,
   quoteStatusLabel,
   useReport,
+  useRefreshReport,
   type ReportDetail,
 } from "@jobproof/shared";
 import { ApiError } from "@jobproof/shared";
@@ -19,6 +20,9 @@ import { useThrottledRefetch } from "../components/useThrottledRefetch";
 import { PhotoGallery } from "../components/PhotoGallery";
 import { QueryBoundary } from "../components/QueryBoundary";
 import { BillingBadge, PageHeader, ReviewBadge, TableWrap, useDocumentTitle } from "../components/ui";
+import { EditReportForm } from "./report/EditReportForm";
+import { HistoryPanel } from "./report/HistoryPanel";
+import { ReviewPanel } from "./report/ReviewPanel";
 
 function Row({ label, children, testId }: { label: string; children: ReactNode; testId?: string }) {
   return (
@@ -38,10 +42,38 @@ function Section({ title, id, children, wide }: { title: string; id: string; chi
   );
 }
 
-function Detail({ r, onImageError, version }: { r: ReportDetail; onImageError: () => void; version: number }) {
+interface EditControls {
+  editing: boolean;
+  formKey: number;
+  onSaved: (refetch: boolean) => void;
+  onClose: () => void;
+  onReload: () => Promise<void>;
+}
+
+function Detail({
+  r,
+  onImageError,
+  version,
+  edit,
+}: {
+  r: ReportDetail;
+  onImageError: () => void;
+  version: number;
+  edit: EditControls;
+}) {
   const { job, customer, quote, invoice } = r;
   return (
     <div className="detail-grid">
+      {edit.editing && (
+        <EditReportForm
+          key={edit.formKey}
+          report={r}
+          onSaved={edit.onSaved}
+          onClose={edit.onClose}
+          onReload={edit.onReload}
+        />
+      )}
+
       <Section title="Job details" id="job-details">
         <dl className="kv">
           <Row label="Type">{jobTypeLabel(job.job_type)}</Row>
@@ -75,49 +107,58 @@ function Detail({ r, onImageError, version }: { r: ReportDetail; onImageError: (
         <dl className="kv">
           <Row label="Painter">{r.painter.name}</Row>
           <Row label="Submitted">{formatDateTime(r.submitted_at)}</Row>
-          <Row label="Review">
-            {r.review_status === "reviewed" && r.reviewed_at ? (
-              <>
-                Reviewed by {r.reviewed_by?.name ?? "a manager"}, {formatDateTime(r.reviewed_at)}
-              </>
-            ) : (
-              "Awaiting review"
-            )}
-          </Row>
         </dl>
-        <h3>Painter notes</h3>
-        {r.painter_notes ? (
-          <p className="prewrap" data-testid="painter-notes">
-            {r.painter_notes}
-          </p>
-        ) : (
-          <p className="muted">The painter left no notes.</p>
+        <h3>Review</h3>
+        <ReviewPanel report={r} editing={edit.editing} />
+        {!edit.editing && (
+          <>
+            <h3>Painter notes</h3>
+            {r.painter_notes ? (
+              <p className="prewrap" data-testid="painter-notes">
+                {r.painter_notes}
+              </p>
+            ) : (
+              <p className="muted">The painter left no notes.</p>
+            )}
+            <h3>Manager notes (internal)</h3>
+            {r.manager_notes ? (
+              <p className="prewrap" data-testid="manager-notes">
+                {r.manager_notes}
+              </p>
+            ) : (
+              <p className="muted" data-testid="manager-notes-empty">
+                No manager notes.
+              </p>
+            )}
+          </>
         )}
       </Section>
 
-      <Section title="Checklist" id="checklist">
-        {r.checklist.length === 0 ? (
-          <p className="muted">No checklist was submitted.</p>
-        ) : (
-          <ul className="checklist">
-            {r.checklist.map((item) => (
-              <li key={item.id} className={item.done ? "" : "check-open"}>
-                <span className={`check-mark ${item.done ? "check-done" : "check-todo"}`} aria-hidden="true">
-                  {item.done ? "✓" : "!"}
-                </span>
-                <div>
-                  <span>
-                    {item.label}
-                    <span className="sr-only">{item.done ? " (done)" : ""}</span>
+      {!edit.editing && (
+        <Section title="Checklist" id="checklist">
+          {r.checklist.length === 0 ? (
+            <p className="muted">No checklist was submitted.</p>
+          ) : (
+            <ul className="checklist">
+              {r.checklist.map((item) => (
+                <li key={item.id} className={item.done ? "" : "check-open"}>
+                  <span className={`check-mark ${item.done ? "check-done" : "check-todo"}`} aria-hidden="true">
+                    {item.done ? "✓" : "!"}
                   </span>
-                  {!item.done && <span className="tag-open">Not done</span>}
-                  {item.note && <p className="muted small">{item.note}</p>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+                  <div>
+                    <span>
+                      {item.label}
+                      <span className="sr-only">{item.done ? " (done)" : ""}</span>
+                    </span>
+                    {!item.done && <span className="tag-open">Not done</span>}
+                    {item.note && <p className="muted small">{item.note}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      )}
 
       <Section title="Photos" id="photos" wide>
         <PhotoGallery photos={r.photos} onImageError={onImageError} version={version} />
@@ -199,16 +240,27 @@ function Detail({ r, onImageError, version }: { r: ReportDetail; onImageError: (
           </TableWrap>
         )}
       </Section>
+
+      <HistoryPanel reportId={r.id} />
     </div>
   );
 }
 
+/** Keyed by report id, so edit mode never carries over to another report. */
 export function ReportDetailPage() {
   const { reportId = "" } = useParams();
+  return <ReportDetailView key={reportId} reportId={reportId} />;
+}
+
+function ReportDetailView({ reportId }: { reportId: string }) {
   const location = useLocation();
   const listSearch = (location.state as { listSearch?: string } | null)?.listSearch ?? "";
   const query = useReport(reportId);
   const data = query.data;
+  const refresh = useRefreshReport(reportId);
+  const [editing, setEditing] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+  const [saved, setSaved] = useState(false);
   // Signed photo URLs expire; a failed image refetches the report once a minute at most.
   const refreshPhotoUrls = useThrottledRefetch(query.refetch);
   useDocumentTitle(data ? `Report ${data.job.reference}` : "Report");
@@ -241,15 +293,54 @@ export function ReportDetailPage() {
         title={data ? `${data.job.reference} · ${data.job.title}` : "Report"}
         actions={
           data && (
-            <div className="badges">
-              <ReviewBadge status={data.review_status} />
-              <BillingBadge status={data.billing_status} />
+            <div className="header-actions">
+              <div className="badges">
+                <ReviewBadge status={data.review_status} />
+                <BillingBadge status={data.billing_status} />
+              </div>
+              {!editing && (
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="edit-report"
+                  onClick={() => {
+                    setSaved(false);
+                    setEditing(true);
+                  }}
+                >
+                  Edit report
+                </button>
+              )}
             </div>
           )
         }
       />
+      {/* Always rendered, so a screen reader announces the text when it appears. */}
+      <p role="status" className={saved ? "saved page-saved" : "sr-only"} data-testid="edit-saved">
+        {saved ? "Changes saved" : ""}
+      </p>
       <QueryBoundary query={query} what="this report" skeletonRows={6}>
-        {(r) => <Detail r={r} onImageError={refreshPhotoUrls} version={query.dataUpdatedAt} />}
+        {(r) => (
+          <Detail
+            r={r}
+            onImageError={refreshPhotoUrls}
+            version={query.dataUpdatedAt}
+            edit={{
+              editing,
+              formKey,
+              onSaved: (refetch) => {
+                setEditing(false);
+                setSaved(true);
+                if (refetch) void refresh();
+              },
+              onClose: () => setEditing(false),
+              onReload: async () => {
+                await refresh();
+                setFormKey((k) => k + 1);
+              },
+            }}
+          />
+        )}
       </QueryBoundary>
     </>
   );

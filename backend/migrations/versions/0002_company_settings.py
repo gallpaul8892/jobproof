@@ -31,7 +31,10 @@ _HEX = "^#[0-9A-F]{6}$"
 
 
 # Control and invisible formatting characters; frozen copy of the company-name rule.
-_FORBIDDEN = re.compile("[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+# Includes lone UTF-16 surrogates U+D800-U+DFFF (an environment variable with undecodable bytes).
+_FORBIDDEN = re.compile(
+    "[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff\ud800-\udfff]"
+)
 
 
 def _company_name() -> str:

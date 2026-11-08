@@ -21,6 +21,15 @@ Playwright at an installed Chrome/Chromium instead:
 (Chrome for Testing 153.0.8010.12) is installed and no Playwright cache exists in
 `~/.cache/ms-playwright`.
 
+## Tests that write
+
+`review.spec.ts`, `edit-report.spec.ts` and `history.spec.ts` review and edit reports, and
+`settings-writes.spec.ts` changes the company settings. They run as their own Playwright projects,
+after the read-only tests and one project at a time (see `playwright.config.ts`). The report tests
+reseed the mock data before each test and once at the end, by running `scripts/dev.sh seed`; set
+`RESEED_COMMAND` (a shell command) for a stack started another way, for example
+`RESEED_COMMAND="make seed"`. To run one of them alone: `npx playwright test review.spec --project=reviews --no-deps`.
+
 ## Other variables
 
 - `WEB_URL`: base URL of the web app (default `http://localhost:8080`).

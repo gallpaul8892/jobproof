@@ -123,6 +123,35 @@ def test_invalid_names_are_422_and_nothing_is_saved(
     assert client.get(URL, headers=admin_headers).json()["updated_at"] is None
 
 
+@pytest.mark.parametrize("escape", ["Acme\\ud800", "\\udc00Acme", "A\\udfffB", "A\\ud83dB"])
+def test_lone_surrogates_are_422_and_nothing_is_saved(
+    client: TestClient, admin_headers: dict[str, str], escape: str
+) -> None:
+    # httpx cannot encode a lone surrogate, so send the JSON escape as raw bytes.
+    response = client.patch(
+        URL,
+        headers={**admin_headers, "Content-Type": "application/json"},
+        content=f'{{"company_name":"{escape}"}}'.encode(),
+    )
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert [e["loc"] for e in body["errors"]] == [["body", "company_name"]]
+    assert _branding(client)["company_name"] == DEFAULT_COMPANY_NAME
+
+
+def test_a_surrogate_pair_is_one_astral_character(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    response = client.patch(
+        URL,
+        headers={**admin_headers, "Content-Type": "application/json"},
+        content=b'{"company_name":"Acme \\ud83c\\udfa8"}',
+    )
+    assert response.status_code == 200
+    assert _branding(client)["company_name"] == "Acme \U0001f3a8"
+
+
 def test_markup_is_stored_as_plain_text(client: TestClient, admin_headers: dict[str, str]) -> None:
     name = "<script>alert(1)</script> & Sons"
     assert _patch(client, admin_headers, {"company_name": name}).status_code == 200
@@ -326,3 +355,13 @@ def test_the_updating_admin_name_is_a_snapshot(
             connection.execute(
                 text("UPDATE users SET full_name = 'Tom Ashworth' WHERE role = 'admin'")
             )
+
+
+@pytest.mark.parametrize("value", ["Acme\ud800", "\udc00Acme", "A\udfffB"])
+def test_the_name_rule_itself_rejects_lone_surrogates(value: str) -> None:
+    from app.schemas.settings import contains_forbidden_character, validate_company_name
+
+    assert contains_forbidden_character(value)
+    with pytest.raises(ValueError, match="Remove control characters"):
+        validate_company_name(value)
+    assert not contains_forbidden_character("Acme \U0001f3a8")

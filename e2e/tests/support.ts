@@ -1,4 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 
 import { ADMIN, API_URL, DEFAULT_NAME, DEFAULT_THEME_COLOURS } from "./support-constants";
@@ -49,8 +51,48 @@ export class ManagerApi {
     private readonly token: string,
   ) {}
 
-  static async create(request: APIRequestContext): Promise<ManagerApi> {
-    return new ManagerApi(request, await apiToken(request));
+  static async create(request: APIRequestContext, who = MANAGER): Promise<ManagerApi> {
+    return new ManagerApi(request, await apiToken(request, who));
+  }
+
+  /** A write straight to the API (set-up and checks); returns the raw response so a test can assert on 409 etc. */
+  async send(method: "POST" | "PATCH", path: string, data: unknown) {
+    return this.request.fetch(`${API_URL}/api/v1/manager/${path}`, {
+      method,
+      data,
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+  }
+
+  /** Marks a report reviewed through the API at its current version. */
+  async review(reportId: string): Promise<ReportFull> {
+    const current = await this.get<ReportFull>(`reports/${reportId}`);
+    const res = await this.send("POST", `reports/${reportId}/review`, { version: current.version });
+    expect(res.ok(), `review ${reportId}`).toBe(true);
+    return (await res.json()) as ReportFull;
+  }
+
+  /** Edits a report through the API at its current version. */
+  async edit(reportId: string, changes: Record<string, unknown>): Promise<ReportFull> {
+    const current = await this.get<ReportFull>(`reports/${reportId}`);
+    const res = await this.send("PATCH", `reports/${reportId}`, { version: current.version, ...changes });
+    expect(res.ok(), `edit ${reportId}`).toBe(true);
+    return (await res.json()) as ReportFull;
+  }
+
+  /** Audit events of a report, newest first. */
+  async history(reportId: string): Promise<AuditItem[]> {
+    return (await this.get<{ items: AuditItem[] }>(`reports/${reportId}/history`)).items;
+  }
+
+  /** Awaiting-review reports, oldest first: the order of the dashboard queue. */
+  async awaiting(): Promise<ReportItem[]> {
+    const page = await this.get<{ items: ReportItem[] }>("reports", {
+      review_status: "awaiting_review",
+      sort: "submitted_asc",
+      page_size: 100,
+    });
+    return page.items;
   }
 
   async get<T>(path: string, query: Record<string, string | number> = {}): Promise<T> {
@@ -69,7 +111,31 @@ export class ManagerApi {
   }
 }
 
+export interface AuditItem {
+  id: string;
+  occurred_at: string;
+  actor: { id: string; name: string };
+  action: "report.reviewed" | "report.reopened" | "report.edited" | "settings.changed";
+  changes: { field: string; item_id: string | null; item_label: string | null; old_value: unknown; new_value: unknown }[];
+}
+
+export interface ReportFull {
+  id: string;
+  version: number;
+  review_status: "awaiting_review" | "reviewed";
+  submitted_at: string;
+  reviewed_at: string | null;
+  reviewed_by: { id: string; name: string } | null;
+  last_changed_at: string | null;
+  last_changed_by: { id: string; name: string } | null;
+  painter_notes: string | null;
+  manager_notes: string | null;
+  job: { reference: string; title: string };
+  checklist: { id: string; label: string; done: boolean; note: string | null }[];
+}
+
 export interface ReportItem {
+  submitted_at: string;
   id: string;
   job_reference: string;
   customer: { id: string; name: string };
@@ -176,4 +242,64 @@ export async function expectNoContrastViolations(page: Page, label: string): Pro
   const results = await new AxeBuilder({ page }).withRules(["color-contrast"]).analyze();
   const summary = results.violations.flatMap((v) => v.nodes.map((n) => `${label}: ${v.id} ${n.target.join(" ")} ${n.any[0]?.message ?? ""}`));
   expect(summary, `color-contrast violations on ${label}`).toEqual([]);
+}
+
+/**
+ * Puts the mock data back to the seed. Tests that write call this first, because reviews and edits
+ * change what every other test sees. `RESEED_COMMAND` overrides the default for stacks started another way.
+ */
+export function reseed(): void {
+  const custom = process.env.RESEED_COMMAND;
+  if (custom) {
+    execFileSync("bash", ["-c", custom], { stdio: "pipe" });
+    return;
+  }
+  execFileSync(fileURLToPath(new URL("../../scripts/dev.sh", import.meta.url)), ["seed"], { stdio: "pipe" });
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function londonParts(iso: string): Record<string, string> {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  return Object.fromEntries(parts.map((p) => [p.type, p.value]));
+}
+
+/** "15 Oct 2026, 11:42" in Europe/London, written independently of the app's formatter. */
+export function londonDateTime(iso: string): string {
+  const p = londonParts(iso);
+  return `${Number(p.day)} ${MONTHS[Number(p.month) - 1]} ${p.year}, ${p.hour}:${p.minute}`;
+}
+
+/** "11:42" in Europe/London. */
+export function londonTime(iso: string): string {
+  const p = londonParts(iso);
+  return `${p.hour}:${p.minute}`;
+}
+
+/** Whole London calendar days from one instant to another. */
+export function londonDaysBetween(fromIso: string, toIso: string): number {
+  const day = (iso: string) => {
+    const p = londonParts(iso);
+    return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)) / 86_400_000;
+  };
+  return day(toIso) - day(fromIso);
+}
+
+export function waitingText(days: number): string {
+  return days === 0 ? "Waiting since today" : days === 1 ? "Waiting 1 day" : `Waiting ${days} days`;
+}
+
+/** Full axe run (WCAG 2.x A and AA) on the current page; fails with a readable list. */
+export async function expectNoAxeViolations(page: Page, label: string): Promise<void> {
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+  const summary = results.violations.map((v) => `${label}: ${v.id} ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
+  expect(summary, `axe violations on ${label}`).toEqual([]);
 }

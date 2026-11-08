@@ -134,6 +134,8 @@ def test_mismatched_prompts_exit_without_creating(
         (EMAIL, "Ada\u202e"),
         (EMAIL, "A\u200bda"),
         (EMAIL, "\u001fAda"),
+        (EMAIL, "Ada\ud800"),
+        (EMAIL, "\udc00Ada"),
     ],
 )
 def test_bad_email_or_name_is_refused(

@@ -13,6 +13,10 @@ export {
   useInvoices,
   shouldRetry,
 } from "./hooks/useManager";
+export { useReviewReport, useUpdateReport, useReportHistory, useRefreshReport } from "./hooks/useReportWrites";
+export * from "./history";
+export * from "./conflict";
+export * from "./reportEdit";
 export { useBranding } from "./hooks/useBranding";
 export { useAdminSettings, useUpdateAdminSettings } from "./hooks/useAdmin";
 export * from "./branding";
@@ -48,5 +52,11 @@ export type {
   Role,
   User,
   AdminSettingsUpdate,
+  AuditAction,
+  AuditChange,
+  AuditEvent,
+  AuditHistory,
+  ReportUpdate,
+  ReportEditableValues,
 } from "./generated";
 export * from "./format/address";
