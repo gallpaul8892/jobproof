@@ -550,8 +550,9 @@ configuration changes. INFRA-6 includes doing this once in dev, written up as a 
 ## 8. Work breakdown
 
 Order: INFRA-1, INFRA-2 and INFRA-3 can run in parallel, then INFRA-4, INFRA-5, INFRA-6,
-INFRA-7. INFRA-8 is later. None of it conflicts with the planned T-002m/n/o work (migrations
-0007 and 0008 just become part of the chain the first deploy applies).
+INFRA-7. INFRA-8 is later. None of it conflicts with the T-002 work: the built migrations 0007
+(T-002n) and 0008 (T-002p), and 0009 if the optional T-002m is built, are simply part of the
+chain the first deploy applies.
 
 | Ticket | Content | Claude without AWS? | Needs Paul |
 |---|---|---|---|

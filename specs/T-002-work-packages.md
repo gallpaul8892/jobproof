@@ -37,7 +37,8 @@ it is built ticket by ticket, `backend/tests/contract.py` (changed once, in T-00
   Keep the mechanism (it is how later epics stage contracts).
 - Package 4: the architect set `PENDING_TICKETS = {"T-002n", "T-002o"}` when writing the
   contract (2026-11-08); backend tests are green with it. T-002n removes its id; T-002o (no
-  contract items) removes its id last, leaving the set empty.
+  contract items) removes its id last, leaving the set empty. Done: the set is empty (checked
+  2026-11-08; T-002p's contract items, v0.4.0, are built too).
 - Never put `x-ticket` on a component schema, only on the operations, parameters and properties
   that use it: `strip_pending` deletes marked nodes, and a hidden schema still referenced from a
   visible place would break `$ref` resolution.
