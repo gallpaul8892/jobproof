@@ -498,6 +498,26 @@ def test_validation_reports_one_entry_per_problem(
     assert ["body", "checklist", 0, "done"] in locs
     assert ["body", "checklist", 0, "note"] in locs
     assert len(locs) == 4
+    messages = {tuple(e["loc"]): e["message"] for e in response.json()["errors"]}
+    assert "at most 5000 characters" in messages[("body", "painter_notes")]
+    assert "at most 500 characters" in messages[("body", "checklist", 0, "note")]
+    assert "items" not in messages[("body", "painter_notes")]
+
+
+def test_checklist_over_the_maximum_is_one_clear_422(
+    client: TestClient, manager_headers: dict[str, str], db_engine: Engine, ds: Any
+) -> None:
+    target = awaiting_reports(ds)[0]
+    before = report_row(db_engine, target.id)
+    items = [{"id": str(uuid.uuid4()), "done": True} for _ in range(101)]
+    response = patch(client, manager_headers, target.id, {"version": 1, "checklist": items})
+    assert response.status_code == 422
+    assert_contract(response, "updateManagerReport")
+    errors = response.json()["errors"]
+    assert len(errors) == 1 and errors[0]["loc"] == ["body", "checklist"]
+    assert "at most 100 items" in errors[0]["message"]
+    assert len(response.content) < 2000
+    assert report_row(db_engine, target.id) == before
 
 
 @pytest.mark.parametrize(

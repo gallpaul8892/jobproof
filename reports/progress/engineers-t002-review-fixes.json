@@ -1,0 +1,49 @@
+{
+  "id": "engineers-t002-review-fixes",
+  "title": "Engineers report: fixes for the minor findings of review-t002-pkg23",
+  "agent": "backend-engineer + frontend-engineer",
+  "model": "sonnet",
+  "status": "done",
+  "date": "2026-11-08",
+  "summary": "Fixed findings 4 to 8 and the documentation findings 3 and 9. Backend 738 passed (1 skip), Vitest shared 101 and web 202 passed (2 opt-in skips), Playwright e2e 133 passed with screenshots on. make lint is clean (redocly keeps its 2 existing warnings).",
+  "blocks": [
+    {
+      "heading": "Findings",
+      "type": "table",
+      "columns": [
+        "Finding",
+        "What was done"
+      ],
+      "rows": [
+        [
+          "#3 ARCHITECTURE.md marks built work as planned",
+          "Markers removed for T-002a to T-002l (file map, migrations 0002 to 0006, patterns, personas, sections 9, 9.1, 9.2, 16); operations now '17, all built'. T-002m items stay planned."
+        ],
+        [
+          "#4 checklist length unbounded",
+          "ReportUpdate.checklist max_length=100: one 422 entry at body.checklist ('at most 100 items'), response under 2 KB, nothing saved. openapi maxItems: 100, client regenerated (gen:check OK). New API test."
+        ],
+        [
+          "#5 note length wording",
+          "The length rule now sits before the validator, so the message is 'String should have at most 5000 characters' (500 for checklist notes). Asserted in the scenario 9 test."
+        ],
+        [
+          "#6 'Marked as reviewed' after a reopening edit",
+          "ReviewPanel drops the done and already-reviewed note when the report goes from reviewed back to awaiting. Vitest case and an e2e step (review, edit, save, expect Awaiting review and no confirmation)."
+        ],
+        [
+          "#7 Reload latest refetch failure",
+          "useRefreshReport accepts strict:true so the refetch throws; the form keeps the typed text and the conflict view and shows 'Could not load the latest version. Try again.' Vitest case and an e2e step that aborts the request."
+        ],
+        [
+          "#8 review queue at 768px and 360px",
+          "Site address shown in the stacked cell at 768px; stacked cards below 640px (grid per row, Review button at the right). Screenshots retaken at 768 and 360 and inspected: no overflow, address and button visible."
+        ],
+        [
+          "#9 AWS role note",
+          "Added to backlog B11: the app role must not own audit_events and must lack TRUNCATE on audit_events, users and job_reports."
+        ]
+      ]
+    }
+  ]
+}

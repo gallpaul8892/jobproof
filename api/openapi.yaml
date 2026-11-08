@@ -1103,6 +1103,7 @@ components:
         checklist:
           type: array
           minItems: 1
+          maxItems: 100
           description: Only the items sent are changed; ids must be unique and belong to this report
           items: { $ref: "#/components/schemas/ChecklistItemUpdate" }
 

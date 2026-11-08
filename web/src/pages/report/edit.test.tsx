@@ -7,11 +7,15 @@ import { EditReportForm } from "./EditReportForm";
 
 const ME = { id: PRIYA.id, full_name: PRIYA.name, email: "p@x.test", role: "manager" };
 
-function setup(handler: Parameters<typeof mockApi>[0], r = report()) {
+function setup(
+  handler: Parameters<typeof mockApi>[0],
+  r = report(),
+  reload: () => Promise<void> = async () => undefined,
+) {
   const calls = mockApi((req) => (req.path.endsWith("/auth/me") ? { body: ME } : handler(req)));
   const onSaved = vi.fn();
   const onClose = vi.fn();
-  const onReload = vi.fn(async () => undefined);
+  const onReload = vi.fn(reload);
   const utils = renderWithDataRouter(<EditReportForm report={r} onSaved={onSaved} onClose={onClose} onReload={onReload} />);
   const patches = () => calls.filter((c) => c.method === "PATCH");
   return { calls, patches, onSaved, onClose, onReload, ...utils };
@@ -125,6 +129,33 @@ describe("EditReportForm", () => {
     await userEvent.click(screen.getByTestId("reload-latest"));
     await userEvent.click(screen.getByTestId("reload-dialog-confirm"));
     expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the typed text and the conflict view, with an error, when the reload fails", async () => {
+    const { onReload } = setup(
+      () =>
+        problem(409, "version_conflict", {
+          current_version: 2,
+          review_status: "awaiting_review",
+          last_changed_by: SARAH,
+          last_changed_at: "2026-10-15T10:40:00Z",
+          current: { painter_notes: "S" },
+        }),
+      report(),
+      async () => {
+        throw new Error("offline");
+      },
+    );
+    await userEvent.type(painter(), "!");
+    const typed = painter().value;
+    await userEvent.click(saveButton());
+    await userEvent.click(await screen.findByTestId("reload-latest"));
+    await userEvent.click(screen.getByTestId("reload-dialog-confirm"));
+    const failed = await screen.findByTestId("reload-failed");
+    expect(failed.textContent).toBe("Could not load the latest version. Try again.");
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(painter().value).toBe(typed);
+    expect(screen.getByTestId("edit-conflict")).toBeTruthy();
   });
 
   it("treats a 409 that shows the user's own identical change as saved (lost reply)", async () => {

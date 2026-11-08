@@ -336,7 +336,7 @@ function ReportDetailView({ reportId }: { reportId: string }) {
               },
               onClose: () => setEditing(false),
               onReload: async () => {
-                await refresh();
+                await refresh({ strict: true });
                 setFormKey((k) => k + 1);
               },
             }}

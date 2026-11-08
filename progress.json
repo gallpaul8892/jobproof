@@ -1,7 +1,7 @@
 {
   "project": "JobProof",
-  "summary": "Phase 1 complete: manager view with mock data, running locally. Next: Docker first run, then painter app",
-  "updated": "2026-11-07 21:34",
+  "summary": "Phase 2a built: Admin and branding, review queue, review, audit trail, report edits, neutral wording (T-002a to T-002l). T-002m (optional mock data profile) not started. Next: Docker first run, then painter app",
+  "updated": "2026-11-08 07:15",
   "phases": [
     {
       "id": "setup",
@@ -65,6 +65,110 @@
       ]
     },
     {
+      "id": "phase2a",
+      "name": "Phase 2a: Admin, branding, review and edit (T-002, web, mock data)",
+      "items": [
+        {
+          "id": "T-002",
+          "title": "Admin company settings, review workflow and report editing (epic)",
+          "owner": "product-owner",
+          "status": "in_progress",
+          "note": "T-002a to T-002l done; T-002m optional and open. Review minors 3 to 9 fixed"
+        },
+        {
+          "id": "T-002a",
+          "title": "Company settings table and public branding endpoint",
+          "owner": "backend-engineer",
+          "status": "done",
+          "note": "Package 1: reviewed, round 1 fixes made (review-t002-pkg1)"
+        },
+        {
+          "id": "T-002b",
+          "title": "Admin persona and authorisation",
+          "owner": "backend+frontend",
+          "status": "done",
+          "note": "Package 1: reviewed, round 1 fixes made (review-t002-pkg1)"
+        },
+        {
+          "id": "T-002c",
+          "title": "Admin sets the company name",
+          "owner": "backend+frontend",
+          "status": "done",
+          "note": "Package 1: reviewed, round 1 fixes made (review-t002-pkg1)"
+        },
+        {
+          "id": "T-002d",
+          "title": "Default dark green theme",
+          "owner": "frontend-engineer",
+          "status": "done",
+          "note": "Package 1: reviewed, round 1 fixes made (review-t002-pkg1)"
+        },
+        {
+          "id": "T-002e",
+          "title": "Admin chooses the colour scheme (contrast enforced)",
+          "owner": "backend+frontend",
+          "status": "done",
+          "note": "Package 1: reviewed, round 1 fixes made (review-t002-pkg1)"
+        },
+        {
+          "id": "T-002k",
+          "title": "Dashboard review queue",
+          "owner": "backend+frontend",
+          "status": "done",
+          "note": "Package 2: review APPROVE (review-t002-pkg23)"
+        },
+        {
+          "id": "T-002g",
+          "title": "Review API (mark reviewed, optimistic concurrency)",
+          "owner": "backend-engineer",
+          "status": "done",
+          "note": "Package 2: review APPROVE (review-t002-pkg23)"
+        },
+        {
+          "id": "T-002h",
+          "title": "Review UI",
+          "owner": "frontend-engineer",
+          "status": "done",
+          "note": "Package 2: review APPROVE (review-t002-pkg23)"
+        },
+        {
+          "id": "T-002f",
+          "title": "Audit trail and history",
+          "owner": "backend+frontend",
+          "status": "done",
+          "note": "Package 2: review APPROVE (review-t002-pkg23)"
+        },
+        {
+          "id": "T-002i",
+          "title": "Edit report API (notes, checklist)",
+          "owner": "backend-engineer",
+          "status": "done",
+          "note": "Package 2: review APPROVE (review-t002-pkg23)"
+        },
+        {
+          "id": "T-002j",
+          "title": "Edit report UI with conflict handling",
+          "owner": "frontend-engineer",
+          "status": "done",
+          "note": "Package 2: review APPROVE (review-t002-pkg23)"
+        },
+        {
+          "id": "T-002l",
+          "title": "Industry-neutral wording",
+          "owner": "frontend-engineer",
+          "status": "done",
+          "note": "Package 3: review APPROVE (review-t002-pkg23)"
+        },
+        {
+          "id": "T-002m",
+          "title": "Tree-surgery mock data profile (optional)",
+          "owner": "backend-engineer",
+          "status": "backlog",
+          "note": "Optional, deferred; not built"
+        }
+      ]
+    },
+    {
       "id": "later",
       "name": "Later phases",
       "items": [
@@ -112,25 +216,25 @@
       "name": "product-owner",
       "model": "sonnet",
       "status": "idle",
-      "note": ""
+      "note": "T-002 tickets written"
     },
     {
       "name": "architect",
       "model": "opus",
       "status": "idle",
-      "note": "Phase 1 ARCHITECTURE.md update done"
+      "note": "T-002 specs, contract v0.2.0; ARCHITECTURE.md as-built update"
     },
     {
       "name": "backend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": "APP_ENV required, 336 tests"
+      "note": "Review minors fixed: 738 backend tests"
     },
     {
       "name": "frontend-engineer",
       "model": "sonnet",
       "status": "idle",
-      "note": "T-001d review fixes done"
+      "note": "Review minors fixed: 202 web tests, 133 e2e"
     },
     {
       "name": "test-engineer",
@@ -142,7 +246,7 @@
       "name": "code-reviewer",
       "model": "opus",
       "status": "idle",
-      "note": "Phase 1 approved"
+      "note": "T-002 packages 1 to 3 reviewed: APPROVE"
     },
     {
       "name": "dependency-checker",
@@ -271,6 +375,56 @@
       "time": "2026-11-07 21:33",
       "who": "orchestrator",
       "msg": "Phase 1 complete. Clean-start check: lint, 337 backend + 159 frontend tests, 48 e2e, audit 0"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "product-owner",
+      "msg": "T-002 epic and 13 tickets written (admin settings, review workflow, report editing)"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "architect",
+      "msg": "T-002 specs, work packages and contract v0.2.0 written"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "backend-engineer",
+      "msg": "Package 1 backend: T-002a/b/c/e (migrations 0002, 0003)"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "frontend-engineer",
+      "msg": "Package 1 frontend: theme, branding, admin settings"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "code-reviewer",
+      "msg": "Package 1: CHANGES REQUESTED (1 major contrast, 7 minor)"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "backend-engineer",
+      "msg": "Package 1 fixes: contrast on both backgrounds, name rule, demo guard"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "backend-engineer",
+      "msg": "Package 2 backend: T-002k/g/f/i (migrations 0004 to 0006)"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "frontend-engineer",
+      "msg": "Package 2 frontend T-002h/j and Package 3 T-002l (Operative wording)"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "code-reviewer",
+      "msg": "Packages 2 and 3: APPROVE, 9 minor. Fixed flaky concurrency test (test-harness bug)"
+    },
+    {
+      "time": "2026-11-08 07:15",
+      "who": "orchestrator",
+      "msg": "Review minors 3 to 9 fixed: 738 backend, 101+202 vitest, 133 e2e; screenshots retaken at 768 and 360"
     }
   ],
   "reports": [
@@ -1493,6 +1647,630 @@
             [
               "Docker images and docker compose up",
               "NOT run: no Docker daemon in the build environment. docker compose config passes"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "architect-t002",
+      "title": "Architect report: company branding, Admin, review and editing (T-002)",
+      "agent": "architect",
+      "model": "opus",
+      "status": "done",
+      "date": "2026-11-07",
+      "summary": "Wrote the technical plans for all 13 T-002 tickets, updated the API contract (the agreement between the server and the web app) and the architecture document. The work is split into three packages that engineers build one after another. Paul's open questions were answered with the defaults written in the tickets; any of them can still be changed. No application code was written.",
+      "blocks": [
+        {
+          "heading": "Documents produced",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "label": "specs/T-002a.md to T-002m.md",
+              "text": "One technical plan per ticket: what is stored, what the server offers, what each screen does, and how each scenario is tested."
+            },
+            {
+              "label": "specs/T-002-work-packages.md",
+              "text": "The build order, and exactly which files each package creates or changes, so engineers do not tread on each other."
+            },
+            {
+              "label": "api/openapi.yaml (version 0.2.0)",
+              "text": "Seven new operations: public branding, Admin settings (read, change, history), mark a report reviewed, edit a report, and report history. Plus the review queue on the dashboard and a sort option on the reports list. Checked with the contract linter and the client generator."
+            },
+            {
+              "label": "ARCHITECTURE.md",
+              "text": "New section 16 with decisions D1 to D7, a database change plan (six steps), the Admin security model, how colours are applied safely, and new backlog items. The old 'T-002a hardening' backlog label is now T-003."
+            }
+          ]
+        },
+        {
+          "heading": "Work packages (built in this order)",
+          "type": "table",
+          "columns": [
+            "Package",
+            "Tickets",
+            "What it delivers"
+          ],
+          "rows": [
+            [
+              "1. Branding and Admin",
+              "T-002a, b, c, d, e",
+              "Company settings record, Admin sign-in and Settings page, company name in the header and tab title, the new dark green look, colour scheme choice with readability checks"
+            ],
+            [
+              "2. Review, edit, audit",
+              "T-002k, g, h, f, i, j",
+              "Dashboard queue of the next 5 reports, 'Mark as reviewed', a permanent change history, and editing notes and checklist safely when two managers work at once"
+            ],
+            [
+              "3. Wording and demo data",
+              "T-002l, T-002m (optional)",
+              "'Operative' instead of 'Painter' on screen; an optional tree-surgery demo dataset"
+            ]
+          ]
+        },
+        {
+          "heading": "Key decisions in plain English",
+          "type": "list",
+          "open": true,
+          "items": [
+            {
+              "label": "One copy of the app per company.",
+              "text": "Each company gets its own installation and database. Its name and colours live in a single settings record that the Admin can change. This keeps each company's data completely separate and can grow into a shared multi-company system later."
+            },
+            {
+              "label": "Admin is a separate account.",
+              "text": "The Admin sees only Settings: no reports or billing. Managers cannot open Settings. The server checks this on every request, not just the screens."
+            },
+            {
+              "label": "Colours that are hard to read are refused.",
+              "text": "Both the header/button colour and the link colour must be clearly readable against white (the WCAG AA standard, 4.5 to 1). The server refuses anything weaker, and the page shows the problem before saving."
+            },
+            {
+              "label": "Colours change without breaking security.",
+              "text": "The site's security policy forbids injected style code, so colours are set through the browser's own styling interface instead. The company name and colours are remembered in the browser so pages open in the right colours straight away, then checked for updates."
+            },
+            {
+              "label": "Nobody can overwrite someone else's work.",
+              "text": "Every report has a version number. If two managers edit or review the same report, the second one is told who changed it and when, and keeps what they typed. Nothing is overwritten."
+            },
+            {
+              "label": "History cannot be rewritten.",
+              "text": "Every review, edit and settings change is recorded with who, when, and old and new values. The database itself refuses any attempt to change or delete these records, and they are kept forever."
+            },
+            {
+              "label": "Editing a reviewed report sends it back for review.",
+              "text": "'Reviewed' means 'this content was approved', so changing it reopens it. The history keeps who reviewed it before."
+            },
+            {
+              "label": "No product name on screen.",
+              "text": "The word 'JobProof' and the old logo are removed. The app shows only the company's name, as text."
+            }
+          ]
+        },
+        {
+          "heading": "Defaults used for Paul's open questions",
+          "type": "table",
+          "columns": [
+            "Question",
+            "Default used"
+          ],
+          "rows": [
+            [
+              "Can the Admin see manager pages?",
+              "No, separate accounts"
+            ],
+            [
+              "Reject or warn on hard-to-read colours?",
+              "Reject"
+            ],
+            [
+              "Does editing a reviewed report reopen it?",
+              "Yes"
+            ],
+            [
+              "Which report fields can managers edit?",
+              "Painter notes, checklist ticks and notes, and a new internal manager note"
+            ],
+            [
+              "What to call field workers?",
+              "Operative"
+            ],
+            [
+              "Logo?",
+              "No, company name as text only"
+            ],
+            [
+              "Show 'JobProof' in the app?",
+              "No"
+            ],
+            [
+              "Where does the review queue go?",
+              "Above 'Recent reports' on the dashboard"
+            ],
+            [
+              "Who creates the first Admin in a real deployment?",
+              "A documented one-line command run at setup"
+            ],
+            [
+              "How long is history kept?",
+              "Indefinitely"
+            ]
+          ]
+        },
+        {
+          "heading": "Risks and things to watch",
+          "type": "list",
+          "items": [
+            {
+              "label": "Tests fail until the first ticket starts.",
+              "text": "The contract now describes the finished state. The backend contract tests will fail until T-002a adds the small 'pending tickets' filter, which is its first step."
+            },
+            {
+              "label": "Database changes.",
+              "text": "Six database steps, all reversible on test data. Undoing the history table would delete history, so that is only ever done on test data."
+            },
+            {
+              "label": "Tree-surgery jobs in a real deployment.",
+              "text": "If T-002m is built, job types become data. A real Arbour deployment would still need its own job types loaded; how is a later decision (backlog B10)."
+            },
+            {
+              "label": "Document size.",
+              "text": "ARCHITECTURE.md is now 474 lines. Once T-002 is built and the 'planned' entries are rewritten as built, it should shrink; if not, it will be split by component."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineers-t002-pkg1",
+      "title": "Engineers report: T-002 Package 1 (T-002a to T-002e, branding and Admin)",
+      "agent": "backend-engineer + frontend-engineer",
+      "model": "sonnet",
+      "status": "done",
+      "date": "2026-11-08",
+      "summary": "Built the Admin persona, company settings and branding for the web app: a public branding endpoint, Admin-only settings (company name, colour scheme) with a server-side contrast rule, the dark green default theme and the Admin settings page. Migrations 0002 (company_settings) and 0003 (admin role). A review round followed (review-t002-pkg1) and its fixes were made: contrast is checked against both white and the surface colour, only U+0020 is trimmed and invisible characters are rejected, demo accounts are refused outside local and test, README and docs updated. Backend 472 passed, Vitest 216 passed at review.",
+      "blocks": [
+        {
+          "heading": "What was built",
+          "type": "list",
+          "items": [
+            {
+              "text": "T-002a: company_settings table and GET /branding (public)."
+            },
+            {
+              "text": "T-002b: admin role, router-level role guards, create-admin command, per-role landing page."
+            },
+            {
+              "text": "T-002c and T-002e: PATCH /admin/settings for company name and colours, with the WCAG contrast rule on the server and in the web form."
+            },
+            {
+              "text": "T-002d: dark green default theme applied through CSSOM custom properties (CSP-safe)."
+            }
+          ],
+          "open": true
+        },
+        {
+          "heading": "Review fixes (round 1)",
+          "type": "list",
+          "items": [
+            {
+              "text": "MAJOR: accent contrast now checked on white and on the surface colour (server and contrast.ts), with an e2e axe run on the lowest-contrast accepted accent."
+            },
+            {
+              "text": "Minors: trimming and invisible characters, create-admin control characters, demo-account guard, README, 360px screenshots."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "review-t002-pkg1",
+      "title": "Code review report: T-002 Package 1 (T-002a to T-002e)",
+      "agent": "code-reviewer",
+      "model": "opus",
+      "status": "done",
+      "date": "2026-11-08",
+      "summary": "Round 1: CHANGES REQUESTED with 1 major issue (an accent colour the server accepts can fail WCAG AA on the light surface colour, so 'AA enforced' does not fully hold) and 7 minor ones. No blockers. Admin authorisation, PATCH validation and atomicity, both migrations, CSP-safe theming and escaping of the company name are sound. Backend 472 passed (1 environment skip), Vitest 216 passed, lint, type-check, contract and generated-client checks clean, npm audit and pip-audit report no vulnerabilities.",
+      "blocks": [
+        {
+          "heading": "Round 1 (1 MAJOR, 7 MINOR)",
+          "type": "table",
+          "columns": [
+            "Severity",
+            "Finding",
+            "Resolution"
+          ],
+          "rows": [
+            [
+              "MAJOR",
+              "The colour rule checks the accent only against white, but the CSS also puts accent text on the surface colour (#F4F7F2): the demo-account role labels on the sign-in page, links in hovered table rows and the selected preset card. #767676 is accepted as an accent (spec scenario 2) yet measures 4.20:1 on the surface, below 4.5:1. The axe check only runs with Navy, so it does not catch this. Owner: architect (rule), web (CSS)",
+              "Open. Either check the accent against the surface colour as well as white (server and shared contrast.ts, same table of cases, add a #767676 accent row), or stop putting accent text on the surface (for example .demo-role in --jp-text). Then add an a11y run with the lowest-contrast accepted accent"
+            ],
+            [
+              "MINOR",
+              "Trimming differs between Python strip() and JS trim(). A leading U+001F is stripped and accepted by the server but rejected by the web form. A leading U+FEFF is stripped by the web but stored by the server as an invisible character. Bidi overrides (U+202E, category Cf) are accepted and can reverse the header and tab title",
+              "Open (backend, architect). Trim only the characters both platforms agree on, or reject Cf format characters as well as Cc. Add these cases to both test tables"
+            ],
+            [
+              "MINOR",
+              "create-admin rejects full names with characters below U+0020 but accepts U+007F to U+009F, unlike the company-name rule (category Cc)",
+              "Open (backend). Use unicodedata.category == 'Cc'"
+            ],
+            [
+              "MINOR",
+              "If the company name is invalid and the colours fail contrast, only the name error is returned. The contrast check runs after Pydantic validation, so the admin has to fix the errors in two rounds",
+              "Open (backend), low. Optionally collect both before responding. Nothing is saved either way, so the request stays atomic"
+            ],
+            [
+              "MINOR",
+              "The demo-accounts list now includes the admin password. The setting is still blocked only when APP_ENV is production (open since T-001), so staging could list admin credentials",
+              "Open (architect). Block DEMO_ACCOUNTS_ENABLED outside local and test"
+            ],
+            [
+              "MINOR",
+              "The README does not document create-admin (the spec requires it). ARCHITECTURE.md line 54 still marks the branding, admin, settings and CLI files as planned",
+              "Open (backend for the README, architect for ARCHITECTURE.md)"
+            ],
+            [
+              "MINOR",
+              "Screenshots are at 1280px and 768px only. T-002d A1 asks for 1280px and 360px for login, dashboard, report and settings",
+              "Open (tests). Add the 360px set"
+            ],
+            [
+              "MINOR",
+              "Existing outdated package: fastapi 0.162.1, latest 0.162.2 (patch). TypeScript 7 and @types/node 26 are deliberate deferrals (ARCHITECTURE.md 13.2), so they are not raised",
+              "Open (architect), next ticket"
+            ]
+          ]
+        },
+        {
+          "heading": "Checks run by the reviewer",
+          "type": "list",
+          "items": [
+            {
+              "label": "Tests.",
+              "text": "scripts/dev.sh test: pytest 472 passed, 1 skipped (sandbox network check). Vitest: shared 58 passed, web 158 passed. The 2 Vitest skips are the opt-in screenshot spec."
+            },
+            {
+              "label": "Lint.",
+              "text": "ruff, ruff format, mypy, eslint and tsc, redocly lint and gen:check are all clean."
+            },
+            {
+              "label": "Dependencies.",
+              "text": "The diff adds only @axe-core/playwright 4.14.0 (e2e dev dependency, MPL-2.0, latest, exact pin, lockfile in sync). npm audit: 0 vulnerabilities. pip-audit on the hashed uv export: none."
+            },
+            {
+              "label": "Live API probe.",
+              "text": "Against the local backend: admin to /manager/dashboard 403; manager to /admin/settings 403; painter PATCH 403; anonymous PATCH 401. {}, null name, non-string name, extra keys, an array body and a text/plain body all return 422. A valid name with failing colours returns 422 contrast_too_low with ratios 2.78 and 4.48, and nothing is saved. CORS preflight from a foreign origin is refused."
+            },
+            {
+              "label": "Not run.",
+              "text": "Playwright e2e: no browsers are installed in this sandbox. The engineers' e2e results are relied on for scenarios 2 to 8."
+            }
+          ]
+        },
+        {
+          "heading": "What the reviewer found sound",
+          "type": "list",
+          "items": [
+            {
+              "text": "Admin routes sit on one router with a router-level require_roles(admin), so every /admin route is guarded. The admin token is in the manager 403 loop, and admin access tests are enumerated from the staged contract, including deactivated, expired and mis-signed tokens. The web RequireRole mounts nothing until /auth/me answers."
+            },
+            {
+              "text": "PATCH: extra keys are forbidden, at least one field is required, null is rejected, colours are validated then upper-cased, and contrast is checked unrounded before the row is locked. SELECT ... FOR UPDATE, then a single commit. A no-op writes nothing and leaves updated_at null. The change list is ready for T-002f."
+            },
+            {
+              "text": "Migrations: 0002 reads DEFAULT_COMPANY_NAME only there, trims it, refuses more than 60 characters or Cc characters, uses frozen hex codes and ON CONFLICT DO NOTHING. 0003 downgrade refuses while an admin exists and rebuilds the enum (tested). The seed preserves company_settings, there is no FK into users, and existing seed ids are unchanged."
+            },
+            {
+              "text": "Contrast maths matches WCAG 2.2 in Python and TS (sRGB threshold 0.04045, unrounded 4.5 comparison, a failing ratio never shown as 4.50), checked against the same table."
+            },
+            {
+              "text": "Theming: applyTheme validates each value against ^#[0-9A-F]{6}$, falls back per token and writes only through setProperty. No <style>, insertRule or style attribute strings, and the CSP is unchanged. The CSS holds no brand hex codes. The snapshot in localStorage is validated and every access is wrapped in try/catch."
+            },
+            {
+              "text": "The company name is rendered only as JSX text and document.title. There is no dangerouslySetInnerHTML or innerHTML in web/src or shared/src. No 'JobProof' text remains in the UI. The seed and demo credentials stay local or test only, and create-admin never logs the email or password."
+            },
+            {
+              "text": "Screenshots: header, login, dashboard and settings follow the dark green, minimal look. The preview and presets render correctly."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineers-t002-pkg2",
+      "title": "Engineers report: T-002 Package 2 (T-002k, g, h, f, i, j: review, audit, edit)",
+      "agent": "backend-engineer + frontend-engineer",
+      "model": "sonnet",
+      "status": "done",
+      "date": "2026-11-08",
+      "summary": "Built the review and edit workflow: dashboard review queue, mark as reviewed, append-only audit trail with history panel, and manager edits to notes and checklist, all with optimistic concurrency (row lock plus version compare, 409 with current values, typed text kept). Migrations 0004 (report versioning), 0005 (audit_events with append-only triggers), 0006 (manager_notes). Reviewed in review-t002-pkg23: APPROVE, 0 blockers, 0 major.",
+      "blocks": [
+        {
+          "heading": "What was built",
+          "type": "list",
+          "items": [
+            {
+              "text": "T-002k: review queue on the dashboard (oldest first, at most five) and sort=submitted_asc on the reports list."
+            },
+            {
+              "text": "T-002g and T-002h: POST review with version check, already_reviewed handling, ReviewPanel."
+            },
+            {
+              "text": "T-002f: audit_events written in the same transaction as each write; database triggers refuse UPDATE, DELETE and TRUNCATE; history endpoints and panel."
+            },
+            {
+              "text": "T-002i and T-002j: PATCH report (notes, checklist) with strict validation, reopening a reviewed report on edit, EditReportForm with conflict view, unsaved-changes guard."
+            }
+          ],
+          "open": true
+        }
+      ]
+    },
+    {
+      "id": "engineers-t002-pkg3",
+      "title": "Engineers report: T-002 Package 3 (T-002l, industry-neutral wording)",
+      "agent": "frontend-engineer",
+      "model": "sonnet",
+      "status": "done",
+      "date": "2026-11-08",
+      "summary": "The web UI now uses industry-neutral wording ('Operative' for the field worker) from one WORDING source in the shared package; the API, generated client and contract are unchanged and a wording test guards the chrome. T-002m (tree-surgery mock data profile) is optional and was not built. Reviewed together with Package 2 in review-t002-pkg23.",
+      "blocks": [
+        {
+          "heading": "What was built",
+          "type": "list",
+          "items": [
+            {
+              "text": "WORDING constants used by every page and by roleLabel; job-type labels stay as data for T-002m."
+            },
+            {
+              "text": "Wording test and e2e check for the trade words in the UI chrome."
+            }
+          ],
+          "open": true
+        }
+      ]
+    },
+    {
+      "id": "review-t002-pkg23",
+      "title": "Code review report: T-002 Packages 2 and 3 (T-002f to T-002l) and Package 1 review fixes",
+      "agent": "code-reviewer",
+      "model": "opus",
+      "status": "done",
+      "date": "2026-11-08",
+      "summary": "Round 1 for Packages 2 and 3, and a re-review of the Package 1 fixes: APPROVE. There are no blockers or major issues and 9 minor ones. The flaky test_many_simultaneous_reviews_exactly_one_wins was a test-harness bug, not an application bug, and the reviewer fixed the test: 30 of 30 runs of the test and 30 of 30 runs of the whole concurrency module now pass. Optimistic concurrency, the append-only audit trail, authorisation on every new route, PATCH and review validation, and conflict handling that keeps typed text are sound. Package 1: the MAJOR (contrast on the surface) and 5 of 7 minors are fixed. The two-round validation and fastapi 0.162.2 are still open. Backend 737 passed (1 environment skip), Vitest 101 + 200 passed, Playwright e2e 127 passed. Screenshots were re-captured with the Operative wording.",
+      "blocks": [
+        {
+          "heading": "Round 1 (0 BLOCKER, 0 MAJOR, 9 MINOR)",
+          "type": "table",
+          "columns": [
+            "Severity",
+            "Finding",
+            "Resolution"
+          ],
+          "rows": [
+            [
+              "MINOR",
+              "Unchanged Package 1 item: an invalid company name and failing colours in one PATCH still return only the name error (verified live: one entry at loc body.company_name). Contrast is checked after Pydantic validation. Owner: backend",
+              "Open, low. Optionally collect both before responding. Nothing is saved either way, so the request stays atomic"
+            ],
+            [
+              "MINOR",
+              "Unchanged Package 1 item: fastapi is still 0.162.1 (latest 0.162.2, patch). No package was added or changed in this diff. npm audit: 0 vulnerabilities, pip-audit: none. TypeScript 7 and @types/node 26 remain deliberate deferrals. Owner: architect",
+              "Open. Bump in the next dependency ticket"
+            ],
+            [
+              "MINOR",
+              "ARCHITECTURE.md still marks the built work as planned: line 54 to 56 (services/audit.py, review.py, report_edit.py, useReportWrites, history.ts, conflict.ts, reportEdit.ts, pages/report/*, ReviewQueue.tsx), lines 116 to 120 (migrations 0002 to 0006) and lines 165 and 189 to 191 (writes, settings accessor, concurrency, audit patterns). Line 51 still says '10 built, 7 planned'. Owner: architect",
+              "Open. Remove the (planned) markers for T-002a to T-002l and update the operation count. The definition of done expects this"
+            ],
+            [
+              "MINOR",
+              "backend/app/schemas/report_write.py:79: `checklist` has min_length=1 and no maximum. A body with 10,000 foreign item ids (verified) returns 422 with 10,000 error entries, about 850 KB, from one manager request. Authenticated, manager only and fast (0.08 s), so it is low risk, but the size is unbounded. Owner: backend",
+              "Add Field(max_length=...) to `checklist` (for example 200, well above any real checklist) and a test for the 422"
+            ],
+            [
+              "MINOR",
+              "backend/app/schemas/report_write.py:68-69, 77-78: `Annotated[SafeText, Field(max_length=...)]` makes Pydantic report 'Value should have at most 5000 items after validation' for a 5,001-character note (verified). The web blocks this client-side, so only API clients and the mobile app later will see the wording. Owner: backend",
+              "Put the length rule in the AfterValidator, or use StringConstraints(max_length=...), so the message reads 'Use 5,000 characters or fewer.' (the web wording). Assert the message in the scenario 9 test"
+            ],
+            [
+              "MINOR",
+              "web/src/pages/report/ReviewPanel.tsx:27, 78: the panel's `note` state survives a save that reopens the report. After 'Mark as reviewed' then 'Edit report' and Save, the panel shows 'Awaiting review', the visible status text 'Marked as reviewed' and the Mark button together (found by reading the code: the panel is not remounted and nothing clears `note` when review_status changes). Owner: web",
+              "Clear `note` when `report.version` changes (for example key ReviewPanel by version, or reset in an effect), and add a Vitest case: review, then rerender with an awaiting report at a higher version, then expect no 'Marked as reviewed'"
+            ],
+            [
+              "MINOR",
+              "web/src/pages/ReportDetail.tsx:338-341 with shared/src/hooks/useReportWrites.ts:61: 'Reload latest' awaits `refetchQueries`, which does not throw when the request fails. The form is then remounted from the old cached report, so after the user has confirmed discarding their edits it shows the old values at the old version, and the next save gets 409 again with no explanation. Owner: web",
+              "After the refetch, check the query state (or use `fetchQuery`, which throws). On failure, keep the form and the conflict view and show 'Could not load the latest version. Try again.'"
+            ],
+            [
+              "MINOR",
+              "web/src/pages/dashboard/ReviewQueue.tsx:69: the site address is in a `col-wide` cell with no `stack-only` copy, so it is not shown at 768px or 360px (see dashboard-tablet.png and dashboard-mobile.png). The spec lists the site address for every row. At 360px the queue is still a 3-column table, and 'Submitted 2 Oct 2026, 15:51' wraps over three lines. Owner: web",
+              "Add the one-line site address to the stacked cell, and at 360px use the stacked-card layout the spec names (below 640px)"
+            ],
+            [
+              "MINOR",
+              "Audit escape hatch (verified that only backend/app/seed/loader.py sets it, and no route imports the loader): `jobproof.allow_audit_truncate` is a custom setting that any role can SET. The trigger therefore stops mistakes, not a compromised app role. Locally the role is a superuser and owns the table, so it can also DISABLE TRIGGER. Owner: architect",
+              "No code change. In the AWS role plan (B11), state that the app role does not own audit_events and has no TRUNCATE on it or on the tables that cascade into it (users, job_reports). Then neither the setting nor the trigger owner can be misused"
+            ]
+          ]
+        },
+        {
+          "heading": "Package 1 review items: status",
+          "type": "table",
+          "columns": [
+            "Item",
+            "Status"
+          ],
+          "rows": [
+            [
+              "MAJOR: accent contrast on the surface colour",
+              "Fixed. `weakest_contrast` checks both white and the surface in the server and in contrast.ts. An e2e axe run with the lowest-contrast accepted accent passes"
+            ],
+            [
+              "MINOR: trimming and invisible characters (Cf, bidi, BOM, surrogates)",
+              "Fixed. Only U+0020 is trimmed, and the same forbidden set is used in Python and TS, with tests"
+            ],
+            [
+              "MINOR: create-admin control characters U+007F to U+009F",
+              "Fixed. Uses contains_forbidden_character"
+            ],
+            [
+              "MINOR: invalid name and failing colours reported over two rounds",
+              "Still open (verified live). Low priority"
+            ],
+            [
+              "MINOR: demo accounts allowed outside local and test",
+              "Fixed. Config refuses DEMO_ACCOUNTS_ENABLED unless APP_ENV is local or test"
+            ],
+            [
+              "MINOR: README create-admin and ARCHITECTURE.md drift",
+              "README fixed. ARCHITECTURE.md still marks the work as planned (see Round 1)"
+            ],
+            [
+              "MINOR: 360px screenshots",
+              "Fixed. The *-mobile.png set is present. Re-captured by the reviewer so login, reports, dashboard and report detail show 'Operative' (the old files predated T-002l)"
+            ],
+            [
+              "MINOR: fastapi 0.162.1 to 0.162.2",
+              "Still open"
+            ]
+          ]
+        },
+        {
+          "heading": "Flaky test: test_many_simultaneous_reviews_exactly_one_wins",
+          "type": "list",
+          "items": [
+            {
+              "label": "Symptom.",
+              "text": "About 1 failure in 10 runs before the fix. The failure was never in the race itself: the warm-up GET .../history returned 500 in one thread, which aborted the barrier for the other 7 (BrokenBarrierError)."
+            },
+            {
+              "label": "Cause (test problem).",
+              "text": "Each thread builds its own app, and FastAPI builds route state lazily on the first requests. While doing so it wraps a pydantic TypeAdapter in warnings.catch_warnings() to silence UnsupportedFieldAttributeWarning. In Python 3.13 catch_warnings swaps the process-wide filter list and is not thread-safe, so one thread leaving it restores the filters while another thread is still inside. pytest's filterwarnings = error then raises the warning, which surfaces as a 500. With 8 threads the overlap is likely; with 2 it is rare. Production is not affected: warnings are not errors there, and uvicorn builds routes on the single event-loop thread. Row locking and version checks were never involved."
+            },
+            {
+              "label": "Fix (backend/tests/test_concurrency.py).",
+              "text": "A module-level _SETUP_LOCK serialises each thread's login and warm-up. The warm-up now also builds the review and PATCH routes, using an unknown id so they return 404 and write nothing. The barrier and the requests under test still run concurrently. Verified: the test passed 30 of 30 runs, the whole concurrency module 30 of 30, and ruff, ruff format and the full backend suite are clean (737 passed). Owner: tests (already done by the reviewer, so nothing to do)."
+            }
+          ]
+        },
+        {
+          "heading": "Checks run by the reviewer",
+          "type": "list",
+          "items": [
+            {
+              "label": "Tests.",
+              "text": "pytest: 737 passed, 1 skipped (sandbox network check). Vitest: shared 101 passed, web 200 passed (2 opt-in screenshot skips). Playwright e2e with system Chrome against the dev stack: 127 passed, 6 skipped (screenshot spec without SCREENSHOT_DIR)."
+            },
+            {
+              "label": "Lint.",
+              "text": "ruff, ruff format, mypy app, eslint and tsc, and redocly lint are clean. Redocly's 2 warnings are existing ones on /health and /branding. gen:check OK. PENDING_TICKETS is empty."
+            },
+            {
+              "label": "Dependencies.",
+              "text": "The diff adds or changes no package. npm audit: 0 vulnerabilities. pip-audit on the hashed uv export: no known vulnerabilities."
+            },
+            {
+              "label": "Live API probes (dev backend).",
+              "text": "PATCH: {}, version-only, version as '1', true or 1.0, notes as an int, 5,001 characters, NUL, a lone surrogate, photos, review_status, checklist null or [], a bad uuid, a foreign id, label, done null or 'yes', duplicate ids, an empty item, an array body, text/plain and deeply nested JSON all return 422 with the right loc. Two problems give two entries. Review: {}, 0, -1, 1.5, '1', true, an extra key and null return 422. A huge version returns 409 (no crash). Admin and painter get 403 and anonymous 401 on PATCH, review and report history. Manager and painter get 403 and anonymous 401 on /admin/settings/history. PUT, DELETE, PATCH and POST on history return 405."
+            },
+            {
+              "label": "Database.",
+              "text": "On the dev database, UPDATE, DELETE and TRUNCATE of audit_events and TRUNCATE job_reports CASCADE all fail with 'audit_events is append-only'. Both triggers are enabled."
+            },
+            {
+              "label": "Screenshots.",
+              "text": "Re-captured with SCREENSHOT_DIR=reports/screenshots (6 passed). The reviewer inspected login (360px), dashboard (768 and 360px), report detail and awaiting (360 and 768px) and report edit (768 and 360px). 'Operative' wording, review panel, history panel and edit form all render without horizontal overflow. These are the queue layout issues listed above."
+            }
+          ]
+        },
+        {
+          "heading": "What the reviewer found sound",
+          "type": "list",
+          "items": [
+            {
+              "text": "Concurrency: review and edit both start with session.get(..., with_for_update=True) on a fresh per-request session, so READ COMMITTED returns the committed row after the lock. The version compare comes after the lock, there is one commit, and any ProblemError rolls back and releases the lock. A no-op edit rolls back explicitly. Review against edit is serialised on the same row lock (test_a_review_racing_an_edit_one_wins). Reopen happens in the same transaction with one version bump, records reopened after edited, and a racing double reopen yields exactly one reopened event. Checklist items are only changed under the report lock. The order of checks matches the spec: 404, then foreign item 422, then 409, then diff."
+            },
+            {
+              "text": "Audit: record_event is called inside each write service before the single commit, so a failed write leaves no event (409 and 422 tests check event counts). Settings no-ops record nothing. actor_name is a snapshot. request_id comes from a validated header pattern. request_id and old_id are stored but _to_schema returns only field, item_id, item_label, old_value and new_value. History is manager or admin only, and manager_notes appear only on manager endpoints. Triggers apply to the owner too. Only the seed loader sets the truncate setting, and the seed refuses to run outside local and test."
+            },
+            {
+              "text": "Authorisation: the new routes sit on the router-level require_roles guards (manager and admin). The access loop is generated from the contract and now covers PATCH and POST with a body, so authorisation wins over validation."
+            },
+            {
+              "text": "Validation: extra keys are forbidden at every level. version is a strict int >= 1. done is a strict bool and an explicit null is rejected. Notes reject NUL and lone surrogates and count code points. A blank note becomes null in the service only, so validation messages refer to the raw input."
+            },
+            {
+              "text": "Frontend conflicts: EditReportForm pins the report it started from (useState(report)), so a background refetch never moves the version forward. On 409 the typed values stay in the form, and 'Current saved value' is shown only for fields that were sent. A retry whose 409 names the current user with current values equal to the body is treated as saved, so there is no duplicate event. 403 keeps the text. Unsaved-changes protection uses both useBlocker and beforeunload. QueryBoundary keeps children mounted on a background error, so the form is not lost."
+            },
+            {
+              "text": "XSS: notes, history before and after values, item labels and names are rendered only as JSX text (pre-wrap). There is no dangerouslySetInnerHTML or innerHTML in web/src or shared/src. The e2e checks that markup in notes is shown literally and that 1,200 characters fit at 360px."
+            },
+            {
+              "text": "T-002l: WORDING is the one source of the trade words, and roleLabel uses it. The API, generated client and contract are unchanged. A wording test guards the chrome. The only remaining trade words in the UI are job-type labels (T-002m, out of scope) and identifiers."
+            }
+          ]
+        },
+        {
+          "heading": "Questions for the architect",
+          "type": "list",
+          "items": [
+            {
+              "text": "Should the 17 remaining x-ticket markers in api/openapi.yaml be removed now that PENDING_TICKETS is empty, or are they kept as provenance?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engineers-t002-review-fixes",
+      "title": "Engineers report: fixes for the minor findings of review-t002-pkg23",
+      "agent": "backend-engineer + frontend-engineer",
+      "model": "sonnet",
+      "status": "done",
+      "date": "2026-11-08",
+      "summary": "Fixed findings 4 to 8 and the documentation findings 3 and 9. Backend 738 passed (1 skip), Vitest shared 101 and web 202 passed (2 opt-in skips), Playwright e2e 133 passed with screenshots on. make lint is clean (redocly keeps its 2 existing warnings).",
+      "blocks": [
+        {
+          "heading": "Findings",
+          "type": "table",
+          "columns": [
+            "Finding",
+            "What was done"
+          ],
+          "rows": [
+            [
+              "#3 ARCHITECTURE.md marks built work as planned",
+              "Markers removed for T-002a to T-002l (file map, migrations 0002 to 0006, patterns, personas, sections 9, 9.1, 9.2, 16); operations now '17, all built'. T-002m items stay planned."
+            ],
+            [
+              "#4 checklist length unbounded",
+              "ReportUpdate.checklist max_length=100: one 422 entry at body.checklist ('at most 100 items'), response under 2 KB, nothing saved. openapi maxItems: 100, client regenerated (gen:check OK). New API test."
+            ],
+            [
+              "#5 note length wording",
+              "The length rule now sits before the validator, so the message is 'String should have at most 5000 characters' (500 for checklist notes). Asserted in the scenario 9 test."
+            ],
+            [
+              "#6 'Marked as reviewed' after a reopening edit",
+              "ReviewPanel drops the done and already-reviewed note when the report goes from reviewed back to awaiting. Vitest case and an e2e step (review, edit, save, expect Awaiting review and no confirmation)."
+            ],
+            [
+              "#7 Reload latest refetch failure",
+              "useRefreshReport accepts strict:true so the refetch throws; the form keeps the typed text and the conflict view and shows 'Could not load the latest version. Try again.' Vitest case and an e2e step that aborts the request."
+            ],
+            [
+              "#8 review queue at 768px and 360px",
+              "Site address shown in the stacked cell at 768px; stacked cards below 640px (grid per row, Review button at the right). Screenshots retaken at 768 and 360 and inspected: no overflow, address and button visible."
+            ],
+            [
+              "#9 AWS role note",
+              "Added to backlog B11: the app role must not own audit_events and must lack TRUNCATE on audit_events, users and job_reports."
             ]
           ]
         }

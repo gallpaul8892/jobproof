@@ -98,7 +98,7 @@ export function EditReportForm({
   /** `refetch` is true when the save is only known from a 409, so the cache does not hold it yet. */
   onSaved: (refetch: boolean) => void;
   onClose: () => void;
-  /** Loads the latest report and restarts the form from it. */
+  /** Loads the latest report and restarts the form from it. Rejects if the report cannot be loaded. */
   onReload: () => Promise<void>;
 }) {
   const [original] = useState(report);
@@ -106,6 +106,8 @@ export function EditReportForm({
   const [failure, setFailure] = useState<Failure | null>(null);
   const [lastBody, setLastBody] = useState<ReportUpdate | null>(null);
   const [confirm, setConfirm] = useState<"cancel" | "reload" | null>(null);
+  const [reloadFailed, setReloadFailed] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const mutation = useUpdateReport(original.id);
   const me = useMe();
   const idBase = useId();
@@ -206,9 +208,15 @@ export function EditReportForm({
               Your changes were not saved.
             </p>
             <p className="small">Your text is still in the form so you can copy it. The saved values are shown beside each field.</p>
-            <button type="button" className="btn btn-small" onClick={() => setConfirm("reload")} data-testid="reload-latest">
+            <button type="button" className="btn btn-small" onClick={() => setConfirm("reload")} data-testid="reload-latest" disabled={reloading}>
               Reload latest
             </button>
+            {reloading && <p className="small">Loading the latest version...</p>}
+            {reloadFailed && (
+              <p role="alert" className="small" data-testid="reload-failed">
+                Could not load the latest version. Try again.
+              </p>
+            )}
           </div>
         )}
         {failure?.kind === "forbidden" && (
@@ -341,8 +349,13 @@ export function EditReportForm({
         testId="reload-dialog"
         onConfirm={() => {
           setConfirm(null);
-          setFailure(null);
-          void onReload();
+          setReloadFailed(false);
+          setReloading(true);
+          // On failure keep the form, the typed text and the conflict view.
+          onReload()
+            .then(() => setFailure(null))
+            .catch(() => setReloadFailed(true))
+            .finally(() => setReloading(false));
         }}
         onCancel={() => setConfirm(null)}
       >

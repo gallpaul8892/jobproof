@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
   formatDateTime,
@@ -28,6 +28,15 @@ export function ReviewPanel({ report, editing }: { report: ReportDetail; editing
   const [reloading, setReloading] = useState(false);
   // Set synchronously in the click handler so a double click sends one request.
   const inFlight = useRef(false);
+
+  // An edit can reopen a reviewed report. Then "Marked as reviewed" (or "X already reviewed")
+  // is no longer true, so drop it whenever the report goes from reviewed back to awaiting.
+  const wasReviewed = useRef(report.review_status === "reviewed");
+  useEffect(() => {
+    const now = report.review_status === "reviewed";
+    if (wasReviewed.current && !now) setNote((n) => (n && (n.kind === "done" || n.kind === "already") ? null : n));
+    wasReviewed.current = now;
+  }, [report.review_status]);
 
   function review() {
     if (inFlight.current || mutation.isPending) return;

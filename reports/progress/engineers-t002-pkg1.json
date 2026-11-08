@@ -1,0 +1,42 @@
+{
+  "id": "engineers-t002-pkg1",
+  "title": "Engineers report: T-002 Package 1 (T-002a to T-002e, branding and Admin)",
+  "agent": "backend-engineer + frontend-engineer",
+  "model": "sonnet",
+  "status": "done",
+  "date": "2026-11-08",
+  "summary": "Built the Admin persona, company settings and branding for the web app: a public branding endpoint, Admin-only settings (company name, colour scheme) with a server-side contrast rule, the dark green default theme and the Admin settings page. Migrations 0002 (company_settings) and 0003 (admin role). A review round followed (review-t002-pkg1) and its fixes were made: contrast is checked against both white and the surface colour, only U+0020 is trimmed and invisible characters are rejected, demo accounts are refused outside local and test, README and docs updated. Backend 472 passed, Vitest 216 passed at review.",
+  "blocks": [
+    {
+      "heading": "What was built",
+      "type": "list",
+      "items": [
+        {
+          "text": "T-002a: company_settings table and GET /branding (public)."
+        },
+        {
+          "text": "T-002b: admin role, router-level role guards, create-admin command, per-role landing page."
+        },
+        {
+          "text": "T-002c and T-002e: PATCH /admin/settings for company name and colours, with the WCAG contrast rule on the server and in the web form."
+        },
+        {
+          "text": "T-002d: dark green default theme applied through CSSOM custom properties (CSP-safe)."
+        }
+      ],
+      "open": true
+    },
+    {
+      "heading": "Review fixes (round 1)",
+      "type": "list",
+      "items": [
+        {
+          "text": "MAJOR: accent contrast now checked on white and on the surface colour (server and contrast.ts), with an e2e axe run on the lowest-contrast accepted accent."
+        },
+        {
+          "text": "Minors: trimming and invisible characters, create-admin control characters, demo-account guard, README, 360px screenshots."
+        }
+      ]
+    }
+  ]
+}

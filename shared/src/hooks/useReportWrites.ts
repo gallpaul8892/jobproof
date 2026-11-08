@@ -50,14 +50,16 @@ export function useReportHistory(id: string) {
 
 /**
  * Refetches the report (resolves when it has arrived) and marks its history, the dashboard and the
- * report lists stale. Used after a conflict, or when a lost reply turns out to have succeeded.
+ * report lists stale (`strict: true` rejects if the report refetch fails). Used after a conflict, or when a lost reply turns out to have succeeded.
  */
 export function useRefreshReport(id: string) {
   const queryClient = useQueryClient();
-  return async (): Promise<void> => {
+  return async (options?: { strict?: boolean }): Promise<void> => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.reportHistory(id) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
     void queryClient.invalidateQueries({ queryKey: ["reports"] });
-    await queryClient.refetchQueries({ queryKey: queryKeys.report(id) });
+    // By default a failed refetch is swallowed (the page shows its own error state); with `strict`
+    // it throws, so a caller that is about to discard local state can refuse to.
+    await queryClient.refetchQueries({ queryKey: queryKeys.report(id) }, { throwOnError: options?.strict === true });
   };
 }

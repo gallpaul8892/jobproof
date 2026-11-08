@@ -63,6 +63,9 @@ export function ReviewQueue({
                     </td>
                     <td>
                       {r.customer.name}
+                      <span className="stack-only queue-site" title={site}>
+                        {site}
+                      </span>
                       <span className="stack-only">{r.painter.name}</span>
                       <span className="stack-only">Submitted {formatDateTime(r.submitted_at)}</span>
                     </td>

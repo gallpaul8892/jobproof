@@ -168,6 +168,15 @@ test.describe("T-002j: edit a report", () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Keep editing" }).click();
     await expect(painterNotes(priya)).toHaveValue("Priya's version of the notes.");
+    // If the refetch behind Reload latest fails, the typed text and the conflict view stay
+    const reportUrl = new RegExp(`/manager/reports/${report.id}$`);
+    await priya.route(reportUrl, (route) => route.abort());
+    await priya.getByRole("button", { name: "Reload latest" }).click();
+    await priya.getByRole("dialog").getByRole("button", { name: "Discard and reload" }).click();
+    await expect(priya.getByTestId("reload-failed")).toHaveText("Could not load the latest version. Try again.");
+    await expect(painterNotes(priya)).toHaveValue("Priya's version of the notes.");
+    await expect(priya.getByTestId("edit-conflict")).toBeVisible();
+    await priya.unroute(reportUrl);
     await priya.getByRole("button", { name: "Reload latest" }).click();
     await priya.getByRole("dialog").getByRole("button", { name: "Discard and reload" }).click();
     await expect(painterNotes(priya)).toHaveValue("Sarah's version of the notes.");

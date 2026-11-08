@@ -1,0 +1,30 @@
+{
+  "id": "engineers-t002-pkg2",
+  "title": "Engineers report: T-002 Package 2 (T-002k, g, h, f, i, j: review, audit, edit)",
+  "agent": "backend-engineer + frontend-engineer",
+  "model": "sonnet",
+  "status": "done",
+  "date": "2026-11-08",
+  "summary": "Built the review and edit workflow: dashboard review queue, mark as reviewed, append-only audit trail with history panel, and manager edits to notes and checklist, all with optimistic concurrency (row lock plus version compare, 409 with current values, typed text kept). Migrations 0004 (report versioning), 0005 (audit_events with append-only triggers), 0006 (manager_notes). Reviewed in review-t002-pkg23: APPROVE, 0 blockers, 0 major.",
+  "blocks": [
+    {
+      "heading": "What was built",
+      "type": "list",
+      "items": [
+        {
+          "text": "T-002k: review queue on the dashboard (oldest first, at most five) and sort=submitted_asc on the reports list."
+        },
+        {
+          "text": "T-002g and T-002h: POST review with version check, already_reviewed handling, ReviewPanel."
+        },
+        {
+          "text": "T-002f: audit_events written in the same transaction as each write; database triggers refuse UPDATE, DELETE and TRUNCATE; history endpoints and panel."
+        },
+        {
+          "text": "T-002i and T-002j: PATCH report (notes, checklist) with strict validation, reopening a reviewed report on edit, EditReportForm with conflict view, unsaved-changes guard."
+        }
+      ],
+      "open": true
+    }
+  ]
+}

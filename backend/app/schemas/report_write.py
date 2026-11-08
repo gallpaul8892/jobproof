@@ -7,6 +7,8 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validat
 
 NOTES_MAX = 5000
 CHECKLIST_NOTE_MAX = 500
+# Well above any real checklist; keeps the 422 for a hostile body small.
+CHECKLIST_MAX_ITEMS = 100
 
 Version = Annotated[int, Field(strict=True, ge=1)]
 
@@ -21,6 +23,12 @@ def reject_unstorable(value: str) -> str:
 
 
 SafeText = Annotated[str, AfterValidator(reject_unstorable)]
+# The length rule comes before the validator, so the message is the text one
+# ("String should have at most 5000 characters"), not the generic "items after validation".
+ChecklistNoteText = Annotated[
+    str, Field(max_length=CHECKLIST_NOTE_MAX), AfterValidator(reject_unstorable)
+]
+NotesText = Annotated[str, Field(max_length=NOTES_MAX), AfterValidator(reject_unstorable)]
 
 
 def empty_to_none(value: str | None) -> str | None:
@@ -41,7 +49,7 @@ class ChecklistItemUpdate(BaseModel):
 
     id: uuid.UUID
     done: Annotated[bool, Field(strict=True)] | None = None
-    note: Annotated[SafeText, Field(max_length=CHECKLIST_NOTE_MAX)] | None = None
+    note: ChecklistNoteText | None = None
 
     @field_validator("done")
     @classmethod
@@ -61,9 +69,12 @@ class ReportUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: Version
-    painter_notes: Annotated[SafeText, Field(max_length=NOTES_MAX)] | None = None
-    manager_notes: Annotated[SafeText, Field(max_length=NOTES_MAX)] | None = None
-    checklist: Annotated[list[ChecklistItemUpdate], Field(min_length=1)] | None = None
+    painter_notes: NotesText | None = None
+    manager_notes: NotesText | None = None
+    checklist: (
+        Annotated[list[ChecklistItemUpdate], Field(min_length=1, max_length=CHECKLIST_MAX_ITEMS)]
+        | None
+    ) = None
 
     @field_validator("checklist")
     @classmethod

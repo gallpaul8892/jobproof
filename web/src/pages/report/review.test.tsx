@@ -38,6 +38,29 @@ describe("ReviewPanel", () => {
     expect(screen.queryByTestId("mark-reviewed")).toBeNull();
   });
 
+  it("drops 'Marked as reviewed' when an edit reopens the report", async () => {
+    mockApi(() => ({ body: reviewedBy(PRIYA) }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    client.setQueryData(["me"], { id: PRIYA.id, full_name: PRIYA.name, role: "manager" });
+    const tree = (r: ReturnType<typeof report>) => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Page r={r} editing={false} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    const view = render(tree(report()));
+    await userEvent.click(screen.getByRole("button", { name: "Mark as reviewed" }));
+    view.rerender(tree(reviewedBy(PRIYA)));
+    await waitFor(() => expect(screen.getByTestId("review-status").textContent).toBe("Marked as reviewed"));
+    // a save reopens the report: awaiting again, higher version
+    view.rerender(tree(report({ review_status: "awaiting_review", version: 3 })));
+    expect(screen.getByTestId("review-line").textContent).toBe("Awaiting review");
+    expect(screen.getByTestId("review-status").textContent).toBe("");
+    expect(screen.queryByText("Marked as reviewed", { selector: "p" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Mark as reviewed" })).toBeTruthy();
+  });
+
   it("sends one request on a double click, shows progress, then announces success", async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((r) => (release = r));

@@ -57,6 +57,16 @@ test.describe("T-002h: review a report", () => {
     await expect(page.getByTestId("mark-reviewed")).toHaveCount(0);
     await expect(page.getByTestId("history-sentence").first()).toHaveText("Priya Nair marked the report as reviewed");
     await expectNoAxeViolations(page, "report reviewed");
+
+    // An edit reopens the report: the panel must not keep saying "Marked as reviewed"
+    await page.getByRole("button", { name: "Edit report" }).click();
+    await page.getByLabel("Manager notes (internal)").fill("Reopened by an edit.");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByTestId("edit-saved")).toHaveText("Changes saved");
+    await expect(page.getByTestId("review-line")).toHaveText("Awaiting review");
+    await expect(page.getByTestId("review-status")).toHaveText("");
+    await expect(page.getByText("Marked as reviewed", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("mark-reviewed")).toBeVisible();
   });
 
   test("a seeded reviewed report shows who reviewed it and has no button", async ({ page, request }) => {

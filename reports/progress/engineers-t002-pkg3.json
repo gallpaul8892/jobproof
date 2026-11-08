@@ -1,0 +1,24 @@
+{
+  "id": "engineers-t002-pkg3",
+  "title": "Engineers report: T-002 Package 3 (T-002l, industry-neutral wording)",
+  "agent": "frontend-engineer",
+  "model": "sonnet",
+  "status": "done",
+  "date": "2026-11-08",
+  "summary": "The web UI now uses industry-neutral wording ('Operative' for the field worker) from one WORDING source in the shared package; the API, generated client and contract are unchanged and a wording test guards the chrome. T-002m (tree-surgery mock data profile) is optional and was not built. Reviewed together with Package 2 in review-t002-pkg23.",
+  "blocks": [
+    {
+      "heading": "What was built",
+      "type": "list",
+      "items": [
+        {
+          "text": "WORDING constants used by every page and by roleLabel; job-type labels stay as data for T-002m."
+        },
+        {
+          "text": "Wording test and e2e check for the trade words in the UI chrome."
+        }
+      ],
+      "open": true
+    }
+  ]
+}
