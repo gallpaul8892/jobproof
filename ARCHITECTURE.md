@@ -8,6 +8,8 @@ built and checked against the code; only the optional T-002m is unbuilt: decisio
 16, build plan in [specs/T-002-work-packages.md](specs/T-002-work-packages.md)). AWS: INFRA-1
 to INFRA-3 built (round 1 review REQUEST CHANGES, fixes in progress, section 10); INFRA-4 to
 INFRA-8 **(planned)**: [specs/INFRA-aws-pipeline.md](specs/INFRA-aws-pipeline.md).
+Phase 2b, the Operative app (T-003a to T-003p), **(planned)** 2026-11-09:
+[specs/T-003-design.md](specs/T-003-design.md), contract v0.6.0 staged (section 15).
 
 ## 1. System overview
 
@@ -18,13 +20,14 @@ API described by [api/openapi.yaml](api/openapi.yaml).
 
 ```
  Manager browser ──> Web SPA (S3+CloudFront | nginx locally) ──┐
- Painter phone   ──> Expo app (Phase 2) ───────────────────────┤ HTTPS JSON, Bearer JWT
+ Operative phone ──> Expo app (T-003, planned) ────────────────┤ HTTPS JSON, Bearer JWT
  Customer        ──> payment link page (later) ────────────────┤
                                                                v
                                    FastAPI backend (ECS Fargate | container | uvicorn)
                                       │                 │
-                                 PostgreSQL 16     Photo store (Phase 1: generated SVG;
-                                 (RDS | container)   later: S3, MinIO locally)
+                                 PostgreSQL 16     Photo store: generated SVG for seeded photos;
+                                 (RDS | container)   uploads (planned, T-003g) in private S3 |
+                                                     SeaweedFS (compose) | moto (dev.sh, tests)
 ```
 
 Phase 1 (built): manager persona, read-only, deterministic mock data, runs offline.
@@ -34,6 +37,8 @@ reviewed and edit notes/checklist with optimistic concurrency and an append-only
 dashboard review queue; neutral wording. Package 4: managers correct customer contact details
 (T-002n) and can re-apply their edits on top of a newer version after a conflict (T-002o).
 Still web only and mock data. One deployment per company (D1).
+Phase 2b **(planned, T-003)**: Android app for operatives (Expo SDK 58): device sessions,
+today's jobs, offline capture and draft, photo upload, submit; small manager evidence display.
 
 ## 2. Components and responsibilities
 
@@ -52,8 +57,9 @@ Still web only and mock data. One deployment per company (D1).
 | `web/scripts/` | `check-dist.mjs` / `dist-origins.mjs`: build fails on any external URL not in the exact allowlist |
 | `shared/src/` | `@jobproof/shared`: `generated/` (hey-api output, committed), `api/` (client Adapter, `ApiError`, query keys, `TokenStore`), `auth/hooks.ts`, `hooks/` (health, manager), `filters.ts`, `format/` (money, dates, labels, address) |
 | `e2e/` | Playwright: auth, dashboard, reports, report detail, billing, states, layout, CSP, screenshots; helpers in `tests/support.ts` |
-| `api/openapi.yaml` | The contract. Hand-written OpenAPI 3.1, v0.5.0: 21 operations (INFRA-3 added `GET /health/live`), all built; `PENDING_TICKETS` is empty (`x-ticket` markers remain as provenance). Backend conforms; clients generated from it |
-| `mobile/` | README only (Phase 2) |
+| `api/openapi.yaml` | The contract. Hand-written OpenAPI 3.1, v0.6.0: 21 operations built plus 11 T-003 operations **staged** (`PENDING_TICKETS` = T-003a, b, c, d, f, g, h, k, o; each ticket removes its id). `x-ticket` markers remain as provenance. Backend conforms; clients generated from it. `npm run gen:check` fails until T-003a regenerates the client |
+| `mobile/` | README only. **(planned, T-003a)** Expo app workspace `@jobproof/mobile`; layout: [specs/T-003-design.md](specs/T-003-design.md) section 3.1 |
+| **(planned, T-003)** backend | `routers/operative.py`, `sessions.py`, `app_status.py`; `services/operative_jobs.py` (`get_own_job`), `drafts.py`, `photo_upload.py`, `submission.py`, `sessions.py`; `photos/object_store.py` (S3), `validate.py`, `metadata.py`; `schemas/operative.py`; `versioning.py`; `seed/operative_day.py`; CLI `deactivate-user` |
 | `backend/app/dbroles.py`, `backend/app/cli.py` | `ensure_roles` (migrator and app roles), `apply_grants`, `migrate` (alembic head, then grants). CLI commands `create-admin`, `create-user --role admin\|manager`, `db-roles`, `migrate` (INFRA-3, section 10) |
 | `backend/app/seed/demo.py` | Dev-AWS-only demo seed `python -m app.seed.demo [--reset]` with its guards (section 9) |
 | `backend/certs/` | `rds-global-bundle.pem`: **placeholder** until the INFRA-6 entry gate (section 12); `README.md` |
@@ -107,6 +113,10 @@ security overrides (js-yaml, minimatch): section 13.1.
 | Web serve | nginx | `nginxinc/nginx-unprivileged:stable-alpine` | **tag not verified** (Docker Hub blocked); backlog B6 |
 | IaC | Terraform / AWS provider | 1.17.1 / 6.72.0 (`~> 6.72`) | verified 2026-11-08; not written yet (planned, INFRA-4) |
 | IaC | CloudFormation bootstrap; cfn-lint | 1.60.0 | clean in review 2026-11-09 |
+| Mobile **(planned, T-003; verified 2026-11-09)** | Expo SDK 58 (2026-10-15), React Native 0.88, React 19.3.0 (exact, bundled), Expo packages `~58.0.x` (`expo-router`, `expo-sqlite`, `expo-file-system`, `expo-background-task`...), minSdk 29 (ours), compileSdk 37 / targetSdk 36 | | React alignment with web 19.3.1 decided in T-003a (design R4); exact versions locked at T-003a |
+| Mobile test **(planned)** | @testing-library/react-native 14.x, jest-expo `~58.0.x`, Maestro CLI 2.x (outside the workspace) | | |
+| Backend **(planned, T-003g)** | boto3 1.43.126, pillow 13.0.0; dev moto[s3,server] 5.2.5 | | python-multipart deliberately not used (raw-body upload) |
+| Local S3 **(planned, T-003g)** | SeaweedFS `chrislusf/seaweedfs` (compose), moto server (dev.sh) | **tag not verified** | MinIO community images discontinued Oct 2025, LocalStack needs an account since Mar 2026 |
 | CI (in use) | `actions/checkout` v7.0.1, `actions/setup-node` v7.1.0, `astral-sh/setup-uv` v10.3.3 (no major tags), `actions/upload-artifact` v7.0.2; actionlint v1.7.12 | | each pinned by full commit SHA with the tag in a comment (SHAs matched their tags in review 2026-11-09); Dependabot bumps them. Source of truth: `.github/workflows/*.yml` |
 | CI (INFRA-5, written 2026-11-09, never run) | `aws-actions/configure-aws-credentials` v6.3.0, `actions/download-artifact` v8.0.2 (SHAs checked with `git ls-remote` 2026-11-09); Terraform 1.17.1 downloaded and checksum-verified by `.github/actions/setup-terraform`; tflint v0.66.0 via `go install` | | no `setup-terraform`, `build-push-action` or `amazon-ecr-login` action is used (plain CLI steps). See spec INFRA "Versions" and section 4.7 |
 
@@ -137,7 +147,12 @@ have no issue/due date, a payment is a deposit against a quote xor a payment aga
 | `customers` | + `version` (>= 1), `last_changed_at`, `last_changed_by_id` | built, 0007 (T-002n) |
 | `audit_events` | + `customer_id` (FK, set iff `entity_type = 'customer'`), index `(customer_id, seq DESC)`; enums gain `customer.edited`, `customer` | built, 0007 (T-002n) |
 | `company_settings.uk_only_contact_details` | boolean not null, default true: phone/postcode must be UK ones | built, 0008 (T-002p) |
-| `job_types` | Job types as data (code, label); `jobs.job_type` becomes text FK; enum dropped | planned, 0009 (T-002m, optional) |
+| `auth_sessions` | Device sessions: rotating refresh-token hashes, revocation | planned, 0009 (T-003b) |
+| `job_checklist_items`; `job_reports.state` (draft/submitted), `submitted_by_id`, nullable `submitted_at`/`review_status`; `report_checklist_items.cannot_do` | The job's planned checklist (report items share its ids); draft reports | planned, 0010 (T-003c) |
+| `report_photos` evidence columns | source, taken/received times, clock offset, optional location, fingerprints, item link, storage keys | planned, 0011 (T-003g) |
+| `job_reports` submission fields; audit `report.submitted`, `report.photo_received` | idempotent submit | planned, 0012 (T-003h) |
+| `job_reports` sign-off columns | customer sign-off | planned, 0013 (T-003o, optional) |
+| `job_types` | Job types as data (code, label); `jobs.job_type` becomes text FK; enum dropped | planned, next free number (0014 after T-003) (T-002m, optional) |
 | `invoice_line_items` | Itemised invoice lines | later |
 | `payment_links` | Customer Stripe checkout links (capability token) | later |
 
@@ -156,7 +171,8 @@ ticket, so no Alembic branches arise:**
 | 0006 | T-002i | `manager_notes` | additive |
 | 0007 | T-002n | customers `version` default 1 + `last_changed_*` (as 0004); audit enum values added in an autocommit block (a value cannot be used in the transaction that adds it); `audit_events.customer_id` + check + index | additive; `ADD COLUMN`/`ADD CONSTRAINT` do not fire the append-only row triggers; downgrade refuses if any `customer.edited` event exists |
 | 0008 | T-002p | `company_settings.uk_only_contact_details boolean not null default true` (existing row becomes true; customers untouched) | additive; drop column |
-| 0009 | T-002m **(planned, optional)** | `job_types` table, `jobs.job_type` enum to text FK (renumbered 0007 to 0008 to 0009 on 2026-11-08 as T-002n and T-002p took those numbers; down_revision `0008`) | type change on `jobs`; downgrade refuses non-painting codes |
+| 0009 to 0013 | T-003b, c, g, h, o **(planned)** | see the table above; details and risks in [specs/T-003-design.md](specs/T-003-design.md) section 7. 0010 is the risky one (nullable report columns; drafts must never reach manager queries) | 0010 downgrade refuses drafts; 0011 refuses uploaded photos; 0012 refuses its audit events |
+| next free (0014) | T-002m **(planned, optional)** | `job_types` table, `jobs.job_type` enum to text FK (renumbered again 2026-11-09: T-003 takes 0009 to 0013) | type change on `jobs`; downgrade refuses non-painting codes |
 
 The seed never touches `company_settings` (excluded from its truncate; no FK into it, so CASCADE
 cannot reach it) and sets `jobproof.allow_audit_truncate` for its own transaction only.
@@ -218,6 +234,13 @@ customer equals the job's customer is guaranteed only by the seed and applicatio
   from a visible node breaks `$ref`). Enum value additions cannot be hidden and need not be: a
   response never contains them before the ticket is built. The generated client is regenerated
   once per package, by its first ticket.
+- **Operative API (planned, T-003; design section 6):** `/api/v1/operative/*`, role `painter`,
+  own jobs only (another operative's job is 404, never 403); operative schemas never carry
+  `manager_notes`, money, customer email or billing. Repeat-safe writes: the job id keys the
+  one report per job; photos use client-generated UUIDs (PUT metadata, then PUT raw file);
+  submit carries a client `submission_id`. Device times (`device_sent_at`) are recorded beside
+  server times; the app sends `X-App-Version`, below the minimum → 426. Manager endpoints only
+  ever see `state = 'submitted'` reports.
 - Contract parity: backend tests validate every response against the schema and check that
   routes and operations match (`test_route_parity.py`); `npm run gen:check` fails on stale
   generated client. Workflow: [specs/T-000-bootstrap.md](specs/T-000-bootstrap.md) section 5.
@@ -229,7 +252,11 @@ customer equals the job's customer is guaranteed only by the seed and applicatio
 | Strategy | `backend/app/photos/store.py`: `PhotoStore` Protocol (`url_for`, `render`), `PlaceholderPhotoStore`; chosen in `backend/app/deps.py` `get_photo_store` | Implemented as described. Only the placeholder exists; `S3PhotoStore` (later) plugs in at `get_photo_store` |
 | Strategy | `shared/src/api/tokenStore.ts`: `TokenStore` interface (sync or async `get/set/clear`); web implementation `web/src/auth/sessionTokenStore.ts` (sessionStorage) | Same auth hooks, platform-specific persistence. Async signatures already allow SecureStore |
 | Adapter | `shared/src/api/client.ts` `configureApiClient` / `callApi` over the generated client | Runtime base URL, bearer header, 15 s timeout with abort, Problem errors to `ApiError`, 401 handler. No DOM access |
-| (none) | Authorisation: `require_roles(...)` in `backend/app/deps.py` | Role-only rules. Revisit as a per-persona Policy when painter ownership rules arrive |
+| (none) | Authorisation: `require_roles(...)` in `backend/app/deps.py` | Role-only rules. **(planned, T-003)** ownership is one rule (`jobs.painter_id = user`), applied by one function `get_own_job`; a Policy class is still not warranted |
+| Strategy + Adapter **(planned, T-003g)** | `PhotoStore` picks placeholder (seeded) or presigned GET (uploaded) per photo; `ObjectStore` protocol with `S3ObjectStore` (boto3; moto, SeaweedFS locally) | One code path for AWS and local; tests substitute the network boundary |
+| Adapter **(planned, T-003e)** | `mobile/src/db` `LocalDb` (expo-sqlite in the app, `node:sqlite` in Jest), `mobile/src/files` `PhotoFiles` | The sync engine's SQL and file logic run in Node without a device |
+| (none) **(planned, T-003f)** | Mobile sync: state-based reconciliation with `rev`/`synced_rev` dirty flags and a photo transition table (`mobile/src/sync/`); Observer status via `useSyncExternalStore` | Chosen over an operation log: edits coalesce, repeats are idempotent, no ordering bugs |
+| (none) **(planned, T-003b)** | Single-flight refresh in the shared Adapter (`refresh` option) | Mobile only passes it; web unchanged |
 | (none) | Invoice status: pure functions plus SQL twins | No transitions in Phase 1, so no State |
 | (none) | Settings accessor `services/settings.py`; single-row table with `CHECK (id = 1)` | D1: name and theme read in one place; no in-process cache (multiple ECS tasks) |
 | (none) | Concurrency: `SELECT ... FOR UPDATE` + version compare in `services/review.py`, `report_edit.py`, `customers.py` | Needs old values for audit and 409 bodies; simpler than conditional UPDATE |
@@ -253,7 +280,9 @@ customer equals the job's customer is guaranteed only by the seed and applicatio
 | `GET/PATCH /manager/customers/{id}`, `GET .../history`, `?customer_id=` on reports | yes | 403 | 403 | n/a | 401 |
 | `GET/PATCH /admin/settings`, `GET /admin/settings/history` | 403 | yes | 403 | n/a | 401 |
 | `GET /photos/{id}/image` | by valid signature only; no bearer token involved | | | | |
-| Painter capture endpoints | later | | own jobs (Phase 2) | | |
+| **(planned, T-003)** `/api/v1/operative/*` | 403 | 403 | own jobs only (others 404) | n/a | 401 |
+| **(planned, T-003b)** `POST /auth/sessions` (device sign-in) | 403 `operatives_only` | 403 `operatives_only` | yes | n/a | public (password) |
+| **(planned)** `POST /auth/sessions/refresh`, `GET /app/status` | public | | | | |
 | Customer payment link | | | | token in link (later) | |
 
 401 means no, invalid or expired token, or an inactive/missing user (with `WWW-Authenticate:
@@ -271,8 +300,15 @@ goes to `/login?expired=1&from=...` (a failed sign-in is not treated as a lost s
 Seeded users with argon2id hashes. `POST /api/v1/auth/login` returns an HS256 JWT (`sub`,
 `role`, `iat`, `exp`, `iss=jobproof`, `aud=jobproof-api`), TTL `JWT_TTL_SECONDS` (default 1800),
 no refresh token. The backend reloads the user on each request (honours `is_active`, role from
-DB). Web stores the token in sessionStorage. Later: refresh tokens and possibly Cognito; the
-bearer contract stays the same.
+DB). Web stores the token in sessionStorage. The web keeps this unchanged.
+
+**(planned, T-003b) Device sessions for the app:** `POST /auth/sessions` (operatives only) returns
+a 900 s JWT with a `sid` claim plus an opaque refresh token (`<session_id>.<secret>`, only its
+SHA-256 stored in `auth_sessions`), rotated on every refresh with reuse detection (a 60 s grace
+for a lost response), 30 days idle / 90 days absolute. Every request with a `sid` checks the
+session (revoked → 401 `session_ended`; inactive user → 401 `account_inactive`), so
+deactivation (`app.cli deactivate-user`) ends a device at once. Refresh token in
+`expo-secure-store`. Design section 4.
 
 ## 9. Security decisions (made in Phase 1 review)
 
@@ -309,6 +345,10 @@ bearer contract stays the same.
 - **Bundle origin check**: exact-string allowlist, section 12.
 - **Photo URLs**: HMAC-SHA256 over `photo_id:variant:exp`, constant-time compare, TTL
   `PHOTO_URL_TTL_SECONDS`; the web refetches the report once (throttled) when images expire.
+  **(planned, T-003g)** Uploaded photos use presigned S3 GET URLs with the same TTL; uploads are
+  validated (10 MiB, JPEG/PNG magic bytes, SHA-256, Pillow decode with a pixel limit), stripped
+  of EXIF/XMP/IPTC without re-encoding, never replaced once stored. Location lives only in DB
+  columns and manager responses.
 - **Container entrypoint shells must be POSIX and busybox-safe** (lesson from the first Docker
   run, B4): the nginx image is Alpine, whose `sh`, `tr`, `grep`, `sed` are busybox. Use only
   POSIX `sh` (no bash arrays, `[[ ]]`, `local`, `pipefail`), `case` patterns and `grep -E`;
@@ -418,7 +458,12 @@ must deny RDS log download and other data-bearing reads (infra); plus minors (sp
   the same image digest and web build. Also `rollback.yml`, `create-user.yml`,
   `dev-demo-data.yml`, `dev-power.yml`. Migrations must be backward compatible with the deployed
   code (expand/contract); prod is never downgraded. The first deploy applies the whole chain,
-  0001 to the head (0008 today; 0009 if T-002m is built), on an empty database.
+  0001 to the head (0008 today; 0013 once T-003 is built), on an empty database.
+- **(planned, T-003g/b/n deltas to INFRA-4)**: app task role gets `s3:PutObject/GetObject/
+  DeleteObject` on the photos bucket's `reports/*`; env `PHOTO_BUCKET`, `AWS_REGION`,
+  `MOBILE_MIN_VERSION_ANDROID`; `csp.txt` becomes a template adding the photos bucket's regional
+  origin to `img-src` (presigned GET); WAF: exclude `SizeRestrictions_BODY` for the photo content
+  path and extend the login rate rule to `POST /api/v1/auth/sessions`.
 - **One stack per company (D1)** still holds: its own accounts or environment, database, domain
   and `DEFAULT_COMPANY_NAME` on the migrate task.
 
@@ -450,7 +495,10 @@ the first real Docker run (B4). If `make up` fails, check in this order:
 7. Then run `make e2e` against it (same URLs as the dev path).
 
 URLs in both paths: web http://localhost:8080, API http://localhost:8000 (no Swagger UI; the
-contract file is the docs).
+contract file is the docs). **(planned, T-003g)** photo storage on http://localhost:8333:
+SeaweedFS (`photos` + one-shot `photos-init`) in compose, an in-memory moto server in
+`scripts/dev.sh`. **(planned, T-003a)** The app runs as an Expo development build against
+either path (`mobile/README.md`).
 
 Demo accounts add `manager2@jobproof.test` / `Manager123!` (Priya Nair) and
 `admin@jobproof.test` / `Admin123!` (Tom Ashworth). `DEFAULT_COMPANY_NAME` (optional) is read
@@ -526,47 +574,48 @@ issue (B7, B8 done). Its first run on GitHub is still pending, so no clean resul
 | @types/node 26 | 22.x | Match Node 22 runtime | with Node runtime upgrade |
 | PostgreSQL 18 | 16 (local, CI, RDS) | Moving local, CI, the workspace's PG16 binaries (`scripts/dev.sh`) and RDS together is a ticket of its own; RDS 16 standard support runs to 2029-02-28 (verified 2026-11-08) | 2027-09-01, before real customer data grows |
 | structlog, UI kits, axios | not used | Lean Phase 1 | when a need appears |
+| Presigned PUT uploads to S3 | upload through the API (T-003g) | Synchronous validation, thumbnails and one-copy guarantee without a worker; pilot volume is small | more than ~50 operatives uploading daily, or upload p95 > 5 s |
+| python-multipart | not used | Raw-body upload avoids it and its 2026 DoS advisories | if a multipart form is ever needed |
+| HEIC on the server | not accepted | The app converts to JPEG; avoids a native HEIF decoder | if a non-app client must upload |
+| EAS Update (OTA), Android foreground service, Sentry, Detox | not used (T-003) | Simpler release and min-version rule; fewer permissions and data processors; Maestro is lighter | after the pilot (design section 3.5, 9, 10, T3-6) |
 
 ## 14. Follow-up backlog
 
 | # | Item | Owner | Suggested ticket |
 |---|---|---|---|
-| B1 | `page` has no upper bound and the contract has no `maximum`. Architect adds `maximum` (e.g. 10000) to the `Page` parameter in `api/openapi.yaml`, regenerates the client (`npm run gen`); backend adds `le=` in `backend/app/routers/manager.py`; add a 422 test | architect, then backend | T-003 hardening |
-| B2 | Invoice customer must equal the job's customer: enforced by seed and app only. Option: unique `(id, customer_id)` on jobs and a composite FK `(job_id, customer_id)` from invoices (new Alembic revision, next free number after the head) | architect, then backend | T-003 hardening |
+| B1 | `page` has no upper bound and the contract has no `maximum`. Architect adds `maximum` (e.g. 10000) to the `Page` parameter in `api/openapi.yaml`, regenerates the client (`npm run gen`); backend adds `le=` in `backend/app/routers/manager.py`; add a 422 test | architect, then backend | T-004 hardening (relabelled 2026-11-09: T-003 is the Operative app) |
+| B2 | Invoice customer must equal the job's customer: enforced by seed and app only. Option: unique `(id, customer_id)` on jobs and a composite FK `(job_id, customer_id)` from invoices (new Alembic revision, next free number after the head) | architect, then backend | T-004 hardening |
 | B3 | **Open.** Pin Docker base image digests. Search `TODO(pin)` (compose, `backend/Dockerfile`, `ci.yml` service container); also `web/Dockerfile` (`node:22-alpine`, nginx). The CI `e2e` job prints the digests it pulled; pin from the first GitHub run | backend, web (`ci.yml`: infra) | after the first GitHub run |
 | B4 | **Open.** First real `make up` and `make e2e` under Docker (section 11). Earlier run found the busybox `tr` issue (fixed; rule in section 9). Now wired as the CI `e2e` job; first GitHub run pending | orchestrator | first GitHub run of `ci.yml` |
 | B5 | **Open.** Blackhole connect-timeout test (`backend/tests/test_health.py`) skips in the sandbox; the CI `backend` job runs it (`pytest -rs`); first GitHub run pending | backend | first GitHub run of `ci.yml` |
 | B6 | **Open.** nginx image tag `stable-alpine` not verified; digest reported by the CI `e2e` job | web | first GitHub run, with B3 |
 | B7 | **Done (INFRA-2).** `pip-audit` automated weekly in `dependency-check.yml` (section 13.1) | dependency-checker | - |
 | B8 | **Done (INFRA-2).** Weekly `dependency-check.yml` (Monday 05:17 UTC) and `dependabot.yml` | - | - |
-| B9 | Naming debt: API/DB say `painter` (`painter_id`, role `painter`, `/manager/painters`) while the UI says "Operative" (T-002l). Rename with a contract version bump when the field-worker app is specified | architect | Phase 2 painter-app spec |
+| B9 | Naming debt, **narrowed by T-003 (2026-11-09)**: the new app surface is named "operative" (`/operative/*`, `Operative*` schemas, `notes`); the role value `painter` and the existing manager fields (`painter`, `painter_id`, `painter_notes`, `/manager/painters`) stay, because renaming them touches the JWT, the DB enum and the web guard for no user benefit | architect | a deliberate v1.0 contract clean-up |
+| B14 | Retention: automatic deletion of photo files and location 6 years after job completion (T3-1 default), and purge of ended `auth_sessions` after 90 days. No scheduler exists yet | architect, backend | before the first expiry (2032) for photos; sessions any time |
 | B10 | A non-painting production deployment needs its own job types; 0009 only inserts painting types and there is no management screen (T-002m) | architect, product owner | before the first Arbour production deployment |
 | B12 | Invoices have no billing-address/name snapshot, so a customer edit (T-002n) changes what issued invoices show. Snapshot name and billing address onto the invoice at issue before invoice documents or Stripe links exist | architect | Stripe/invoice-document ticket |
 | B11 | Separate migrator and app DB roles (audit append-only defence in depth, section 9.1). The AWS app role must not own `audit_events` and must lack TRUNCATE on `audit_events`, `users` and `job_reports` (the tables that cascade into it); otherwise the `jobproof.allow_audit_truncate` setting (settable by any role) and the trigger owner could be misused (T-002 review, finding 9). **Fixed pending reviewer re-check:** built in INFRA-3 (`backend/app/dbroles.py`, spec INFRA section 5.4); round 1 found it fails as the non-superuser RDS master, now being fixed by the backend engineer together with the non-superuser test | backend, infra | INFRA-3 round 2 review |
 | B13 | No password change and no user management: users come only from the seed and `app.cli create-user --role admin\|manager` (`create-admin` remains, INFRA-3). Needed before real users | architect | before prod go-live (spec INFRA section 5.7) |
 
-## 15. Phase 2 starting points (painter mobile app, Expo)
+## 15. Phase 2b: the Operative app (T-003, all **planned**)
 
-Not a spec; the Phase 2 spec will define screens and contract changes.
+Design: [specs/T-003-design.md](specs/T-003-design.md) (decisions T3-1 to T3-8 for Paul at its
+top); build order: [specs/T-003-work-packages.md](specs/T-003-work-packages.md) (packages A to
+F); specs `specs/T-003a.md` to `T-003p.md`. Contract v0.6.0 staged in `api/openapi.yaml`.
 
-- **Reuse from `shared/` unchanged:** generated client and types, the Adapter
-  (`configureApiClient` with the API origin from Expo config instead of `config.js`), `ApiError`,
-  query keys, auth hooks (`useLogin`, `useMe`, `useLogout`), `shouldRetry`, formatters (money,
-  dates, labels, address). The shared package has no DOM access.
-- **Platform-specific:** a `TokenStore` over `expo-secure-store` (the interface already accepts
-  async methods), navigation, camera/photo capture, offline queue if in scope.
-- **Endpoints needed (high level):** painter's assigned jobs (list, detail) scoped to the
-  caller; create/update a draft completion report with checklist; photo upload (presigned S3
-  upload in AWS, MinIO locally, via an `S3PhotoStore`); submit report. `GET /auth/me` already
-  returns the role.
-- **Design changes that follow:** ownership rules (painter sees only own jobs) make the
-  per-persona Policy worth introducing; first write endpoints need idempotency and validation
-  conventions; the painter role currently gets 403 on all manager endpoints and that stays.
-- **(from T-002)** Write conventions now exist (section 5): reuse `version`/409 for report
-  drafts. `manager_notes` is internal: painter endpoints must never return it. Mobile reuses
-  `useBranding` (AsyncStorage snapshot), `DEFAULT_THEME`, `contrast.ts`, `buildReportUpdate`,
-  `mergeOnTop`, and the customer validators with `ukOnly` from branding if mobile ever edits
-  contact details.
+| Topic | Decision (reason in the design) |
+|---|---|
+| App | Expo SDK 58, Expo Router, Android 10+ (minSdk 29); development builds, not Expo Go |
+| Shared code | Generated client, Adapter (gains optional single-flight `refresh` and an AbortSignal fallback for Hermes), `ApiError`, branding, text rules, dates; new `shared/src/operative/` (status words, submit-rule twin with `submitCases.json`, validators, evidence flags, semver) and read hooks. Writes go through the mobile sync engine, not shared hooks |
+| Local data | SQLite (WAL, `synchronous=FULL`) for drafts, checklist states, photo records; files in app-private storage; refresh token in `expo-secure-store`; TanStack Query cache persisted to `expo-sqlite/kv-store`; every row keyed by user |
+| Sync | State-based reconciliation (dirty flags), max 2 uploads, backoff 5 s/15 s/1 min/5 min/15 min, single flight; foreground plus `expo-background-task` (WorkManager, >= 15 min); no foreground service |
+| Sessions | Section 8 (device sessions) |
+| Photos | Upload through the API (metadata PUT, raw-file PUT), presigned S3 GET for viewing; validation and EXIF removal on the server (section 9) |
+| Reports | One per job; `state` draft/submitted; drafts invisible to managers; submit idempotent by `submission_id`; job completed at submit |
+| Evidence | Server times authoritative; device times recorded with per-request `device_sent_at`; offset > 300 s flagged; gallery and location flagged; files never replaced |
+| Testing | pytest (moto), Vitest, Jest (`node:sqlite` logic, jest-expo + RNTL 14 UI), headless sync integration against the real backend through a fault proxy, `expo export`; Maestro and device scripts outside the workspace |
+| Release | EAS Build (AAB), Play App Signing, internal testing track, `MOBILE_MIN_VERSION_ANDROID` gate (426); needs prod (INFRA-6/7) and the custom domain (INFRA-8) first |
 
 ## 16. Phase 2a decisions (T-002)
 
