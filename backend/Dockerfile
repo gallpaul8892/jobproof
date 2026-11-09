@@ -25,6 +25,7 @@ WORKDIR /app
 COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
+COPY certs ./certs
 USER 10001
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \

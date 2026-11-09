@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: JobProof API
-  version: 0.4.0
+  version: 0.5.0
   summary: Contract between the JobProof backend and its web and mobile clients.
   description: |
     Source of truth for the JobProof API (see ARCHITECTURE.md section 5 for conventions).
@@ -66,6 +66,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
+
+  /health/live:
+    get:
+      tags: [health]
+      operationId: getHealthLive
+      summary: Process liveness only (no database check)
+      description: |
+        For the load balancer target group. It never touches the database, so a database
+        failover does not make the load balancer stop every task. Use `/health` for readiness.
+      security: []
+      responses:
+        "200":
+          description: The process is serving requests
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthLive" }
 
   /api/v1/auth/login:
     post:
@@ -707,6 +723,12 @@ components:
         status: { type: string, enum: [ok, degraded] }
         database: { type: string, enum: [ok, unavailable] }
         version: { type: string, examples: ["0.1.0"] }
+
+    HealthLive:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok] }
 
     Role:
       type: string

@@ -43,6 +43,10 @@ export type Health = {
     version: string;
 };
 
+export type HealthLive = {
+    status: 'ok';
+};
+
 /**
  * `painter` is the field worker, shown as "Operative" in the UI (T-002l).
  */
@@ -665,6 +669,22 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type GetHealthLiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/health/live';
+};
+
+export type GetHealthLiveResponses = {
+    /**
+     * The process is serving requests
+     */
+    200: HealthLive;
+};
+
+export type GetHealthLiveResponse = GetHealthLiveResponses[keyof GetHealthLiveResponses];
 
 export type LoginData = {
     body: LoginRequest;

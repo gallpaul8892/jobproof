@@ -29,6 +29,16 @@ def database_is_up(engine: Engine) -> bool:
     return True
 
 
+class HealthLiveResponse(BaseModel):
+    status: str
+
+
+@router.get("/health/live", response_model=HealthLiveResponse)
+def get_health_live() -> HealthLiveResponse:
+    """Liveness for the load balancer: no database access, so a failover cannot kill tasks."""
+    return HealthLiveResponse(status="ok")
+
+
 @router.get("/health", response_model=HealthResponse)
 def get_health(request: Request, response: Response) -> HealthResponse:
     if database_is_up(request.app.state.engine):

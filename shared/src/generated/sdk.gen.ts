@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetBrandingData, GetBrandingResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetManagerCustomerData, GetManagerCustomerErrors, GetManagerCustomerResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListAdminSettingsHistoryData, ListAdminSettingsHistoryErrors, ListAdminSettingsHistoryResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerCustomerHistoryData, ListManagerCustomerHistoryErrors, ListManagerCustomerHistoryResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportHistoryData, ListManagerReportHistoryErrors, ListManagerReportHistoryResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, LoginData, LoginErrors, LoginResponses, ReviewManagerReportData, ReviewManagerReportErrors, ReviewManagerReportResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateManagerCustomerData, UpdateManagerCustomerErrors, UpdateManagerCustomerResponses, UpdateManagerReportData, UpdateManagerReportErrors, UpdateManagerReportResponses } from './types.gen';
+import type { GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetBrandingData, GetBrandingResponses, GetHealthData, GetHealthErrors, GetHealthLiveData, GetHealthLiveResponses, GetHealthResponses, GetManagerCustomerData, GetManagerCustomerErrors, GetManagerCustomerResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListAdminSettingsHistoryData, ListAdminSettingsHistoryErrors, ListAdminSettingsHistoryResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerCustomerHistoryData, ListManagerCustomerHistoryErrors, ListManagerCustomerHistoryResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportHistoryData, ListManagerReportHistoryErrors, ListManagerReportHistoryResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, LoginData, LoginErrors, LoginResponses, ReviewManagerReportData, ReviewManagerReportErrors, ReviewManagerReportResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateManagerCustomerData, UpdateManagerCustomerErrors, UpdateManagerCustomerResponses, UpdateManagerReportData, UpdateManagerReportErrors, UpdateManagerReportResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -22,6 +22,15 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
  * Liveness and database readiness
  */
 export const getHealth = <ThrowOnError extends boolean = false>(options?: Options<GetHealthData, ThrowOnError>): RequestResult<GetHealthResponses, GetHealthErrors, ThrowOnError> => (options?.client ?? client).get<GetHealthResponses, GetHealthErrors, ThrowOnError>({ url: '/health', ...options });
+
+/**
+ * Process liveness only (no database check)
+ *
+ * For the load balancer target group. It never touches the database, so a database
+ * failover does not make the load balancer stop every task. Use `/health` for readiness.
+ *
+ */
+export const getHealthLive = <ThrowOnError extends boolean = false>(options?: Options<GetHealthLiveData, ThrowOnError>): RequestResult<GetHealthLiveResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetHealthLiveResponses, unknown, ThrowOnError>({ url: '/health/live', ...options });
 
 /**
  * Exchange email and password for a short-lived access token

@@ -59,3 +59,23 @@ def test_health_503_within_3s_when_database_blackholed() -> None:
 @pytest.mark.parametrize("path", ["/openapi.json", "/docs", "/redoc"])
 def test_generated_docs_are_disabled(client: TestClient, path: str) -> None:
     assert client.get(path).status_code == 404
+
+
+def test_health_live_ok(client: TestClient) -> None:
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert_contract(response, "getHealthLive")
+
+
+def test_health_live_does_not_touch_the_database() -> None:
+    """A database failover must not fail the load balancer's liveness check."""
+    settings = get_settings().model_copy(
+        update={"database_url": "postgresql+psycopg://x:x@127.0.0.1:1/none"}
+    )
+    with TestClient(create_app(settings)) as unreachable:
+        response = unreachable.get("/health/live")
+        assert unreachable.get("/health").status_code == 503
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert_contract(response, "getHealthLive")

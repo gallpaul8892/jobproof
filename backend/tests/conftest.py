@@ -20,7 +20,7 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
-from sqlalchemy.engine import make_url  # noqa: E402
+from sqlalchemy.engine import URL, make_url  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -221,3 +221,84 @@ def reseed(db_engine: Any) -> Iterator[None]:
     load(db_engine, build_dataset(ANCHOR))
     yield
     load(db_engine, build_dataset(ANCHOR))
+
+
+# ---- B11 scratch database (INFRA-3) --------------------------------------------------------
+import dataclasses  # noqa: E402
+
+B11_DATABASE = "jobproof_b11"
+B11_MIGRATOR_PASSWORD = "migrator-Pass-0123456789"  # noqa: S105
+B11_APP_PASSWORD = "app-Pass-%'-0123456789"  # noqa: S105 - special characters on purpose
+
+
+@dataclasses.dataclass(frozen=True)
+class B11Database:
+    """A scratch database prepared the way AWS is: owned by the migrator, used by the app role."""
+
+    superuser: URL
+    migrator: URL
+    app: URL
+
+    @property
+    def superuser_url(self) -> str:
+        return self.superuser.render_as_string(hide_password=False)
+
+    @property
+    def migrator_url(self) -> str:
+        return self.migrator.render_as_string(hide_password=False)
+
+    @property
+    def app_url(self) -> str:
+        return self.app.render_as_string(hide_password=False)
+
+
+@pytest.fixture(scope="session")
+def b11() -> Iterator[B11Database]:
+    """Scratch database `jobproof_b11`: roles created by db-roles, schema by migrate, seed loaded.
+
+    The roles are cluster-wide, so they are dropped again at the end of the session.
+    """
+    from app import dbroles
+    from app.seed.loader import load
+
+    base = make_url(TEST_DATABASE_URL)
+    superuser = base.set(database=B11_DATABASE)
+    admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+
+    def cleanup() -> None:
+        with admin.connect() as connection:
+            connection.execute(text(f'DROP DATABASE IF EXISTS "{B11_DATABASE}" WITH (FORCE)'))
+            for role in (dbroles.APP_ROLE, dbroles.MIGRATOR_ROLE):
+                connection.execute(text(f'DROP ROLE IF EXISTS "{role}"'))
+
+    cleanup()
+    with admin.connect() as connection:
+        connection.execute(text(f'CREATE DATABASE "{B11_DATABASE}"'))
+    engine = create_engine(superuser)
+    with engine.begin() as connection:
+        dbroles.ensure_roles(connection, B11_MIGRATOR_PASSWORD, B11_APP_PASSWORD)
+    prepared = B11Database(
+        superuser=superuser,
+        migrator=superuser.set(username=dbroles.MIGRATOR_ROLE, password=B11_MIGRATOR_PASSWORD),
+        app=superuser.set(username=dbroles.APP_ROLE, password=B11_APP_PASSWORD),
+    )
+    dbroles.migrate(prepared.migrator_url, require_migrator=True)
+    load(engine, build_dataset(ANCHOR))
+    engine.dispose()
+    try:
+        yield prepared
+    finally:
+        cleanup()
+        admin.dispose()
+
+
+@pytest.fixture
+def b11_reseeded(b11: B11Database) -> Iterator[B11Database]:
+    """The scratch database with the standard dataset loaded, before and after the test."""
+    from app.seed.loader import load
+
+    engine = create_engine(b11.superuser)
+    load(engine, build_dataset(ANCHOR))
+    yield b11
+    load(engine, build_dataset(ANCHOR))
+    engine.dispose()
