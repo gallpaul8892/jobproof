@@ -111,12 +111,24 @@ ok "protected route refuses anonymous callers"
 
 # ---- optional sign-in -----------------------------------------------------------------------
 if [ -n "${SMOKE_EMAIL:-}" ] && [ -n "${SMOKE_PASSWORD:-}" ]; then
-  printf '{"email": "%s", "password": "%s"}' "$SMOKE_EMAIL" "$SMOKE_PASSWORD" > "$TMP/login.json"
+  # Build the JSON with a real encoder (quotes and backslashes in a password are escaped), reading
+  # the values from the environment so they never appear on a command line.
+  if command -v jq >/dev/null 2>&1; then
+    jq -n '{email: env.SMOKE_EMAIL, password: env.SMOKE_PASSWORD}' > "$TMP/login.json" \
+      || fail "could not build the sign-in request"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, os; print(json.dumps({"email": os.environ["SMOKE_EMAIL"], "password": os.environ["SMOKE_PASSWORD"]}))' \
+      > "$TMP/login.json" || fail "could not build the sign-in request"
+  else
+    fail "sign-in needs jq or python3 to build the request safely"
+  fi
   get /api/v1/auth/login -X POST -H 'Content-Type: application/json' --data-binary "@$TMP/login.json"
   [ "$STATUS" = "200" ] || fail "sign-in returned $STATUS"
   TOKEN="$(sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TMP/b")"
   [ -n "$TOKEN" ] || fail "sign-in returned no access_token"
-  get /api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+  # The bearer token goes in a header file, not on the curl command line (visible in ps).
+  ( umask 077; printf 'Authorization: Bearer %s\n' "$TOKEN" > "$TMP/auth.hdr" )
+  get /api/v1/auth/me -H "@$TMP/auth.hdr"
   [ "$STATUS" = "200" ] || fail "/api/v1/auth/me returned $STATUS"
   ok "sign-in and /auth/me"
 fi

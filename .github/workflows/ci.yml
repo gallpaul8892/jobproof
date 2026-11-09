@@ -10,9 +10,10 @@ on:
 permissions:
   contents: read
 
-# Superseded pull request runs are cancelled; runs called from a push to main never are.
+# Superseded pull request runs are cancelled; runs called from a push to main never are (each
+# non-pull_request run gets its own group, keyed on the run id).
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -156,3 +157,19 @@ jobs:
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           "$(go env GOPATH)/bin/actionlint" -color
+
+  infra:
+    name: cfn-lint (infra/bootstrap)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CFN_LINT_VERSION: "1.60.0" # latest on PyPI when pinned (2026-11-09); bump deliberately
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: cfn-lint (version-pinned, in a throwaway virtualenv)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cfn-lint-venv"
+          "$RUNNER_TEMP/cfn-lint-venv/bin/pip" install --quiet "cfn-lint==${CFN_LINT_VERSION}"
+          "$RUNNER_TEMP/cfn-lint-venv/bin/cfn-lint" infra/bootstrap/bootstrap.cfn.yaml

@@ -1,4 +1,5 @@
-# Weekly vulnerability scan (backlog B7, B8). Opens or updates one issue when anything is found.
+# Weekly vulnerability scan (backlog B7, B8) and RDS CA bundle comparison. Opens or updates one
+# issue when anything is found.
 # Terraform provider checks are added with INFRA-4. Spec: specs/INFRA-aws-pipeline.md section 4.1.
 name: dependency-check
 
@@ -48,13 +49,43 @@ jobs:
           npm audit > "$RUNNER_TEMP/npm-audit.txt" 2>&1
           echo "status=$?" >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/npm-audit.txt"
+      - name: RDS CA bundle matches AWS's published bundle
+        id: rds
+        env:
+          BUNDLE_URL: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+        run: |
+          # status 0 = same, or skipped (placeholder); 1 = differs; 2 = could not download.
+          set +e
+          committed=backend/certs/rds-global-bundle.pem
+          if ! grep -q -- '-----BEGIN CERTIFICATE-----' "$committed"; then
+            echo "The committed file is still the placeholder (no certificate in it): skipping."
+            echo "status=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! curl -fsSL --retry 3 --max-time 60 "$BUNDLE_URL" -o "$RUNNER_TEMP/aws-bundle.pem" \
+            || ! grep -q -- '-----BEGIN CERTIFICATE-----' "$RUNNER_TEMP/aws-bundle.pem"; then
+            echo "Could not download a certificate bundle from $BUNDLE_URL"
+            echo "status=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tr -d '\r' < "$committed" > "$RUNNER_TEMP/committed.pem"
+          tr -d '\r' < "$RUNNER_TEMP/aws-bundle.pem" > "$RUNNER_TEMP/aws-bundle-lf.pem"
+          if diff -u "$RUNNER_TEMP/committed.pem" "$RUNNER_TEMP/aws-bundle-lf.pem" > "$RUNNER_TEMP/rds-diff.txt"; then
+            echo "The committed bundle is identical to AWS's published bundle."
+            echo "status=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "The committed bundle differs from AWS's published bundle:"
+            head -c 4000 "$RUNNER_TEMP/rds-diff.txt"
+            echo "status=1" >> "$GITHUB_OUTPUT"
+          fi
       - name: Open or update the findings issue
-        if: steps.pip.outputs.status != '0' || steps.npm.outputs.status != '0'
+        if: steps.pip.outputs.status != '0' || steps.npm.outputs.status != '0' || steps.rds.outputs.status != '0'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PIP_STATUS: ${{ steps.pip.outputs.status }}
           NPM_STATUS: ${{ steps.npm.outputs.status }}
+          RDS_STATUS: ${{ steps.rds.outputs.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           {
@@ -69,6 +100,14 @@ jobs:
             echo '```'
             head -c 20000 "$RUNNER_TEMP/npm-audit.txt"
             echo '```'
+            echo
+            echo "RDS CA bundle check status: $RDS_STATUS (0 = same as AWS or skipped, 1 = differs, 2 = download failed)"
+            if [ "$RDS_STATUS" != "0" ] && [ -f "$RUNNER_TEMP/rds-diff.txt" ]; then
+              echo "If AWS published a new bundle, replace backend/certs/rds-global-bundle.pem with it."
+              echo '```diff'
+              head -c 8000 "$RUNNER_TEMP/rds-diff.txt"
+              echo '```'
+            fi
           } > "$RUNNER_TEMP/body.md"
           gh label create dependencies --color 0366d6 --description "Dependency updates and audits" 2>/dev/null || true
           existing="$(gh issue list --label dependencies --state open --search 'Weekly dependency check in:title' --json number --jq '.[0].number // empty')"
@@ -78,5 +117,5 @@ jobs:
             gh issue create --title "Weekly dependency check: findings" --label dependencies --body-file "$RUNNER_TEMP/body.md"
           fi
       - name: Fail the run when there are findings (so the Actions tab shows it too)
-        if: steps.pip.outputs.status != '0' || steps.npm.outputs.status != '0'
+        if: steps.pip.outputs.status != '0' || steps.npm.outputs.status != '0' || steps.rds.outputs.status != '0'
         run: exit 1

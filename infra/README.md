@@ -79,6 +79,14 @@ anything not listed here.
 
 ### D. Upload the bootstrap file: dev first, then prod (about 10 minutes each)
 
+Before step 4, look up the two numeric IDs (GitHub CLI, signed in; they identify the account and
+the repository permanently, even if either is renamed):
+
+```
+gh api users/gallpaul8892 --jq .id        # GitHubOwnerId
+gh api repos/gallpaul8892/jobproof --jq .id   # GitHubRepoId
+```
+
 The file `infra/bootstrap/bootstrap.cfn.yaml` creates three things only: the GitHub sign-in link,
 the bucket that holds Terraform's record of what exists, and two roles GitHub may use. It creates
 no keys and no passwords. Details: [bootstrap/README.md](bootstrap/README.md).
@@ -89,7 +97,9 @@ no keys and no passwords. Details: [bootstrap/README.md](bootstrap/README.md).
 3. Search for **CloudFormation**. Click **Create stack**, then **With new resources (standard)**.
    Choose **Upload a template file**, pick the downloaded file, click **Next**.
 4. Stack name: `jobproof-bootstrap`. Parameters: set `Environment` to `dev`. Leave `GitHubOwner`
-   as `gallpaul8892`, `GitHubRepo` as `jobproof`, and `SubjectMode` as `workflow` (choose `branch`
+   as `gallpaul8892`, `GitHubRepo` as `jobproof`. Set `GitHubOwnerId` and `GitHubRepoId` to the
+   two numbers from the lookup below (they are not secret, and are required even in `branch`
+   mode). Leave `SubjectMode` as `workflow` (choose `branch`
    only if you decided not to allow the GitHub setting in step E2). Click **Next**.
 5. On the options page, scroll to **Stack failure options** and leave the defaults. Find
    **Termination protection** and choose **Activated**. Click **Next**.
@@ -118,13 +128,14 @@ try again.
    ```
    gh api -X PUT repos/gallpaul8892/jobproof/actions/oidc/customization/sub \
      --input - <<'JSON'
-   {"include_claim_keys": ["repo", "context", "job_workflow_ref"]}
+   {"include_claim_keys": ["repo", "context", "job_workflow_ref", "repository_owner_id", "repository_id"]}
    JSON
    ```
 
    Do this **before** the first deploy, and do not change it afterwards without updating both
    bootstrap stacks. To check it: `gh api repos/gallpaul8892/jobproof/actions/oidc/customization/sub`
-   should show those three keys. If you chose not to allow this, you used `SubjectMode=branch` in
+   should show those five keys, in that order (the order sets the subject, and the stack's trust
+   must match it). If you chose not to allow this, you used `SubjectMode=branch` in
    step D and skip this step. (To undo the setting later, send `{"use_default": true}`
    instead.)
 

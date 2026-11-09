@@ -22,13 +22,16 @@ No access keys, no passwords, no secrets. Region is locked to eu-west-2 by a tem
 | `Environment` | none | `dev` or `prod` |
 | `GitHubOwner` | `gallpaul8892` | GitHub user or organisation |
 | `GitHubRepo` | `jobproof` | Repository name |
+| `GitHubOwnerId` | (none, required) | Numeric ID of the owner: `gh api users/OWNER --jq .id` |
+| `GitHubRepoId` | (none, required) | Numeric ID of the repository: `gh api repos/OWNER/REPO --jq .id` |
 | `SubjectMode` | `workflow` | `workflow` or `branch` (see below) |
 
 ## Who can assume what (the trust)
 
 `SubjectMode=workflow` (decision P2 = yes). The repository's OIDC subject template is
-`repo, context, job_workflow_ref`, so the token subject looks like
-`repo:OWNER/REPO:ref:refs/heads/main:job_workflow_ref:OWNER/REPO/.github/workflows/pipeline.yml@refs/heads/main`.
+`repo, context, job_workflow_ref, repository_owner_id, repository_id`, so the token subject looks like
+`repo:OWNER/REPO:ref:refs/heads/main:job_workflow_ref:OWNER/REPO/.github/workflows/pipeline.yml@refs/heads/main:repository_owner_id:111:repository_id:222`.
+The numeric IDs mean a renamed, deleted and recreated, or transferred repository cannot reuse the trust.
 
 | Role | Allowed subjects |
 |---|---|
@@ -39,7 +42,8 @@ No access keys, no passwords, no secrets. Region is locked to eu-west-2 by a tem
 `SubjectMode=branch` (fallback, P2 = no). The subject is GitHub's default, so only the branch can
 be named: plan role = `repo:OWNER/REPO:pull_request` and `repo:OWNER/REPO:ref:refs/heads/main`;
 terraform role = `repo:OWNER/REPO:ref:refs/heads/main` (any workflow on `main`). Protection then
-rests on reviewing `.github/workflows/`.
+rests on reviewing `.github/workflows/`. The two ID parameters are still required but unused in
+this mode (the default subject carries no IDs).
 
 **The repository's subject template and `SubjectMode` must agree**, and the template must be set
 before the first pipeline run. Changing one later means updating both stacks (spec, risk 3).

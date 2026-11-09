@@ -13,7 +13,7 @@ Metadata:
         Parameters: [Environment]
       - Label:
           default: Which GitHub repository may sign in?
-        Parameters: [GitHubOwner, GitHubRepo, SubjectMode]
+        Parameters: [GitHubOwner, GitHubRepo, GitHubOwnerId, GitHubRepoId, SubjectMode]
 
 Parameters:
   Environment:
@@ -34,14 +34,30 @@ Parameters:
     AllowedPattern: "^[A-Za-z0-9._-]{1,100}$"
     ConstraintDescription: A GitHub repository name (letters, digits, dot, underscore, hyphen).
     Description: GitHub repository name.
+  GitHubOwnerId:
+    Type: String
+    AllowedPattern: "^[0-9]{1,20}$"
+    ConstraintDescription: The numeric GitHub account ID (digits only).
+    Description: >-
+      Numeric ID of the GitHub owner (not secret). Look it up with
+      gh api users/<owner> --jq .id (see infra/README.md, step D). Used in workflow mode, where it
+      is part of the trusted OIDC subject, so a renamed or recreated account cannot sign in.
+  GitHubRepoId:
+    Type: String
+    AllowedPattern: "^[0-9]{1,20}$"
+    ConstraintDescription: The numeric GitHub repository ID (digits only).
+    Description: >-
+      Numeric ID of the repository (not secret). Look it up with
+      gh api repos/<owner>/<repo> --jq .id (see infra/README.md, step D). Used in workflow mode,
+      like GitHubOwnerId. Not used in branch mode.
   SubjectMode:
     Type: String
     Default: workflow
     AllowedValues: [workflow, branch]
     Description: >-
-      workflow (default, decision P2 = yes): roles are tied to specific workflow files. Needs the
-      repository's OIDC subject template set to repo, context, job_workflow_ref (see
-      infra/bootstrap/README.md). branch (fallback, P2 = no): roles are tied to the main branch
+      workflow (default, decision P2 = yes): roles are tied to specific workflow files and to the
+      numeric owner and repository IDs. Needs the repository's OIDC subject template set to repo,
+      context, job_workflow_ref, repository_owner_id, repository_id (see infra/README.md). branch (fallback, P2 = no): roles are tied to the main branch
       and to pull requests only, using GitHub's default subject.
 
 Rules:
@@ -149,10 +165,10 @@ Resources:
               StringLike:
                 token.actions.githubusercontent.com:sub: !If
                   - WorkflowMode
-                  # Subject template is repo, context, job_workflow_ref.
-                  # ci.yml on a pull request, or pipeline.yml (prod-preview) on main.
-                  - - !Sub "repo:${GitHubOwner}/${GitHubRepo}:pull_request:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/ci.yml@refs/pull/*"
-                    - !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/pipeline.yml@refs/heads/main"
+                  # Subject template is repo, context, job_workflow_ref, repository_owner_id,
+                  # repository_id. ci.yml on a pull request, or pipeline.yml (prod-preview) on main.
+                  - - !Sub "repo:${GitHubOwner}/${GitHubRepo}:pull_request:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/ci.yml@refs/pull/*:repository_owner_id:${GitHubOwnerId}:repository_id:${GitHubRepoId}"
+                    - !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/pipeline.yml@refs/heads/main:repository_owner_id:${GitHubOwnerId}:repository_id:${GitHubRepoId}"
                   # Fallback: GitHub's default subject.
                   - - !Sub "repo:${GitHubOwner}/${GitHubRepo}:pull_request"
                     - !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main"
@@ -201,6 +217,26 @@ Resources:
                   - ssm:GetParametersByPath
                   - ssm:GetParameterHistory
                 NotResource: !Sub "arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/jobproof/*/release"
+              # ReadOnlyAccess also reaches some data and diagnostics. Any pull request can run the
+              # plan role, so deny those reads (a deny always beats an allow).
+              - Sid: DenyReadingDatabaseLogs
+                Effect: Deny
+                Action:
+                  - rds:DownloadDBLogFilePortion
+                  - rds:DownloadCompleteDBLogFile
+                Resource: "*"
+              - Sid: DenyReadingDataAndCode
+                Effect: Deny
+                Action:
+                  - lambda:GetFunction
+                  - dynamodb:GetItem
+                  - dynamodb:BatchGetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:PartiQLSelect
+                  - ec2:GetConsoleOutput
+                  - cloudformation:GetTemplate
+                Resource: "*"
               - Sid: DenyDecrypting
                 Effect: Deny
                 Action:
@@ -245,7 +281,7 @@ Resources:
                 token.actions.githubusercontent.com:sub: !If
                   - WorkflowMode
                   - !Sub
-                    - "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/${Workflow}@refs/heads/main"
+                    - "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/${Workflow}@refs/heads/main:repository_owner_id:${GitHubOwnerId}:repository_id:${GitHubRepoId}"
                     - Workflow: !If [IsProd, deploy-prod.yml, pipeline.yml]
                   - !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main"
       ManagedPolicyArns:
@@ -270,6 +306,12 @@ Outputs:
   OidcProviderArn:
     Description: GitHub OIDC provider.
     Value: !GetAtt GitHubOidcProvider.Arn
+  GitHubOwnerId:
+    Description: Numeric GitHub owner ID the workflow-mode trust names (not secret).
+    Value: !Ref GitHubOwnerId
+  GitHubRepoId:
+    Description: Numeric GitHub repository ID the workflow-mode trust names (not secret).
+    Value: !Ref GitHubRepoId
   SubjectMode:
     Description: Which trust style this stack was created with.
     Value: !Ref SubjectMode

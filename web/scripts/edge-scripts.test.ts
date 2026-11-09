@@ -155,7 +155,20 @@ beforeAll(async () => {
       return json(401, { code: "unauthenticated" }, "application/problem+json");
     }
     if (path === "/api/v1/auth/login" && req.method === "POST") {
-      return json(200, { access_token: "tok" });
+      let raw = "";
+      req.on("data", (d) => (raw += d));
+      req.on("end", () => {
+        try {
+          const login = JSON.parse(raw) as { email?: string; password?: string };
+          const expected = process.env.SMOKE_TEST_EXPECT_PASSWORD ?? "s3cret-pass";
+          return login.email === "a@b.test" && login.password === expected
+            ? json(200, { access_token: "tok" })
+            : json(401, { code: "invalid_credentials" }, "application/problem+json");
+        } catch {
+          return json(400, { code: "bad_json" }, "application/problem+json");
+        }
+      });
+      return;
     }
     if (path === "/api/v1/auth/me") {
       return req.headers.authorization === "Bearer tok"
@@ -204,6 +217,19 @@ describe("smoke-test.sh", () => {
     expect(status).toBe(0);
     expect(out).toContain("sign-in and /auth/me");
     expect(out).not.toContain("s3cret-pass");
+  });
+
+  it("sends a password containing a double quote and a backslash as valid JSON", async () => {
+    const password = 'p"w\\x"\\';
+    process.env.SMOKE_TEST_EXPECT_PASSWORD = password;
+    try {
+      const { status, out } = await smoke([], { SMOKE_EMAIL: "a@b.test", SMOKE_PASSWORD: password });
+      expect(out).toContain("sign-in and /auth/me");
+      expect(status).toBe(0);
+      expect(out).not.toContain(password);
+    } finally {
+      delete process.env.SMOKE_TEST_EXPECT_PASSWORD;
+    }
   });
 
   it.each([
