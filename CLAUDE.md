@@ -16,8 +16,7 @@ endpoints now exist for: Admin settings (company name, colour scheme), marking r
 manager edits to report notes and checklist, and manager corrections to customer contact details
 (both audited, optimistic concurrency; after a conflict "Apply my changes on top" re-applies the
 manager's fields onto the latest version and never saves by itself). Report photos stay read-only.
-Deployment model: one deployment per company, configured by a settings record; true multi-tenancy is deliberately deferred (decision D1 in T-002). Still out of scope: painter
-capture (Expo), customer payment (Stripe), quotes and deposits, AWS deployment. The mock data is
+Deployment model: one deployment per company, configured by a settings record; true multi-tenancy is deliberately deferred (decision D1 in T-002). Phase 2a is delivered. AWS delivery (INFRA-1 to INFRA-5: Terraform, GitHub Actions pipeline to dev and a manual prod deploy) is written but not yet deployed; see specs/INFRA-aws-pipeline.md. **Next: Phase 2b, the Operative mobile app (epic tickets/T-003-operative-app.md, Expo, Android first).** Still out of scope: customer payment (Stripe) and quotes and deposits. The mock data is
 still painting and decorating; UI wording is industry-neutral (T-002l).
 
 ## Stack (fixed)
