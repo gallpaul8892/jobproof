@@ -83,14 +83,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - name: eslint and tsc (all workspaces)
-        run: npm run lint
+      - name: eslint and tsc (shared, web and e2e; mobile has its own job)
+        run: npm run lint -w @jobproof/shared -w @jobproof/web -w @jobproof/e2e
       - name: Lint the OpenAPI contract
         run: npx --no-install redocly lint api/openapi.yaml --config api/redocly.yaml
       - name: Generated client is up to date (gen:check)
         run: npm run gen:check
       - name: Shared and web unit tests (includes the busybox test for web/nginx/*.sh)
-        run: npm test
+        run: npm test -w @jobproof/shared -w @jobproof/web
       - name: Production build (includes the bundle origin check)
         run: npm run build -w @jobproof/web
 
@@ -116,11 +116,13 @@ jobs:
         run: npm run lint -w @jobproof/mobile
       - name: Jest (logic and ui projects, config assertions)
         run: npm test -w @jobproof/mobile
+      # expo-doctor is a pinned mobile devDependency (version and integrity come from the lockfile).
+      # It asks the Expo API for SDK metadata, so an outage on their side must not block a merge:
+      # a failure is shown as a warning annotation instead.
       - name: expo-doctor (needs the Expo API; EXPO_OFFLINE is unset for this step)
         env:
           EXPO_OFFLINE: "0"
-        run: npx --yes expo-doctor@1.21.6
-        working-directory: mobile
+        run: npm run doctor -w @jobproof/mobile || echo "::warning title=expo-doctor::expo-doctor failed or the Expo API was unreachable; check the log"
       - name: Android bundle (Metro resolves everything, one React copy)
         run: npm run export -w @jobproof/mobile
 

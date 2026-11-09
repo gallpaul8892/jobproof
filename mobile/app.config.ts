@@ -61,6 +61,9 @@ export function buildConfig(env: Record<string, string | undefined>): ExpoConfig
     },
     plugins: [
       "expo-router",
+      // Plain placeholder splash (T-003a): white with the app icon centred. The company name is
+      // runtime branding and unknown at build time; a branded splash is a later ticket.
+      ["expo-splash-screen", { backgroundColor: "#FFFFFF", image: "./assets/icon.png", imageWidth: 200 }],
       [
         "expo-build-properties",
         {

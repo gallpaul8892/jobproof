@@ -51,7 +51,9 @@ export function configureApiClient(options: ApiClientOptions): void {
     try {
       return await baseFetch(input, { ...init, signal });
     } catch (cause) {
-            throw networkError(cause);
+      // React Native's fetch (whatwg-fetch) rejects an abort with a plain AbortError and drops
+      // signal.reason, so prefer the reason: a phone timeout must read "timeout", not "network_error".
+      throw networkError(signal.aborted && signal.reason !== undefined ? signal.reason : cause);
     } finally {
       dispose();
     }
@@ -66,26 +68,46 @@ export function configureApiClient(options: ApiClientOptions): void {
 interface SdkResult<T> {
   data?: T;
   error?: unknown;
+  request?: Request;
   response?: Response;
 }
 
-/** Runs the configured refresh once at a time; concurrent 401s share one promise. */
+export interface CallOptions {
+  /**
+   * Set false for the session operations themselves (createDeviceSession, refreshDeviceSession,
+   * endDeviceSession): a 401 from them neither starts a refresh (which would wait on itself) nor
+   * runs `onUnauthorized`; the caller owns the session state. Default true.
+   */
+  refresh?: boolean;
+}
+
+/**
+ * Runs the configured refresh once at a time; concurrent 401s share one promise. When it fails,
+ * `onUnauthorized` runs here, once for the whole burst rather than once per waiting caller.
+ */
 function refreshOnce(): Promise<boolean> {
   if (!refreshHandler) return Promise.resolve(false);
-  refreshInFlight ??= refreshHandler()
-    .catch(() => false)
-    .finally(() => {
-      refreshInFlight = undefined;
-    });
+  refreshInFlight ??= (async () => {
+    const ok = await Promise.resolve().then(() => refreshHandler!()).catch(() => false);
+    if (!ok) unauthorizedHandler?.();
+    return ok;
+  })().finally(() => {
+    refreshInFlight = undefined;
+  });
   return refreshInFlight;
 }
 
 /** Unwraps an SDK call: returns data, or throws ApiError for any failure. */
-export async function callApi<T>(call: () => Promise<SdkResult<T>>): Promise<T> {
-  return attempt(call, true);
+export async function callApi<T>(call: () => Promise<SdkResult<T>>, options: CallOptions = {}): Promise<T> {
+  return attempt(call, options.refresh !== false, options.refresh !== false);
 }
 
-async function attempt<T>(call: () => Promise<SdkResult<T>>, mayRefresh: boolean): Promise<T> {
+function bearer(request: Request | undefined): string | null {
+  const header = request?.headers.get("Authorization");
+  return header?.startsWith("Bearer ") ? header.slice(7) : null;
+}
+
+async function attempt<T>(call: () => Promise<SdkResult<T>>, mayRefresh: boolean, notify: boolean): Promise<T> {
   let result: SdkResult<T>;
   try {
     result = await call();
@@ -99,8 +121,16 @@ async function attempt<T>(call: () => Promise<SdkResult<T>>, mayRefresh: boolean
       result.response?.headers.get("X-Request-ID"),
     );
     // A wrong password is also a 401, but it is not a lost session.
-    if (error.status === 401 && error.code !== "invalid_credentials") {
-      if (mayRefresh && refreshHandler && (await refreshOnce())) return attempt(call, false);
+    if (error.status === 401 && error.code !== "invalid_credentials" && notify) {
+      if (mayRefresh && refreshHandler) {
+        // A late 401 for a request sent with a token that has since been replaced: retry with the
+        // new one instead of rotating again (the rotation grace rule makes extra rotations costly).
+        const current = await activeTokenStore?.get();
+        const used = bearer(result.request);
+        if (current && used && current !== used) return attempt(call, false, true);
+        if (await refreshOnce()) return attempt(call, false, true);
+        throw error; // onUnauthorized already ran, once, inside refreshOnce
+      }
       unauthorizedHandler?.();
     }
     throw error;

@@ -1,5 +1,7 @@
 export { configureApiClient, callApi, getTokenStore, REQUEST_TIMEOUT_MS } from "./api/client";
-export type { ApiClientOptions } from "./api/client";
+export type { ApiClientOptions, CallOptions } from "./api/client";
+export { deviceSessionApi } from "./auth/deviceSession";
+export type { DeviceSessionApi } from "./auth/deviceSession";
 export { ApiError, toApiError } from "./api/errors";
 export type { FieldError } from "./api/errors";
 export type { TokenStore } from "./api/tokenStore";
@@ -64,6 +66,9 @@ export type {
   AdminSettingsUpdate,
   AuditAction,
   AppStatus,
+  DeviceSession,
+  DeviceSessionRequest,
+  DevicePlatform,
   AuditChange,
   AuditEvent,
   AuditHistory,

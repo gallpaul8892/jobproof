@@ -60,4 +60,10 @@ describe("app config", () => {
   it("uses a distinct application id per variant so builds can sit side by side", () => {
     expect(buildConfig({ ...ENV, APP_VARIANT: "preview" }).android?.package).toBe("uk.co.jobproof.operative.preview");
   });
+
+  it("has a plain splash (white background, the icon) through the expo-splash-screen plugin", () => {
+    const plugin = (buildConfig(ENV).plugins as unknown[][]).find((p) => Array.isArray(p) && p[0] === "expo-splash-screen");
+    expect(plugin).toBeDefined();
+    expect(plugin![1]).toMatchObject({ backgroundColor: "#FFFFFF", image: "./assets/icon.png" });
+  });
 });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./errors";
 import { callApi, configureApiClient, REQUEST_TIMEOUT_MS } from "./client";
-import { getHealth, getMe } from "../generated";
+import { getHealth, getMe, refreshDeviceSession } from "../generated";
 
 function jsonResponse(body: unknown, status: number, type = "application/json"): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
@@ -191,6 +191,31 @@ describe("api client: runtimes without AbortSignal.any / timeout (Hermes)", () =
     expect(await pending).toMatchObject({ status: 0, code: "timeout" });
   });
 
+  it("reports a timeout as 'timeout' when the runtime rejects with a plain AbortError (React Native fetch)", async () => {
+    vi.useFakeTimers();
+    configureApiClient({
+      baseUrl: "http://api.test",
+      fetch: (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          // whatwg-fetch: the reason is dropped and a generic AbortError is thrown.
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        }),
+    });
+    const pending = callApi(() => getMe()).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1);
+    expect(await pending).toMatchObject({ status: 0, code: "timeout" });
+  });
+
+  it("still reports network_error for an ordinary failure while the signal is live", async () => {
+    configureApiClient({
+      baseUrl: "http://api.test",
+      fetch: async () => {
+        throw new TypeError("Network request failed");
+      },
+    });
+    expect(await callApi(() => getMe()).catch((e: unknown) => e)).toMatchObject({ code: "network_error" });
+  });
+
   it("clears the timer when the request settles", async () => {
     vi.useFakeTimers();
     configureApiClient({
@@ -312,5 +337,115 @@ describe("api client: refresh hook point", () => {
     });
     await callApi(() => getMe()).catch(() => undefined);
     expect(refreshes).toBe(0);
+  });
+});
+
+describe("api client: refresh edge cases", () => {
+  const problem = (code: string) =>
+    jsonResponse({ title: "x", status: 401, code, request_id: "r" }, 401, "application/problem+json");
+  const me = () => jsonResponse({ id: "1", email: "a", full_name: "A", role: "painter" }, 200);
+  const auth = (input: RequestInfo | URL) => (input instanceof Request ? input.headers.get("Authorization") : null);
+
+  it("does not deadlock when refresh goes through callApi and the refresh call itself gets 401 (refresh: false)", async () => {
+    let unauthorized = 0;
+    configureApiClient({
+      baseUrl: "http://api.test",
+      onUnauthorized: () => void (unauthorized += 1),
+      refresh: async () => {
+        try {
+          await callApi(
+            () => refreshDeviceSession({ body: { refresh_token: "x".repeat(30) } }),
+            { refresh: false },
+          );
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      fetch: async (input) => {
+        const url = input instanceof Request ? input.url : String(input);
+        return url.endsWith("/auth/sessions/refresh") ? problem("session_ended") : problem("unauthenticated");
+      },
+    });
+    const outcome = await Promise.race([
+      callApi(() => getMe()).catch((e: unknown) => e),
+      new Promise((r) => setTimeout(() => r("hung"), 1000)),
+    ]);
+    expect(outcome).toMatchObject({ status: 401 });
+    expect(unauthorized).toBe(1);
+  });
+
+  it("refresh: false neither refreshes nor runs onUnauthorized", async () => {
+    let refreshes = 0;
+    let unauthorized = 0;
+    configureApiClient({
+      baseUrl: "http://api.test",
+      onUnauthorized: () => void (unauthorized += 1),
+      refresh: async () => {
+        refreshes += 1;
+        return true;
+      },
+      fetch: async () => problem("session_ended"),
+    });
+    await expect(callApi(() => getMe(), { refresh: false })).rejects.toMatchObject({ status: 401, code: "session_ended" });
+    expect(refreshes).toBe(0);
+    expect(unauthorized).toBe(0);
+  });
+
+  it("runs onUnauthorized exactly once for concurrent 401s when the shared refresh fails", async () => {
+    let refreshes = 0;
+    let unauthorized = 0;
+    configureApiClient({
+      baseUrl: "http://api.test",
+      onUnauthorized: () => void (unauthorized += 1),
+      refresh: async () => {
+        refreshes += 1;
+        await new Promise((r) => setTimeout(r, 5));
+        return false;
+      },
+      fetch: async () => problem("unauthenticated"),
+    });
+    const results = await Promise.all([1, 2, 3].map(() => callApi(() => getMe()).catch((e: unknown) => e)));
+    for (const r of results) expect(r).toMatchObject({ status: 401 });
+    expect(refreshes).toBe(1);
+    expect(unauthorized).toBe(1);
+  });
+
+  it("retries without refreshing when the token store already holds a different token", async () => {
+    let token = "old";
+    let refreshes = 0;
+    const seen: (string | null)[] = [];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    configureApiClient({
+      baseUrl: "http://api.test",
+      tokenStore: { get: () => token, set: () => undefined, clear: () => undefined },
+      refresh: async () => {
+        refreshes += 1;
+        token = "new";
+        return true;
+      },
+      fetch: async (input) => {
+        const a = auth(input);
+        seen.push(a);
+        if (a === "Bearer old") {
+          // The slow request: its 401 arrives after another call has already refreshed.
+          if (seen.filter((x) => x === "Bearer old").length === 2) await gate;
+          return problem("unauthenticated");
+        }
+        return me();
+      },
+    });
+    const first = callApi(() => getMe());
+    await first; // refreshes once: token is now "new"
+    expect(refreshes).toBe(1);
+    // A second call that was sent with "old" before the refresh, and fails after it.
+    token = "old";
+    const late = callApi(() => getMe());
+    await new Promise((r) => setTimeout(r, 0));
+    token = "new";
+    release();
+    await expect(late).resolves.toMatchObject({ id: "1" });
+    expect(refreshes).toBe(1);
   });
 });

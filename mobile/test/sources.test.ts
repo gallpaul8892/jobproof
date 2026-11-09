@@ -38,3 +38,23 @@ describe("source scans", () => {
     expect(offences).toEqual([]);
   });
 });
+
+describe("token hygiene (scenario 6)", () => {
+  const read = (f: string) => fs.readFileSync(f, "utf8");
+
+  it("never logs anything that mentions a token", () => {
+    const offences = files.filter((f) => /console\.\w+\([^)]*token/i.test(read(f)) || /console\.\w+\([^)]*password/i.test(read(f)));
+    expect(offences).toEqual([]);
+  });
+
+  it("only SecureTokenStore imports expo-secure-store", () => {
+    const users = files.filter((f) => /from "expo-secure-store"/.test(read(f))).map((f) => path.relative(ROOT, f));
+    expect(users).toEqual([path.join("src", "api", "secureTokenStore.ts")]);
+  });
+
+  it("the plain key-value store never receives a credential", () => {
+    const kv = files.filter((f) => /expo-sqlite\/kv-store/.test(read(f)));
+    expect(kv.length).toBeGreaterThan(0);
+    for (const f of kv) expect(read(f)).not.toMatch(/token|password|refresh/i);
+  });
+});

@@ -1,16 +1,13 @@
 import { useState } from "react";
-import { Slot } from "expo-router";
 import { createQueryClient } from "../src/api/queryClient";
+import { getSessionManager } from "../src/api/session";
 import { setupApi } from "../src/api/setup";
-import { AppShell } from "../src/features/shell/AppShell";
+import { AppRoot } from "../src/features/session/AppRoot";
 
-setupApi();
+const manager = getSessionManager();
+setupApi(manager);
 
 export default function RootLayout() {
   const [client] = useState(createQueryClient);
-  return (
-    <AppShell client={client}>
-      <Slot />
-    </AppShell>
-  );
+  return <AppRoot manager={manager} client={client} />;
 }

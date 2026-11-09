@@ -9,7 +9,9 @@ COPY shared/package.json shared/
 COPY web/package.json web/
 COPY mobile/package.json mobile/
 COPY e2e/package.json e2e/
-RUN npm ci
+# Every workspace manifest is copied above so the lockfile validates, but only shared and web (plus the
+# root) are installed: the Expo and React Native tree (about 990 packages with install scripts) stays out.
+RUN npm ci --workspace @jobproof/shared --workspace @jobproof/web --include-workspace-root
 COPY shared shared
 COPY web web
 RUN npm run build -w @jobproof/web

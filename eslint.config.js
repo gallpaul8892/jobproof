@@ -35,6 +35,20 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node, ...globals.jest, __DEV__: "readonly" } },
   },
   {
+    // T-003b scenario 6: nothing named *token* or *password* may reach a log call.
+    files: ["mobile/app/**/*.{ts,tsx}", "mobile/src/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.object.name='console'] :matches(Identifier[name=/token|password|secret/i])",
+          message: "Do not log credentials: nothing named token, password or secret may reach console.",
+        },
+      ],
+    },
+  },
+  {
     files: ["mobile/*.js"],
     rules: { "@typescript-eslint/no-require-imports": "off" }, // Metro/Jest configs are CommonJS
   },

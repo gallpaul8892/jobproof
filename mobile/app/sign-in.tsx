@@ -1,5 +1,5 @@
-import { SignInPlaceholder } from "../src/features/shell/SignInPlaceholder";
+import { SignInScreen } from "../src/features/session/SignInScreen";
 
 export default function SignIn() {
-  return <SignInPlaceholder />;
+  return <SignInScreen />;
 }

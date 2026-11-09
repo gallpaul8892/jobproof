@@ -1,8 +1,9 @@
 # mobile (`@jobproof/mobile`)
 
 The Operative app: Expo SDK 58, React Native 0.88, React 19.3.0, Expo Router, Android first.
-Design: [specs/T-003-design.md](../specs/T-003-design.md). Current ticket: T-003a (app shell:
-branded header, server reachability, no business screens yet).
+Design: [specs/T-003-design.md](../specs/T-003-design.md). Current tickets: T-003a (app shell:
+branded header, server reachability) and T-003b (operative sign-in, secure session, sign-out; the
+job screens are placeholders until T-003c).
 
 It uses the same generated API client as the web app through `@jobproof/shared` (public entry
 only; ESLint forbids deep imports). Expo Go is not used (later tickets add native modules): use a

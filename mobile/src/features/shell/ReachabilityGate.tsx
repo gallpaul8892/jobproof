@@ -3,15 +3,19 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useAppBranding } from "../../theme/BrandingProvider";
 import { Unreachable } from "./Unreachable";
 import { useAppStatus } from "@jobproof/shared";
+import { useSession } from "../session/SessionProvider";
 
 /**
  * Shows the "Can't reach the office system" screen when the status call fails, with Retry.
  * The branding header stays above it, so the screen is never blank. Once signed-in work exists
- * (T-003b onwards) offline use must not be blocked here: later tickets bypass this gate then.
+ * a signed-in operative is never blocked here (offline use, T-003b scenario 12 / T-003i): the gate
+ * only guards the way to the sign-in screen.
  */
 export function ReachabilityGate({ children }: { children: ReactNode }) {
   const status = useAppStatus();
   const { theme } = useAppBranding();
+  const { state } = useSession();
+  if (state.status === "signed_in") return <>{children}</>;
   if (status.isError) {
     return <Unreachable onRetry={() => void status.refetch()} />;
   }
