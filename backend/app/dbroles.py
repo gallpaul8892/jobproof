@@ -46,21 +46,54 @@ def _role_exists(connection: Connection, role: str) -> bool:
     )
 
 
+def _scram_verifier(connection: Connection, role: str, password: str) -> str:
+    """SCRAM-SHA-256 verifier computed in this process (libpq), so the plain password is never
+    sent to the server and cannot appear in a statement log."""
+    raw = connection.connection.dbapi_connection
+    assert raw is not None  # noqa: S101 - the connection is open
+    verifier = raw.pgconn.encrypt_password(password.encode(), role.encode(), b"scram-sha-256")
+    return str(verifier.decode())
+
+
+def _check_unprivileged(connection: Connection, role: str) -> None:
+    row = connection.execute(
+        text(
+            "SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, "
+            "rolbypassrls FROM pg_roles WHERE rolname = :r"
+        ),
+        {"r": role},
+    ).one()
+    if not row.rolcanlogin or any(row[1:]):
+        raise RoleError(
+            f"The role {role} has unexpected privileged attributes; fix it as a superuser."
+        )
+
+
 def current_user(connection: Connection) -> str:
     return str(connection.execute(text("SELECT current_user")).scalar_one())
 
 
 def ensure_roles(connection: Connection, migrator_password: str, app_password: str) -> None:
-    """Create or update the two login roles and give the migrator the schema (as master)."""
+    """Create or update the two login roles and give the migrator the schema.
+
+    Must work as the RDS master, which is CREATEROLE but not a superuser: it cannot change
+    privileged attributes, so an existing role only gets a new password (then is verified).
+    """
     for role, password in ((MIGRATOR_ROLE, migrator_password), (APP_ROLE, app_password)):
         if len(password) < MIN_ROLE_PASSWORD:
             raise RoleError(f"The {role} password must be at least {MIN_ROLE_PASSWORD} characters.")
-        verb = "ALTER" if _role_exists(connection, role) else "CREATE"
-        _run(connection, f"{verb} ROLE %I WITH {_ROLE_ATTRIBUTES} PASSWORD %L", role, password)
+        verifier = _scram_verifier(connection, role, password)
+        if _role_exists(connection, role):
+            _run(connection, "ALTER ROLE %I WITH LOGIN PASSWORD %L", role, verifier)
+        else:
+            _run(connection, f"CREATE ROLE %I WITH {_ROLE_ATTRIBUTES} PASSWORD %L", role, verifier)
+        _check_unprivileged(connection, role)
     # RDS's master is not a superuser, so it needs SET on the new owner to hand the schema over.
     _run(connection, "GRANT %I TO CURRENT_USER WITH SET TRUE", MIGRATOR_ROLE)
     database = str(connection.execute(text("SELECT current_database()")).scalar_one())
     _run(connection, "GRANT CONNECT ON DATABASE %I TO %I, %I", database, MIGRATOR_ROLE, APP_ROLE)
+    # The new schema owner needs CREATE on the database before it can own a schema.
+    _run(connection, "GRANT CREATE ON DATABASE %I TO %I", database, MIGRATOR_ROLE)
     _run(connection, "ALTER SCHEMA public OWNER TO %I", MIGRATOR_ROLE)
     _run(connection, "GRANT USAGE ON SCHEMA public TO %I", APP_ROLE)
     _run(connection, "REVOKE CREATE ON SCHEMA public FROM %I", APP_ROLE)

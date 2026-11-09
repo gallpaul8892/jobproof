@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app import cli, dbroles
 from app.config import get_settings
@@ -213,9 +213,11 @@ def test_the_api_works_end_to_end_as_the_app_role(b11_reseeded: B11Database) -> 
         assert any(e["action"] == "report.edited" for e in history.json()["items"])
 
 
-def test_migrate_and_db_roles_are_idempotent(b11: B11Database, super_engine: Engine) -> None:
+def test_migrate_and_db_roles_are_idempotent(
+    b11: B11Database, super_engine: Engine, master_engine: Engine
+) -> None:
     before = {t: _privileges(super_engine, t) for t in _tables(super_engine)}
-    with super_engine.begin() as connection:
+    with master_engine.begin() as connection:
         dbroles.ensure_roles(connection, B11_MIGRATOR_PASSWORD, B11_APP_PASSWORD)
     assert dbroles.migrate(b11.migrator_url, require_migrator=True) == dbroles.head_revision()
     assert {t: _privileges(super_engine, t) for t in _tables(super_engine)} == before
@@ -223,6 +225,108 @@ def test_migrate_and_db_roles_are_idempotent(b11: B11Database, super_engine: Eng
     with engine.connect() as connection:
         assert connection.execute(text("SELECT 1")).scalar_one() == 1
     engine.dispose()
+
+
+@pytest.fixture
+def master_engine(b11: B11Database) -> Iterator[Engine]:
+    engine = create_engine(b11.master)
+    yield engine
+    engine.dispose()
+
+
+def _can_log_in(url: Any) -> bool:
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            return connection.execute(text("SELECT 1")).scalar_one() == 1
+    except OperationalError:
+        return False
+    finally:
+        engine.dispose()
+
+
+def test_the_master_is_not_a_superuser(b11: B11Database, super_engine: Engine) -> None:
+    with super_engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT rolsuper, rolcreaterole FROM pg_roles WHERE rolname = :r"),
+            {"r": b11.master.username},
+        ).one()
+    assert (row.rolsuper, row.rolcreaterole) == (False, True)
+
+
+def test_db_roles_as_the_non_superuser_master_rotates_passwords(
+    b11: B11Database, master_engine: Engine
+) -> None:
+    """The RDS path: the second run takes the existing-roles branch and still succeeds."""
+    new_migrator, new_app = "rotated-migrator-Pass-01", "rotated-app-Pass-%'-02"
+    try:
+        with master_engine.begin() as connection:
+            dbroles.ensure_roles(connection, new_migrator, new_app)
+        assert _can_log_in(b11.migrator.set(password=new_migrator))
+        assert _can_log_in(b11.app.set(password=new_app))
+        assert not _can_log_in(b11.migrator)  # the old passwords stopped working
+        assert not _can_log_in(b11.app)
+    finally:
+        with master_engine.begin() as connection:
+            dbroles.ensure_roles(connection, B11_MIGRATOR_PASSWORD, B11_APP_PASSWORD)
+    assert _can_log_in(b11.migrator)
+    assert _can_log_in(b11.app)
+    assert dbroles.migrate(b11.migrator_url, require_migrator=True) == dbroles.head_revision()
+
+
+def test_ensure_roles_refuses_an_existing_role_with_privileged_attributes(
+    b11: B11Database, super_engine: Engine, master_engine: Engine
+) -> None:
+    with super_engine.begin() as connection:
+        connection.execute(text(f"ALTER ROLE {dbroles.APP_ROLE} CREATEDB"))
+    try:
+        with (
+            pytest.raises(dbroles.RoleError, match="privileged attributes"),
+            master_engine.begin() as connection,
+        ):
+            dbroles.ensure_roles(connection, B11_MIGRATOR_PASSWORD, B11_APP_PASSWORD)
+    finally:
+        with super_engine.begin() as connection:
+            connection.execute(text(f"ALTER ROLE {dbroles.APP_ROLE} NOCREATEDB"))
+
+
+def test_passwords_are_stored_as_scram_and_never_sent_in_clear(
+    b11: B11Database,
+    super_engine: Engine,
+    master_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with super_engine.connect() as connection:
+        stored = dict(
+            connection.execute(
+                text("SELECT rolname, rolpassword FROM pg_authid WHERE rolname IN (:m, :a)"),
+                {"m": dbroles.MIGRATOR_ROLE, "a": dbroles.APP_ROLE},
+            ).all()
+        )
+    assert set(stored) == {dbroles.MIGRATOR_ROLE, dbroles.APP_ROLE}
+    for verifier in stored.values():
+        assert verifier.startswith("SCRAM-SHA-256$")
+    sent: list[str] = []
+
+    def record(conn: Any, cursor: Any, statement: str, parameters: Any, *_: Any) -> None:
+        sent.append(f"{statement} {parameters}")
+
+    event.listen(master_engine, "before_cursor_execute", record)
+    original_run = dbroles._run
+
+    def recording_run(connection: Any, template: str, *args: str) -> None:
+        sent.append(f"{template} {args}")
+        original_run(connection, template, *args)
+
+    monkeypatch.setattr(dbroles, "_run", recording_run)
+    with caplog.at_level("DEBUG"), master_engine.begin() as connection:
+        dbroles.ensure_roles(connection, B11_MIGRATOR_PASSWORD, B11_APP_PASSWORD)
+    event.remove(master_engine, "before_cursor_execute", record)
+    everything = "\n".join(sent) + caplog.text
+    assert any("SCRAM-SHA-256$" in s for s in sent)
+    assert B11_MIGRATOR_PASSWORD not in everything
+    assert B11_APP_PASSWORD not in everything
 
 
 def test_migrate_removes_privilege_drift(b11: B11Database, super_engine: Engine) -> None:

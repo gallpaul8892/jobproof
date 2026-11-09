@@ -10,7 +10,8 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import ArgumentError
 
 # Development-only fallbacks, used when APP_ENV is local or test and nothing is configured.
 # Any other environment (staging, production) must supply real secrets, or startup fails.
@@ -116,10 +117,32 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _database_connection(self) -> Self:
-        parts = (self.db_host, self.db_name, self.db_user, self.db_password)
+        parts = (
+            self.db_host,
+            self.db_name,
+            self.db_user,
+            self.db_password,
+            self.db_sslmode,
+            self.db_sslrootcert,
+        )
         if self.database_url:
             if any(part is not None for part in parts):
                 raise ValueError("Set DATABASE_URL or the DB_* settings, not both")
+            if self.app_env in ("staging", "production"):
+                try:
+                    url_query = make_url(self.database_url).query
+                except ArgumentError:
+                    raise ValueError("DATABASE_URL is not a valid database URL") from None
+                if url_query.get("sslmode") != "verify-full":
+                    raise ValueError(
+                        f"DATABASE_URL must include sslmode=verify-full when APP_ENV={self.app_env}"
+                    )
+                url_cert = url_query.get("sslrootcert")
+                if not isinstance(url_cert, str) or not url_cert:
+                    raise ValueError(
+                        f"DATABASE_URL must include sslrootcert when APP_ENV={self.app_env}"
+                    )
+                _check_ca_bundle(url_cert)
             return self
         missing = [
             name

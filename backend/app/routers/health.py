@@ -1,6 +1,7 @@
 """Unversioned health endpoint for the load balancer and compose healthchecks."""
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
@@ -30,7 +31,7 @@ def database_is_up(engine: Engine) -> bool:
 
 
 class HealthLiveResponse(BaseModel):
-    status: str
+    status: Literal["ok"]
 
 
 @router.get("/health/live", response_model=HealthLiveResponse)

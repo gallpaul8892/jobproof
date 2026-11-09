@@ -100,6 +100,64 @@ def test_aws_environments_refuse_weaker_tls(env: str, mode: str, tmp_path: Path)
         _settings(app_env=env, db_sslmode=mode, db_sslrootcert=str(_fake_bundle(tmp_path)))
 
 
+def _url_settings(env: str, url: str) -> Settings:
+    return Settings(
+        app_env=env,  # type: ignore[arg-type]
+        **SECRETS,
+        database_url=url,
+        demo_accounts_enabled=False,
+        fixed_now=None,
+    )
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_aws_environments_accept_a_verify_full_database_url(env: str, tmp_path: Path) -> None:
+    url = f"postgresql+psycopg://u:p@h:1/d?sslmode=verify-full&sslrootcert={_fake_bundle(tmp_path)}"
+    assert _url_settings(env, url).database_url == url
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+@pytest.mark.parametrize("mode", ["", "?sslmode=require", "?sslmode=verify-ca", "?sslmode=prefer"])
+def test_aws_environments_refuse_a_database_url_without_verify_full(env: str, mode: str) -> None:
+    with pytest.raises(ValidationError, match="sslmode=verify-full"):
+        _url_settings(env, f"postgresql+psycopg://u:p@h:1/d{mode}")
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_aws_environments_need_a_readable_bundle_in_the_database_url(
+    env: str, tmp_path: Path
+) -> None:
+    base = "postgresql+psycopg://u:p@h:1/d?sslmode=verify-full"
+    with pytest.raises(ValidationError, match="must include sslrootcert"):
+        _url_settings(env, base)
+    with pytest.raises(ValidationError, match="cannot be read"):
+        _url_settings(env, f"{base}&sslrootcert={tmp_path / 'nope.pem'}")
+    placeholder = tmp_path / "placeholder.pem"
+    placeholder.write_text("# PLACEHOLDER\n")
+    with pytest.raises(ValidationError, match="no valid PEM certificate"):
+        _url_settings(env, f"{base}&sslrootcert={placeholder}")
+
+
+def test_an_unparseable_database_url_is_refused_without_echoing_it() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _url_settings("staging", "not a url secret-canary")
+    assert "secret-canary" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "extra", [{"db_sslmode": "verify-full"}, {"db_sslrootcert": "/etc/ca.pem"}]
+)
+def test_url_with_only_ssl_parts_counts_as_both(extra: dict[str, str]) -> None:
+    with pytest.raises(ValidationError, match="not both"):
+        Settings(
+            app_env="local",
+            **SECRETS,
+            database_url="postgresql+psycopg://u:p@h:1/d",
+            demo_accounts_enabled=False,
+            **extra,  # type: ignore[arg-type]
+        )
+
+
 def test_a_placeholder_bundle_stops_startup(tmp_path: Path) -> None:
     placeholder = tmp_path / "placeholder.pem"
     placeholder.write_text("# PLACEHOLDER - not a certificate\n")

@@ -229,6 +229,8 @@ import dataclasses  # noqa: E402
 B11_DATABASE = "jobproof_b11"
 B11_MIGRATOR_PASSWORD = "migrator-Pass-0123456789"  # noqa: S105
 B11_APP_PASSWORD = "app-Pass-%'-0123456789"  # noqa: S105 - special characters on purpose
+B11_MASTER_ROLE = "b11_master"
+B11_MASTER_PASSWORD = "master-Pass-0123456789"  # noqa: S105
 
 
 @dataclasses.dataclass(frozen=True)
@@ -238,6 +240,11 @@ class B11Database:
     superuser: URL
     migrator: URL
     app: URL
+    master: URL  # like the RDS master: LOGIN CREATEROLE CREATEDB, not a superuser, owns the DB
+
+    @property
+    def master_url(self) -> str:
+        return self.master.render_as_string(hide_password=False)
 
     @property
     def superuser_url(self) -> str:
@@ -256,31 +263,43 @@ class B11Database:
 def b11() -> Iterator[B11Database]:
     """Scratch database `jobproof_b11`: roles created by db-roles, schema by migrate, seed loaded.
 
-    The roles are cluster-wide, so they are dropped again at the end of the session.
+    The roles are cluster-wide, so they are dropped again at the end of the session. `db-roles`
+    runs as `b11_master`, a non-superuser that owns the database, as the RDS master does.
     """
     from app import dbroles
     from app.seed.loader import load
 
     base = make_url(TEST_DATABASE_URL)
     superuser = base.set(database=B11_DATABASE)
+    master = superuser.set(username=B11_MASTER_ROLE, password=B11_MASTER_PASSWORD)
     admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
 
     def cleanup() -> None:
         with admin.connect() as connection:
             connection.execute(text(f'DROP DATABASE IF EXISTS "{B11_DATABASE}" WITH (FORCE)'))
-            for role in (dbroles.APP_ROLE, dbroles.MIGRATOR_ROLE):
+            for role in (dbroles.APP_ROLE, dbroles.MIGRATOR_ROLE, B11_MASTER_ROLE):
                 connection.execute(text(f'DROP ROLE IF EXISTS "{role}"'))
 
     cleanup()
     with admin.connect() as connection:
-        connection.execute(text(f'CREATE DATABASE "{B11_DATABASE}"'))
+        connection.execute(
+            text(
+                f"CREATE ROLE {B11_MASTER_ROLE} LOGIN CREATEROLE CREATEDB NOSUPERUSER "
+                f"PASSWORD '{B11_MASTER_PASSWORD}'"  # noqa: S608 - constant test value
+            )
+        )
+        connection.execute(text(f'CREATE DATABASE "{B11_DATABASE}" OWNER {B11_MASTER_ROLE}'))
+    master_engine = create_engine(master)
+    for _ in range(2):  # the second run is the existing-roles path (no privileged ALTER)
+        with master_engine.begin() as connection:
+            dbroles.ensure_roles(connection, B11_MIGRATOR_PASSWORD, B11_APP_PASSWORD)
+    master_engine.dispose()
     engine = create_engine(superuser)
-    with engine.begin() as connection:
-        dbroles.ensure_roles(connection, B11_MIGRATOR_PASSWORD, B11_APP_PASSWORD)
     prepared = B11Database(
         superuser=superuser,
         migrator=superuser.set(username=dbroles.MIGRATOR_ROLE, password=B11_MIGRATOR_PASSWORD),
         app=superuser.set(username=dbroles.APP_ROLE, password=B11_APP_PASSWORD),
+        master=master,
     )
     dbroles.migrate(prepared.migrator_url, require_migrator=True)
     load(engine, build_dataset(ANCHOR))

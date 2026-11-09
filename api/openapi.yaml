@@ -71,6 +71,7 @@ paths:
     get:
       tags: [health]
       operationId: getHealthLive
+      x-ticket: INFRA-3
       summary: Process liveness only (no database check)
       description: |
         For the load balancer target group. It never touches the database, so a database

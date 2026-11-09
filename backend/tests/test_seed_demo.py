@@ -32,7 +32,11 @@ ADMIN_NAME = "SELECT full_name FROM users WHERE role = 'admin'"
 
 
 def _settings(url: str, **overrides: Any) -> Settings:
-    return Settings(**{**GOOD, "database_url": url, **overrides})
+    # Validated as local (the local test database has no TLS, which staging refuses), then
+    # switched to the staging the demo guards require.
+    wanted = overrides.pop("app_env", GOOD["app_env"])
+    local = Settings(**{**GOOD, "app_env": "local", "database_url": url, **overrides})
+    return local.model_copy(update={"app_env": wanted})
 
 
 def _empty(b11: B11Database) -> None:

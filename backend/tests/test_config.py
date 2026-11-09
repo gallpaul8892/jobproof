@@ -1,3 +1,7 @@
+import base64
+from collections.abc import Iterator
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,6 +12,19 @@ BASE = {
     "jwt_secret": "j" * 32,
     "photo_url_secret": "p" * 32,
 }
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _strict_database_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """staging and production refuse a DATABASE_URL without verify-full and a readable CA bundle."""
+    der = b"\x30\x82\x01\x00" + bytes(range(256))
+    bundle = tmp_path_factory.mktemp("ca") / "bundle.pem"
+    body = base64.encodebytes(der).decode()
+    bundle.write_text(f"-----BEGIN CERTIFICATE-----\n{body}-----END CERTIFICATE-----\n")
+    original = BASE["database_url"]
+    BASE["database_url"] = f"{original}?sslmode=verify-full&sslrootcert={bundle}"
+    yield
+    BASE["database_url"] = original
 
 
 def test_defaults_and_comma_separated_origins() -> None:
@@ -218,7 +235,6 @@ def test_seed_and_alembic_entry_points_fail_clearly_without_app_env(
 ) -> None:
     import subprocess
     import sys
-    from pathlib import Path
 
     backend = Path(__file__).resolve().parents[1]
     env = {
