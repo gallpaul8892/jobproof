@@ -1,0 +1,195 @@
+{
+  "id": "review-infra-45",
+  "title": "Code review report: INFRA-4 (Terraform modules and dev/prod environments) and INFRA-5 (pipeline, deploy-prod, rollback, create-user, dev-demo-data, dev-power workflows); round 2 re-check of INFRA-1/2/3",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-09",
+  "summary": "Round 2 for INFRA-1/2/3 (d3a9b97, a437c8d): every round-1 finding is fixed except the RDS CA bundle, which stays a placeholder and is the agreed INFRA-6 entry gate. The db-roles BLOCKER fix was re-run on PostgreSQL 16.15 as a LOGIN CREATEROLE CREATEDB NOSUPERUSER role that owns the database, twice, in a rolled-back transaction. Both runs succeeded, both role passwords were stored as SCRAM-SHA-256 verifiers, and the public schema ended up owned by jobproof_migrator. test_db_roles, test_config, test_config_db_parts and test_seed_demo pass (156 tests), the web edge-scripts tests pass (24), and cfn-lint 1.60.0 is clean. Round 1 for INFRA-4 (721e058) and INFRA-5 (20f3bb7): CHANGES REQUESTED, with 4 BLOCKERs, 3 MAJORs and 8 MINORs. None of this code has run and Terraform was not validated here, so these findings come from reading the code against the provider source and the AWS docs. The no-secret-in-state requirement is met. Secrets use ephemeral random_password and secret_string_wo, the RDS master password is managed by RDS, and no random_password resource or plain secret argument exists. Provider source on main plus CHANGELOG 6.26.0 (#44876) confirm that a write-only secret version is refreshed with ListSecretVersionIds and secret_string set to null, so with ~> 6.72 neither the terraform role nor the plan role reads the value. BLOCKERs: (1) the deploy role trust in ci_roles leaves out the repository_owner_id and repository_id suffix that the repository subject template now adds, so no workflow can assume jobproof-github-deploy; (2) data.aws_ssm_parameters_by_path on /jobproof/<env> is denied to the plan role, so prod-preview fails, the pipeline run is never 'success', and deploy-prod's verify can never pass; (3) the create-user task passes ADMIN_INITIAL_PASSWORD by bare secret name, which ECS only accepts for SSM parameters, so the first Admin cannot be created; (4) dev's ECR repository policy does not allow ecr:DescribeImages, which promote-image.sh calls across accounts, so promotion fails. MAJORs: the WAF login rate limit can be bypassed with percent-encoding, the INFRA-5 scripts have no committed tests, and the deploy role can in practice read every secret through RunTask command overrides and the task logs, which needs an architect decision. Sound: no script injection (every workflow_dispatch input goes through env and is validated), least-privilege job permissions, deploy-prod promotion checks, rollback that verifies the revision after the move, a create-user password that is never an input or logged, prod guards (DEMO_SEED_ALLOWED rejected by variable validation and by the parity script), deletion protection, final snapshot, and 14-day backups.",
+  "blocks": [
+    {
+      "heading": "Round 2 re-check of INFRA-1/2/3 (review-infra-123)",
+      "type": "table",
+      "columns": [
+        "Severity",
+        "Finding",
+        "Resolution"
+      ],
+      "rows": [
+        [
+          "BLOCKER",
+          "db-roles as the non-superuser RDS master",
+          "Fixed (a437c8d). GRANT CREATE ON DATABASE runs before ALTER SCHEMA OWNER. An existing role gets only ALTER ROLE ... LOGIN PASSWORD, then _check_unprivileged reads pg_roles. Reproduced as fixed on PG 16.15: two runs as a NOSUPERUSER CREATEROLE CREATEDB database owner, rolled back"
+        ],
+        [
+          "MAJOR",
+          "B11 fixture ran as superuser",
+          "Fixed. The b11 fixture creates b11_master (NOSUPERUSER) as the database owner and runs ensure_roles twice, then migrate. New tests cover rotation, the privileged-attribute refusal and the not-superuser check. 156 tests pass"
+        ],
+        [
+          "MAJOR",
+          "Role passwords sent in clear",
+          "Fixed. libpq encrypt_password sends a SCRAM verifier. A test asserts SCRAM-SHA-256$ in pg_authid and that neither plain password appears in the SQL sent or the logs"
+        ],
+        [
+          "MAJOR",
+          "Plan role could download RDS logs",
+          "Fixed (d3a9b97). Denies added for rds:Download*, lambda:GetFunction, DynamoDB item reads, ec2:GetConsoleOutput and cloudformation:GetTemplate. cfn-lint clean"
+        ],
+        [
+          "MAJOR",
+          "RDS CA bundle placeholder",
+          "Still open by decision: INFRA-6 entry gate. The weekly comparison has been added to dependency-check.yml"
+        ],
+        [
+          "MINOR",
+          "Trust by owner/repo only",
+          "Fixed in bootstrap (repository_owner_id and repository_id in both subject templates, parameters validated as digits). The Terraform deploy role was not updated to match: see the INFRA-4 BLOCKER below"
+        ],
+        [
+          "MINOR",
+          "No infra job in ci.yml",
+          "Fixed (cfn-lint 1.60.0 job; terraform job added in INFRA-5)"
+        ],
+        [
+          "MINOR",
+          "ci.yml concurrency for main",
+          "Fixed (run_id for non-pull_request events)"
+        ],
+        [
+          "MINOR",
+          "smoke-test.sh JSON and bearer token",
+          "Fixed (jq or json.dumps from env; header file with umask 077). The quote and backslash test passes"
+        ],
+        [
+          "MINOR",
+          "DATABASE_URL bypassed verify-full",
+          "Fixed. Staging and production require sslmode=verify-full and sslrootcert and check the bundle. DB_SSLMODE and DB_SSLROOTCERT now count as DB_* parts"
+        ],
+        [
+          "MINOR",
+          "/health/live contract",
+          "Fixed (x-ticket INFRA-3; Literal['ok'])"
+        ],
+        [
+          "MINOR",
+          "Spec risk 4 wording",
+          "Fixed (risk 4 now says the plan role reads state)"
+        ],
+        [
+          "MINOR",
+          "ARCHITECTURE/spec versions stale",
+          "Partly fixed. ARCHITECTURE.md still calls INFRA-4 'planned' (lines 9-10, 62, 108): see the INFRA-4/5 documentation finding"
+        ]
+      ]
+    },
+    {
+      "heading": "INFRA-4/5 round 1 (4 BLOCKER, 3 MAJOR, 8 MINOR)",
+      "type": "table",
+      "columns": [
+        "Severity",
+        "Finding",
+        "Resolution"
+      ],
+      "rows": [
+        [
+          "BLOCKER",
+          "infra/terraform/modules/ci_roles/main.tf:19-22: the deploy role trust subject is 'repo:O/R:ref:refs/heads/main:job_workflow_ref:O/R/.github/workflows/<wf>@refs/heads/main' with StringEquals. The repository subject template (infra/README.md:132, set before the first deploy) adds ':repository_owner_id:<id>:repository_id:<id>' to every token, so the sub never matches. deploy-dev, deploy-prod, rollback, create-user, dev-demo-data and dev-power would all get AccessDenied in workflow mode, which is the default. Owner: infra",
+          "Open. Add variables github_owner_id and github_repo_id (digits only, validated) to ci_roles and the envs, set them in both terraform.tfvars (not secret), and append ':repository_owner_id:${owner_id}:repository_id:${repo_id}' in workflow mode, exactly as bootstrap.cfn.yaml does. Add a check to check-env-parity.sh or a test that renders the subject and compares it with the bootstrap template"
+        ],
+        [
+          "BLOCKER",
+          "infra/terraform/envs/{dev,prod}/main.tf:39-53: data.aws_ssm_parameters_by_path on '/jobproof/<env>' calls ssm:GetParametersByPath on the resource parameter/jobproof/<env>. The plan role's DenyReadingParameterValues (bootstrap.cfn.yaml, NotResource parameter/jobproof/*/release) denies it. prod-preview therefore fails, the pipeline run conclusion is 'failure', and deploy-prod.yml:68 (gh run list --status success) can never find a run, so prod can never be deployed. The data source would also copy any future SecureString under /jobproof/<env>/ into state (with_decryption defaults to true). Owner: infra",
+          "Open. Remove the by-path data source. Every workflow already passes image_tag except PR plans (not built). Make image_tag required (non-empty, 40-hex or 'unreleased'), or read the single parameter in the workflow with 'aws ssm get-parameter --name /jobproof/<env>/release' (allowed for the plan role) and pass -var. Never read a path"
+        ],
+        [
+          "BLOCKER",
+          "infra/terraform/modules/ecs_service/main.tf:87: ADMIN_INITIAL_PASSWORD valueFrom is the bare name 'jobproof/<env>/admin-initial-password'. ECS accepts a name only for SSM parameters in the same region. For Secrets Manager it needs an ARN (AWS::ECS::TaskDefinition Secret, ValueFrom), so the create-user task fails at start and the first prod Admin (spec 1F, 5.6) cannot be created. Owner: infra",
+          "Open. Use the partial ARN 'arn:aws:secretsmanager:${region}:${account}:secret:${admin_initial_password_name}' (no random suffix). The ops execution role's '-*' resource already matches it. Confirm in INFRA-6 by running create-user in dev"
+        ],
+        [
+          "BLOCKER",
+          "infra/terraform/modules/ecr/main.tf:42-57 and infra/scripts/promote-image.sh:25: promote-image calls 'ecr describe-images --registry-id <dev>' on dev's repository with the prod deploy role. Cross-account access needs the repository policy to allow it, and dev's policy allows only BatchCheckLayerAvailability, BatchGetImage and GetDownloadUrlForLayer. The first step of every promotion fails (spec 4.4 step 2). Owner: infra",
+          "Open. Add ecr:DescribeImages to the PromotionPull statement, or replace the describe-images call with 'aws ecr batch-get-image ... --query images[0].imageId.imageDigest', which is already allowed"
+        ],
+        [
+          "MAJOR",
+          "infra/terraform/modules/waf/main.tf:32-43: the login rate limit matches uri_path EXACTLY '/api/v1/auth/login' with text transformation NONE. uvicorn percent-decodes the path before routing, so '/api/v1/auth/log%69n' reaches the login endpoint without matching the rule. Decision P6 can be bypassed. Owner: infra",
+          "Open. Use text transformations URL_DECODE (priority 0) then LOWERCASE (priority 1) on the uri_path match, or a STARTS_WITH '/api/v1/auth/' scope-down with URL_DECODE. Keep the method match"
+        ],
+        [
+          "MAJOR",
+          "infra/scripts/{export-outputs,run-task,find-task-definition,deploy-service,promote-image,push-image,load-config}.sh: spec 4.7 says these were exercised against a stub aws, but no test is committed. The safety properties (injection rejection in export-outputs, detecting a circuit-breaker rollback, exit-code propagation, the family filter, refusing a digest mismatch) are untested in CI. Owner: tests",
+          "Open. Commit the stub-aws tests (Vitest like edge-scripts.test.ts, or bats) and run them in ci.yml. Minimum: a malformed outputs.json is refused, deploy-service fails when the service is on another revision or rolloutState != COMPLETED, run-task exits 1 on a non-zero container exit, promote-image dies on a digest mismatch"
+        ],
+        [
+          "MAJOR",
+          "infra/terraform/modules/ci_roles/main.tf:98-108 with ecs_service ops tasks: ecs:RunTask on every jobproof task definition plus logs:GetLogEvents on the ops and migrate log groups lets the deploy role run db-roles or migrate with a command override that prints DB_PASSWORD (the RDS master), JWT_SECRET and the other secrets, then read them back. The 'no secrets' label for this role (spec 5.1, the role description) is not true in practice. The role is assumable only by workflows on main, so this needs a decision, not necessarily a code change. Owner: architect",
+          "Open. Either record it as an accepted risk in spec 5.1 and ARCHITECTURE.md (the deploy role equals database admin plus app secrets; the control is main-only trust plus review of .github/), or narrow it: separate the db-roles task into a role assumable only by pipeline.yml and deploy-prod.yml, and restrict RunTask to the families each workflow needs"
+        ],
+        [
+          "MINOR",
+          "infra/terraform/envs/*: no .terraform.lock.hcl is committed, so terraform-dev and terraform-prod resolve providers per run within ~> 6.72, and prod can run a provider version dev never applied. Owner: infra",
+          "Open. Commit the lock files from the terraform-lockfiles artifact on the first CI run, before INFRA-6. The -lockfile=readonly path then takes over"
+        ],
+        [
+          "MINOR",
+          ".github/actions/setup-terraform/action.yml:207-210: SHA256SUMS is fetched from the same host as the zip and its signature is not checked, so the checksum only detects corruption. Owner: infra",
+          "Open. Pin the expected linux_amd64 sha256 for 1.17.1 in the action (bumped deliberately with the version), or verify SHA256SUMS.sig with HashiCorp's key"
+        ],
+        [
+          "MINOR",
+          ".github/workflows/deploy-prod.yml:68-76: the promotion trusts the dev ECR tag and checks neither the branch nor the digest the pipeline built. Owner: infra",
+          "Open. Add '--branch main' to gh run list. Record the digest the pipeline pushed (an artifact or the job summary output) and have promote-image compare src_digest with it"
+        ],
+        [
+          "MINOR",
+          "deploy-prod.yml:138-144: prod Terraform runs from current main with image_tag set to the promoted SHA, so task-definition settings (env, secrets) come from a newer commit than the image. This is documented in 4.7 but not risk-assessed. Owner: architect",
+          "Open. Accept explicitly in spec 4.7 (env changes must also be expand-then-contract), or check out the promoted SHA's infra/terraform for terraform-prod"
+        ],
+        [
+          "MINOR",
+          ".github/workflows/pipeline.yml:21-23: the workflow-level concurrency group deploy-dev also covers the ci and build jobs. A newer queued push replaces an older pending run, so that commit never gets CI at all. Owner: infra",
+          "Open. Move the concurrency group to the terraform-dev and deploy-dev jobs (dev-demo-data, dev-power and rollback keep using deploy-dev)"
+        ],
+        [
+          "MINOR",
+          "infra/scripts/run-task.sh:121: one-off tasks always use the newest revision of their family. After a rollback, create-user and seed-demo run the newer image's code against the database. Owner: infra",
+          "Open. In rollback, create-user and dev-demo-data, resolve the ops revision whose image tag equals the release parameter (as find-task-definition.sh does for the API)"
+        ],
+        [
+          "MINOR",
+          "infra/terraform/modules/monitoring/main.tf:135-139: AWS creates a default 'AWS services' anomaly monitor for new Cost Explorer accounts, and a second DIMENSIONAL SERVICE monitor per account may be refused. Unverified here. Owner: infra",
+          "Open. Check on the first dev apply (INFRA-6). If it is refused, import the default monitor or attach the subscription to it"
+        ],
+        [
+          "MINOR",
+          "Documentation drift. ARCHITECTURE.md:9-10, 62 and 108 still say INFRA-4 is planned. Spec 5.1 still marks the plan-role denies 'to add' and describes the subject template without the repository IDs. The prod tfvars comment says to set promotion_peer_account_id by hand, but the workflows pass it with -var. Owner: architect",
+          "Open. Update these after the BLOCKER fixes. Record the alarm_email tfvars edit as a manual step in spec 1E (it is in infra/terraform/README.md only)"
+        ]
+      ]
+    },
+    {
+      "heading": "What the reviewer found sound",
+      "type": "list",
+      "items": [
+        "No secret in state or plan: ephemeral random_password feeds secret_string_wo with secret_string_wo_version. Provider >= 6.26.0 refreshes write-only versions with ListSecretVersionIds and sets secret_string to null (checked in the provider source and CHANGELOG #44876). RDS manage_master_user_password is used, and the outputs hold names and ARNs only.",
+        "Provider schemas read correctly for aws 6.x: aws_cloudfront_vpc_origin (vpc_origin_endpoint_config, origin_ssl_protocols) and origin.vpc_origin_config; wafv2 CLOUDFRONT scope through the us-east-1 alias, rate_based_statement with evaluation_window_sec and scope_down_statement.and_statement; aws_ce_anomaly_subscription threshold_expression.dimension ANOMALY_TOTAL_IMPACT_ABSOLUTE; data aws_region .region; target_group_arn output depends_on the listener.",
+        "Network and security groups: internal ALB that admits only the CloudFront origin-facing prefix list on 80. Tasks admit only the ALB SG on 8000; ops tasks admit nothing. RDS admits 5432 from the app and ops SGs only, with no public access and force_ssl. DB subnets have no route out. Dev tasks have a public IP but inbound only from the ALB.",
+        "Execution roles split (app reads app secrets only; ops deviation documented). Task roles are empty. PassRole is limited to ecs-tasks. The ECS trust has an aws:SourceAccount condition.",
+        "Prod guards: demo_seed_allowed is rejected by variable validation and by check-env-parity.sh. app_env is tied to the environment. Region is pinned to eu-west-2. allowed_account_ids is passed by the workflows. RDS has deletion protection, a final snapshot, retained automated backups and 14 days (7 in dev). ALB deletion protection is on, buckets have force_destroy false, and terraform_data has prevent_destroy.",
+        "Workflows: every workflow_dispatch input reaches run steps only through env and is validated (40-hex SHA, choice re-checked, email regex, control characters). The jq-built COMMAND_JSON has no shell parsing. id-token: write appears only on AWS jobs, with persist-credentials false and no environment: (keeps job_workflow_ref). Actions are pinned by SHA. Task logs are indented so they cannot inject workflow commands.",
+        "Promotion: verify runs on main, needs a full SHA that is an ancestor of HEAD, a successful push run of pipeline.yml and a successful deploy-dev job, and downloads that run's web-dist. The image is copied by digest and re-checked after the push. Rollback checks the web tarball exists, refuses unsafe tar paths, and deploy-service.sh detects circuit-breaker rollbacks. create-user takes no password input and logs none."
+      ]
+    },
+    {
+      "heading": "Questions for the architect",
+      "type": "list",
+      "items": [
+        "Accept 'deploy role = database admin plus app secrets via RunTask overrides' as a recorded risk, or split a db-admin role (MAJOR above)?",
+        "Should terraform-prod apply the promoted SHA's infra/terraform instead of main's?",
+        "Should create-user's secret deletion be closed now by granting secretsmanager:DeleteSecret on jobproof/<env>/admin-initial-password-* to the deploy role (spec 4.7 follow-up), since the password otherwise stays in Secrets Manager until Paul deletes it?"
+      ]
+    }
+  ]
+}
