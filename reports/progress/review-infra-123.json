@@ -1,0 +1,51 @@
+{
+  "id": "review-infra-123",
+  "title": "Code review report: INFRA-1 (bootstrap CloudFormation and runbook), INFRA-2 (CI, dependency check, Dependabot), INFRA-3 (app readiness for AWS)",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-09",
+  "summary": "Round 1 for 5fe6834, d676c4c and 322808d: REQUEST CHANGES, with 1 blocker, 4 majors and 8 minors. INFRA-1 and INFRA-2 are sound apart from minors: the OIDC trust requires aud sts.amazonaws.com, the terraform role is an exact sub match on one workflow file on main per account, fork pull requests get no token, the state bucket is private, versioned, encrypted, TLS-only and retained, cfn-lint 1.60.0 is clean, the workflows use contents: read, persist-credentials false, no pull_request_target, no secrets and no untrusted expressions in run steps, and all four action SHAs match their tags. BLOCKER: app.cli db-roles cannot run as the RDS master, which is not a superuser. ALTER SCHEMA public OWNER TO jobproof_migrator fails because the migrator lacks CREATE on the database, and on any later run ALTER ROLE ... NOSUPERUSER NOREPLICATION NOBYPASSRLS is refused by PG16. Both were reproduced on PostgreSQL 16.15 as a non-superuser CREATEROLE role in a rolled-back transaction. The B11 tests run ensure_roles as the superuser, so they missed it. Majors: that test gap; role passwords sent in clear in SQL text, so the failing ALTER writes them to the RDS log, which the plan role (any pull request) can download through ReadOnlyAccess rds:Download*; and the RDS CA bundle is still the placeholder (fail-closed is correct, but no deploy can start). The grants themselves are right. Full test suites not re-run by the reviewer; reported at HEAD: backend 1746, shared 439, web 279, e2e 149, all green.",
+  "blocks": [
+    {
+      "heading": "Round 1 (1 BLOCKER, 4 MAJOR, 8 MINOR)",
+      "type": "table",
+      "columns": ["Severity", "Finding", "Resolution"],
+      "rows": [
+        ["BLOCKER", "backend/app/dbroles.py:61-69 ensure_roles: (a) ALTER SCHEMA public OWNER TO jobproof_migrator fails as the RDS master with 'permission denied for database' because the new owner needs CREATE on the database; (b) on any later run ALTER ROLE ... NOSUPERUSER ... NOREPLICATION NOBYPASSRLS fails for a non-superuser. Reproduced on PG 16.15. Owner: backend", "Open. GRANT CREATE ON DATABASE to the migrator before the schema ownership change; for an existing role run only ALTER ROLE %I WITH LOGIN PASSWORD %L, then check pg_roles and raise RoleError if any privileged attribute is set; keep the full attribute list on CREATE only"],
+        ["MAJOR", "backend/tests/conftest.py b11 fixture and test_db_roles.py idempotency test run ensure_roles as the superuser, so the RDS privilege model is never exercised. Owner: tests", "Open. Create b11_master LOGIN CREATEROLE CREATEDB NOSUPERUSER, own the scratch DB, run ensure_roles as it twice then migrate; assert the second run succeeds and passwords rotate"],
+        ["MAJOR", "backend/app/dbroles.py:31-40,60: role passwords go to the server in clear inside SQL text and would be logged by a failing statement. Owner: backend", "Open. Send a client-side SCRAM verifier; test pg_authid.rolpassword starts with SCRAM-SHA-256$"],
+        ["MAJOR", "bootstrap.cfn.yaml PlanRole: ReadOnlyAccess includes rds:Download*, so any pull-request run can download RDS log files. Owner: infra", "Open. Deny rds:DownloadDBLogFilePortion and rds:DownloadCompleteDBLogFile; also lambda:GetFunction, dynamodb reads, ec2:GetConsoleOutput, cloudformation:GetTemplate"],
+        ["MAJOR", "backend/certs/rds-global-bundle.pem is still the placeholder, so no staging or production start is possible (fail-closed is correct). Owner: backend / Paul", "Open. Commit the real bundle from truststore.pki.rds.amazonaws.com before INFRA-6; add the weekly comparison to dependency-check.yml"],
+        ["MINOR", "bootstrap trust names the repository only by owner/repo. Owner: infra", "Open. Add repository_owner_id and repository_id to the subject template and trust conditions"],
+        ["MINOR", "ci.yml has no infra job (spec 4.2). Owner: infra", "Open. Add an infra job with pinned cfn-lint"],
+        ["MINOR", "ci.yml concurrency group is the same for every main push when called from pipeline.yml. Owner: infra", "Open. Key on run_id for non-pull_request events"],
+        ["MINOR", "smoke-test.sh builds login JSON with printf and passes the bearer token on the command line. Owner: infra", "Open. Use jq/json.dumps and a header file; add a test with quote and backslash in the password"],
+        ["MINOR", "config.py: verify-full enforced only for DB_*; DATABASE_URL bypasses it in staging and production. Owner: backend", "Open. Require sslmode=verify-full and sslrootcert in DATABASE_URL there, or refuse it"],
+        ["MINOR", "openapi /health/live lacks x-ticket: INFRA-3; response model status is str, contract is enum [ok]. Owner: backend", "Open. Add x-ticket and Literal['ok']"],
+        ["MINOR", "Spec risk 4 wrongly says state is readable only by the terraform role; the plan role reads it. Owner: architect", "Open. Correct risk 4; make 'no secret in state' a hard INFRA-4 requirement"],
+        ["MINOR", "ARCHITECTURE.md and the spec's Versions are stale (checkout v6, setup-node v6, setup-uv v8; INFRA-1/2/3 still planned). Owner: architect", "Open. Update versions, remove planned markers; close B4, B5, B8 after the first GitHub run, B11 after the BLOCKER fix"]
+      ]
+    },
+    {
+      "heading": "What the reviewer found sound",
+      "type": "list",
+      "items": [
+        "OIDC trust: aud sts.amazonaws.com; exact sub match per terraform role; plan role wildcard cannot get past the repo prefix; fork PRs get no token.",
+        "State bucket: versioned, encrypted, public access blocked, TLS-only, retained; London-only rule; cfn-lint clean.",
+        "Workflows: minimal permissions, persist-credentials false, no pull_request_target, no secrets, no untrusted expressions in run steps; action SHAs match their tags.",
+        "Grants: no TRUNCATE; audit_events SELECT/INSERT only; app role owns nothing; drift revoked; server-side quoting prevents SQL injection.",
+        "Demo seed guards, create-user, /health/live, upload-web.sh and smoke-test.sh behave as specified."
+      ]
+    },
+    {
+      "heading": "Questions for the architect",
+      "type": "list",
+      "items": [
+        "Is the real RDS CA bundle an INFRA-3 merge condition or the INFRA-6 entry gate? (Decision: INFRA-6 entry gate, tracked.)",
+        "Confirm 'no secret in Terraform state' as a hard INFRA-4 requirement.",
+        "Who owns fixes in .github/ and infra/bootstrap? (Decision: the infra engineer.)"
+      ]
+    }
+  ]
+}
