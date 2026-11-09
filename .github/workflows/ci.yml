@@ -94,6 +94,36 @@ jobs:
       - name: Production build (includes the bundle origin check)
         run: npm run build -w @jobproof/web
 
+  mobile:
+    name: mobile (lint, tests, expo-doctor, android bundle)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # Build-time server address for the config check and the bundle export only; no real server is contacted.
+      API_BASE_URL: https://api.invalid
+      APP_VARIANT: preview
+      EXPO_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: eslint and tsc
+        run: npm run lint -w @jobproof/mobile
+      - name: Jest (logic and ui projects, config assertions)
+        run: npm test -w @jobproof/mobile
+      - name: expo-doctor (needs the Expo API; EXPO_OFFLINE is unset for this step)
+        env:
+          EXPO_OFFLINE: "0"
+        run: npx --yes expo-doctor@1.21.6
+        working-directory: mobile
+      - name: Android bundle (Metro resolves everything, one React copy)
+        run: npm run export -w @jobproof/mobile
+
   e2e:
     name: e2e (Playwright against the compose stack)
     runs-on: ubuntu-24.04

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetBrandingData, GetBrandingResponses, GetHealthData, GetHealthErrors, GetHealthLiveData, GetHealthLiveResponses, GetHealthResponses, GetManagerCustomerData, GetManagerCustomerErrors, GetManagerCustomerResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListAdminSettingsHistoryData, ListAdminSettingsHistoryErrors, ListAdminSettingsHistoryResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerCustomerHistoryData, ListManagerCustomerHistoryErrors, ListManagerCustomerHistoryResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportHistoryData, ListManagerReportHistoryErrors, ListManagerReportHistoryResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, LoginData, LoginErrors, LoginResponses, ReviewManagerReportData, ReviewManagerReportErrors, ReviewManagerReportResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateManagerCustomerData, UpdateManagerCustomerErrors, UpdateManagerCustomerResponses, UpdateManagerReportData, UpdateManagerReportErrors, UpdateManagerReportResponses } from './types.gen';
+import type { CreateDeviceSessionData, CreateDeviceSessionErrors, CreateDeviceSessionResponses, DeleteOperativePhotoData, DeleteOperativePhotoErrors, DeleteOperativePhotoResponses, EndDeviceSessionData, EndDeviceSessionErrors, EndDeviceSessionResponses, GetAdminSettingsData, GetAdminSettingsErrors, GetAdminSettingsResponses, GetAppStatusData, GetAppStatusResponses, GetBrandingData, GetBrandingResponses, GetHealthData, GetHealthErrors, GetHealthLiveData, GetHealthLiveResponses, GetHealthResponses, GetManagerCustomerData, GetManagerCustomerErrors, GetManagerCustomerResponses, GetManagerDashboardData, GetManagerDashboardErrors, GetManagerDashboardResponses, GetManagerReportData, GetManagerReportErrors, GetManagerReportResponses, GetMeData, GetMeErrors, GetMeResponses, GetOperativeJobData, GetOperativeJobErrors, GetOperativeJobResponses, GetPhotoImageData, GetPhotoImageErrors, GetPhotoImageResponses, ListAdminSettingsHistoryData, ListAdminSettingsHistoryErrors, ListAdminSettingsHistoryResponses, ListDemoAccountsData, ListDemoAccountsErrors, ListDemoAccountsResponses, ListManagerCustomerHistoryData, ListManagerCustomerHistoryErrors, ListManagerCustomerHistoryResponses, ListManagerInvoicesData, ListManagerInvoicesErrors, ListManagerInvoicesResponses, ListManagerPaintersData, ListManagerPaintersErrors, ListManagerPaintersResponses, ListManagerReportHistoryData, ListManagerReportHistoryErrors, ListManagerReportHistoryResponses, ListManagerReportsData, ListManagerReportsErrors, ListManagerReportsResponses, ListOperativeJobsData, ListOperativeJobsErrors, ListOperativeJobsResponses, LoginData, LoginErrors, LoginResponses, RefreshDeviceSessionData, RefreshDeviceSessionErrors, RefreshDeviceSessionResponses, RegisterOperativePhotoData, RegisterOperativePhotoErrors, RegisterOperativePhotoResponses, ReviewManagerReportData, ReviewManagerReportErrors, ReviewManagerReportResponses, SaveOperativeDraftData, SaveOperativeDraftErrors, SaveOperativeDraftResponses, SubmitOperativeReportData, SubmitOperativeReportErrors, SubmitOperativeReportResponses, UpdateAdminSettingsData, UpdateAdminSettingsErrors, UpdateAdminSettingsResponses, UpdateManagerCustomerData, UpdateManagerCustomerErrors, UpdateManagerCustomerResponses, UpdateManagerReportData, UpdateManagerReportErrors, UpdateManagerReportResponses, UploadOperativePhotoContentData, UploadOperativePhotoContentErrors, UploadOperativePhotoContentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -63,6 +63,62 @@ export const getMe = <ThrowOnError extends boolean = false>(options?: Options<Ge
 export const listDemoAccounts = <ThrowOnError extends boolean = false>(options?: Options<ListDemoAccountsData, ThrowOnError>): RequestResult<ListDemoAccountsResponses, ListDemoAccountsErrors, ThrowOnError> => (options?.client ?? client).get<ListDemoAccountsResponses, ListDemoAccountsErrors, ThrowOnError>({ url: '/api/v1/auth/demo-accounts', ...options });
 
 /**
+ * Operative sign-in on a device (mobile app); returns access and refresh tokens
+ *
+ * Only role `painter` may create a device session. The password is checked first (wrong
+ * email or password, or an inactive account: 401 `invalid_credentials`, same as
+ * `login`); a correct password for a manager or admin gives 403 `operatives_only` and no
+ * session is created. A new session for the same user and `device_id` revokes that
+ * device's previous session. The access token is a JWT (claims as `login` plus `sid`),
+ * valid `expires_in` seconds (default 900). The refresh token is opaque, single use
+ * (rotated on every refresh) and expires after 30 days without use or 90 days after
+ * sign-in, whichever is first (`refresh_expires_at`). Clients must not judge expiry by the
+ * device clock: they try a refresh and let the server decide.
+ *
+ */
+export const createDeviceSession = <ThrowOnError extends boolean = false>(options: Options<CreateDeviceSessionData, ThrowOnError>): RequestResult<CreateDeviceSessionResponses, CreateDeviceSessionErrors, ThrowOnError> => (options.client ?? client).post<CreateDeviceSessionResponses, CreateDeviceSessionErrors, ThrowOnError>({
+    url: '/api/v1/auth/sessions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Exchange a refresh token for a new access token and a new refresh token
+ *
+ * Rotation: the token sent is spent and a new pair is returned. Re-sending the token that
+ * was just replaced, within 60 seconds of its rotation, is treated as a lost response and
+ * returns another new pair (the unreceived one stops working). Re-sending any older token,
+ * or the previous one after that window, revokes the whole session (theft detection).
+ * 401 `session_ended` for an unknown, expired, revoked or reused token; 401
+ * `account_inactive` when the user has been deactivated (the session is revoked too).
+ *
+ */
+export const refreshDeviceSession = <ThrowOnError extends boolean = false>(options: Options<RefreshDeviceSessionData, ThrowOnError>): RequestResult<RefreshDeviceSessionResponses, RefreshDeviceSessionErrors, ThrowOnError> => (options.client ?? client).post<RefreshDeviceSessionResponses, RefreshDeviceSessionErrors, ThrowOnError>({
+    url: '/api/v1/auth/sessions/refresh',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Sign out this device (revoke the session of the bearer token)
+ *
+ * Revokes the session named by the access token's `sid`; its refresh token stops working
+ * at once. Idempotent: an already revoked session, or a token without `sid` (web), is 204.
+ *
+ */
+export const endDeviceSession = <ThrowOnError extends boolean = false>(options?: Options<EndDeviceSessionData, ThrowOnError>): RequestResult<EndDeviceSessionResponses, EndDeviceSessionErrors, ThrowOnError> => (options?.client ?? client).delete<EndDeviceSessionResponses, EndDeviceSessionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/auth/sessions/current',
+    ...options
+});
+
+/**
  * Company name and theme for this deployment
  *
  * Public: used by the login page before anyone signs in. Returns only the company name and
@@ -70,6 +126,17 @@ export const listDemoAccounts = <ThrowOnError extends boolean = false>(options?:
  *
  */
 export const getBranding = <ThrowOnError extends boolean = false>(options?: Options<GetBrandingData, ThrowOnError>): RequestResult<GetBrandingResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetBrandingResponses, unknown, ThrowOnError>({ url: '/api/v1/branding', ...options });
+
+/**
+ * Server time and the minimum supported mobile app version
+ *
+ * Public and cheap (no database access). The app calls it on launch and at the start of
+ * each sync run to check it can reach the server, to measure the phone clock's offset
+ * (`server_time` minus the device time at the midpoint of the request) and to learn the
+ * minimum supported version. `Cache-Control: no-store`.
+ *
+ */
+export const getAppStatus = <ThrowOnError extends boolean = false>(options?: Options<GetAppStatusData, ThrowOnError>): RequestResult<GetAppStatusResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetAppStatusResponses, unknown, ThrowOnError>({ url: '/api/v1/app/status', ...options });
 
 /**
  * Current company settings
@@ -298,12 +365,161 @@ export const listManagerInvoices = <ThrowOnError extends boolean = false>(option
 });
 
 /**
+ * The caller's jobs for today plus earlier unfinished ones, with full detail
+ *
+ * `jobs_today` (`today` = Europe/London calendar day of the server clock): every job assigned to the
+ * caller with `scheduled_start` today, whatever its state, ordered open jobs first
+ * (`in_progress`, `to_do`), then `submitted`, `completed_by_office`, `cancelled`, then by
+ * `reference`. `earlier_unfinished`: jobs assigned to the caller with `scheduled_start`
+ * before today, not completed or cancelled, and with no submitted report, ordered by
+ * `scheduled_start` then `reference`. Each item is a full `OperativeJob` so the app can
+ * store every listed job for offline use with one request. A job reassigned to someone
+ * else simply stops appearing.
+ *
+ */
+export const listOperativeJobs = <ThrowOnError extends boolean = false>(options?: Options<ListOperativeJobsData, ThrowOnError>): RequestResult<ListOperativeJobsResponses, ListOperativeJobsErrors, ThrowOnError> => (options?.client ?? client).get<ListOperativeJobsResponses, ListOperativeJobsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/operative/jobs',
+    ...options
+});
+
+/**
+ * One of the caller's jobs (any date), with checklist, contact and report state
+ */
+export const getOperativeJob = <ThrowOnError extends boolean = false>(options: Options<GetOperativeJobData, ThrowOnError>): RequestResult<GetOperativeJobResponses, GetOperativeJobErrors, ThrowOnError> => (options.client ?? client).get<GetOperativeJobResponses, GetOperativeJobErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/operative/jobs/{job_id}',
+    ...options
+});
+
+/**
+ * Save draft report fields (creates the draft on first use)
+ *
+ * One report per job; the job id identifies it, so repeating a call is safe. The first
+ * write (this, or registering a photo) creates the draft and moves a `scheduled` job to
+ * `in_progress`. Only the fields sent change; per checklist item only `status` and/or
+ * `note` sent change. Last write wins per field (the operative is the only writer of a
+ * draft). `not_done` without a note is allowed in a draft and refused at submit. Notes
+ * follow the multi-line text rule (NUL and lone surrogates refused). Order of checks: body
+ * (422), job is the caller's (404), job not cancelled (409 `job_cancelled`) or closed by
+ * the office (409 `job_closed`), report not submitted (409 `report_submitted`), item ids
+ * belong to the job (422).
+ *
+ */
+export const saveOperativeDraft = <ThrowOnError extends boolean = false>(options: Options<SaveOperativeDraftData, ThrowOnError>): RequestResult<SaveOperativeDraftResponses, SaveOperativeDraftErrors, ThrowOnError> => (options.client ?? client).patch<SaveOperativeDraftResponses, SaveOperativeDraftErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/operative/jobs/{job_id}/report',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Submit the completion report (safe to repeat with the same submission_id)
+ *
+ * Applies `draft` (if sent) and submits, in one transaction under a row lock on the job.
+ * Repeating with the same `submission_id` after success returns 200 and the current job
+ * (no change). A different `submission_id` on a submitted report is 409
+ * `already_submitted` with `submitted_at` (the other device or attempt won). Every id in
+ * `photo_ids` must already be registered (else 409 `photos_not_registered` listing the
+ * missing ids; register them, then retry); photos registered but not yet uploaded count
+ * as present and may upload afterwards (`pending_photo_count` on the manager's report).
+ * Completeness (422 `submission_incomplete`, one `errors` entry per problem, `loc`
+ * `["photos","before"]`, `["photos","after"]` or `["checklist","<item id>"]`): at least
+ * one registered Before and one After photo; every checklist item not removed by the
+ * office is done, or not done with a non-blank note. On success: report `submitted`,
+ * `submitted_at` = server time, `review_status` `awaiting_review`, job `completed` with
+ * `completed_on` = the later of `scheduled_start` and the London date of `submitted_at`,
+ * and a `report.submitted` audit event. Order of checks: body (422), job is the caller's
+ * (404), replay or `already_submitted` (409), `job_cancelled`/`job_closed` (409),
+ * `photos_not_registered` (409), `submission_incomplete` (422).
+ *
+ */
+export const submitOperativeReport = <ThrowOnError extends boolean = false>(options: Options<SubmitOperativeReportData, ThrowOnError>): RequestResult<SubmitOperativeReportResponses, SubmitOperativeReportErrors, ThrowOnError> => (options.client ?? client).post<SubmitOperativeReportResponses, SubmitOperativeReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/operative/jobs/{job_id}/report/submit',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete a photo from a draft (row and stored files)
+ *
+ * Draft only (409 `report_submitted` afterwards). Idempotent: an unknown photo id on the
+ * caller's job is 204. No audit event: a draft photo never reached the office.
+ *
+ */
+export const deleteOperativePhoto = <ThrowOnError extends boolean = false>(options: Options<DeleteOperativePhotoData, ThrowOnError>): RequestResult<DeleteOperativePhotoResponses, DeleteOperativePhotoErrors, ThrowOnError> => (options.client ?? client).delete<DeleteOperativePhotoResponses, DeleteOperativePhotoErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/operative/jobs/{job_id}/photos/{photo_id}',
+    ...options
+});
+
+/**
+ * Register a photo's metadata (client-generated id), or change its stage, item or caption
+ *
+ * Step 1 of 2 for a photo (step 2 uploads the file). Creates the draft if needed. 201 when
+ * created, 200 when the photo already exists with the same evidence fields (a safe
+ * repeat); `stage`, `checklist_item_id` and `caption` may change while the report is a
+ * draft. Evidence fields are fixed at registration and any difference is 409
+ * `photo_content_mismatch` (also when the id is used by another job): `source`,
+ * `taken_at`, `taken_at_source`, `location`, `original`, `upload`. Limits: 60 photos per
+ * report, 12 per checklist item (409 `photo_limit_reached`). The same `original.sha256`
+ * twice in one report is 409 `duplicate_photo` with `existing_photo_id`. After
+ * submission: an identical repeat is 200; any change is 409 `report_submitted`.
+ * `clock_offset_seconds` = server time minus `device_sent_at`, so the app sets
+ * `device_sent_at` when it sends the request, not when it queued it.
+ *
+ */
+export const registerOperativePhoto = <ThrowOnError extends boolean = false>(options: Options<RegisterOperativePhotoData, ThrowOnError>): RequestResult<RegisterOperativePhotoResponses, RegisterOperativePhotoErrors, ThrowOnError> => (options.client ?? client).put<RegisterOperativePhotoResponses, RegisterOperativePhotoErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/operative/jobs/{job_id}/photos/{photo_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Upload the photo file (raw body), step 2 of 2
+ *
+ * The body is the upload copy's bytes, exactly as registered: `Content-Type` equal to
+ * `upload.content_type` (`image/jpeg` or `image/png`, checked against the file's magic
+ * bytes), `Content-Length` required and at most 10 MiB (else 413 `photo_too_large` before
+ * the body is read), SHA-256 equal to `upload.sha256` (else 422 `checksum_mismatch`;
+ * retry), decodable with the registered `upload.width`/`upload.height` (else 415
+ * `unsupported_photo_type`). Allowed after submission for photos registered before it.
+ * Idempotent: once stored, the same bytes return 200 and nothing is rewritten; a stored
+ * photo is never replaced (409 `photo_content_mismatch` for different bytes). The server
+ * removes embedded metadata (EXIF, XMP, IPTC, PNG text chunks) without re-encoding, makes
+ * a thumbnail, and stores both privately. 503 `busy` with `Retry-After` when the server is
+ * processing its maximum number of uploads.
+ *
+ */
+export const uploadOperativePhotoContent = <ThrowOnError extends boolean = false>(options: Options<UploadOperativePhotoContentData, ThrowOnError>): RequestResult<UploadOperativePhotoContentResponses, UploadOperativePhotoContentErrors, ThrowOnError> => (options.client ?? client).put<UploadOperativePhotoContentResponses, UploadOperativePhotoContentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/operative/jobs/{job_id}/photos/{photo_id}/content',
+    ...options,
+    headers: {
+        'Content-Type': 'image/jpeg',
+        ...options.headers
+    }
+});
+
+/**
  * Photo bytes via a signed URL
  *
  * Clients never build this URL; they use `url` / `thumb_url` from `ReportPhoto`. The
  * signature is `hex(HMAC-SHA256(PHOTO_URL_SECRET, "{photo_id}:{variant}:{exp}"))`.
- * Phase 1 returns a generated SVG placeholder. Later phases redirect to an S3 presigned
- * URL instead; clients must treat the URL as opaque.
+ * Serves the generated SVG placeholders of seeded photos (no stored file). Photos uploaded
+ * from the app (T-003g) are not served here: their `url`/`thumb_url` are short-lived
+ * presigned object-storage URLs on another origin. Clients must treat every URL as opaque.
  *
  */
 export const getPhotoImage = <ThrowOnError extends boolean = false>(options: Options<GetPhotoImageData, ThrowOnError>): RequestResult<GetPhotoImageResponses, GetPhotoImageErrors, ThrowOnError> => (options.client ?? client).get<GetPhotoImageResponses, GetPhotoImageErrors, ThrowOnError>({ url: '/api/v1/photos/{photo_id}/image', ...options });

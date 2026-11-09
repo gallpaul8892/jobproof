@@ -1,5 +1,6 @@
 import re
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from alembic import command
@@ -21,6 +22,7 @@ TABLES = {
     "payments",
     "company_settings",
     "audit_events",
+    "auth_sessions",
 }
 ENUMS = {
     "user_role": ["manager", "painter", "admin"],
@@ -86,8 +88,9 @@ def test_upgrade_downgrade_upgrade_and_no_drift() -> None:
 
 def test_history_is_linear_with_one_head() -> None:
     script = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL))
-    assert script.get_heads() == ["0008"]
+    assert script.get_heads() == ["0009"]
     assert [r.revision for r in script.walk_revisions()] == [
+        "0009",
         "0008",
         "0007",
         "0006",
@@ -494,7 +497,7 @@ def test_0007_downgrade_is_refused_while_a_customer_event_exists() -> None:
             }
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == "0008"
+                == "0009"
             )
     finally:
         with engine.begin() as connection:
@@ -538,3 +541,181 @@ def test_0008_adds_the_uk_only_flag_defaulting_to_true_and_downgrades() -> None:
             connection.execute(text("CREATE SCHEMA public"))
         engine.dispose()
         command.upgrade(config, "head")
+
+
+def test_0009_creates_auth_sessions_and_downgrades_cleanly() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0008")
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            assert "auth_sessions" not in inspect(connection).get_table_names()
+        command.upgrade(config, "0009")
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert "auth_sessions" in inspector.get_table_names()
+            columns = {c["name"]: c for c in inspector.get_columns("auth_sessions")}
+            assert {
+                "id",
+                "user_id",
+                "device_id",
+                "device_name",
+                "platform",
+                "app_version",
+                "created_at",
+                "last_used_at",
+                "idle_expires_at",
+                "absolute_expires_at",
+                "refresh_hash",
+                "previous_refresh_hash",
+                "rotated_at",
+                "generation",
+                "revoked_at",
+                "revoked_reason",
+            } == set(columns)
+            assert columns["refresh_hash"]["type"].length == 64
+            assert columns["revoked_at"]["nullable"] and not columns["refresh_hash"]["nullable"]
+            assert columns["idle_expires_at"]["type"].timezone is True
+            indexes = {ix["name"]: ix for ix in inspector.get_indexes("auth_sessions")}
+            active = indexes["uq_auth_sessions_active_device"]
+            assert active["unique"] and active["column_names"] == ["user_id", "device_id"]
+            assert "revoked_at IS NULL" in active["dialect_options"]["postgresql_where"]
+        command.downgrade(config, "0008")
+        with engine.connect() as connection:
+            assert "auth_sessions" not in inspect(connection).get_table_names()
+        command.upgrade(config, "head")
+        command.check(config)
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+        engine.dispose()
+        command.upgrade(config, "head")
+
+
+def test_0009_upgrade_keeps_existing_users(scratch_engine: Engine) -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    config = alembic_config(url)
+    command.downgrade(config, "0008")
+    with scratch_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users (email, full_name, role) "
+                "VALUES ('keep@example.test', 'Keep Me', 'painter')"
+            )
+        )
+    command.upgrade(config, "head")
+    with scratch_engine.begin() as connection:
+        assert (
+            connection.execute(
+                text("SELECT full_name FROM users WHERE email = 'keep@example.test'")
+            ).scalar_one()
+            == "Keep Me"
+        )
+        connection.execute(text("DELETE FROM users WHERE email = 'keep@example.test'"))
+
+
+_SESSION_COLUMNS = (
+    "user_id, device_id, platform, app_version, last_used_at, idle_expires_at, "
+    "absolute_expires_at, refresh_hash"
+)
+
+
+def _insert_session(
+    connection: Any, user_id: Any, device_id: str, extra: str = "", values: str = ""
+) -> None:
+    connection.execute(
+        text(
+            f"INSERT INTO auth_sessions ({_SESSION_COLUMNS}{extra}) VALUES "  # noqa: S608
+            f"(:u, :d, 'android', '1.0.0', now(), now() + interval '30 days', "
+            f"now() + interval '90 days', repeat('a', 64){values})"
+        ),
+        {"u": user_id, "d": device_id},
+    )
+
+
+def test_0009_constraints_reject_bad_session_rows(db_engine: Engine) -> None:
+    import uuid
+
+    from sqlalchemy.exc import IntegrityError
+
+    with db_engine.connect() as connection:
+        user_id = connection.execute(text("SELECT id FROM users LIMIT 1")).scalar_one()
+    device = str(uuid.uuid4())
+
+    def rejected(statement: str, **params: Any) -> None:
+        with pytest.raises(IntegrityError), db_engine.begin() as connection:
+            connection.execute(text(statement), {"u": user_id, "d": str(uuid.uuid4()), **params})
+
+    base = (
+        "INSERT INTO auth_sessions (user_id, device_id, platform, app_version, last_used_at, "
+        "idle_expires_at, absolute_expires_at, refresh_hash{extra}) VALUES (:u, :d, "
+        "{platform}, '1.0.0', now(), {idle}, now() + interval '90 days', repeat('a', 64){vals})"
+    )
+    ok_idle = "now() + interval '30 days'"
+    rejected(base.format(extra="", platform="'windows'", idle=ok_idle, vals=""))
+    rejected(
+        base.format(extra="", platform="'android'", idle="now() + interval '91 days'", vals="")
+    )
+    rejected(  # revoked_at without a reason
+        base.format(extra=", revoked_at", platform="'android'", idle=ok_idle, vals=", now()")
+    )
+    rejected(  # a reason without revoked_at
+        base.format(
+            extra=", revoked_reason", platform="'android'", idle=ok_idle, vals=", 'signed_out'"
+        )
+    )
+    rejected(  # unknown reason
+        base.format(
+            extra=", revoked_at, revoked_reason",
+            platform="'android'",
+            idle=ok_idle,
+            vals=", now(), 'because'",
+        )
+    )
+    rejected(base.format(extra=", generation", platform="'android'", idle=ok_idle, vals=", 0"))
+
+    with db_engine.begin() as connection:
+        _insert_session(connection, user_id, device)
+    try:
+        with pytest.raises(IntegrityError), db_engine.begin() as connection:
+            _insert_session(connection, user_id, device)  # a second active session, same device
+        with db_engine.begin() as connection:  # but a revoked one may coexist
+            _insert_session(
+                connection, user_id, device, ", revoked_at, revoked_reason", ", now(), 'replaced'"
+            )
+    finally:
+        with db_engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM auth_sessions WHERE device_id = :d"), {"d": device}
+            )
+
+
+def test_a_user_with_sessions_cannot_be_deleted(db_engine: Engine) -> None:
+    import uuid
+
+    from sqlalchemy.exc import IntegrityError
+
+    user_id = uuid.uuid4()
+    device = str(uuid.uuid4())
+    with db_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users (id, email, full_name, role) "
+                "VALUES (:id, 'del@example.test', 'D', 'painter')"
+            ),
+            {"id": user_id},
+        )
+        _insert_session(connection, user_id, device)
+    try:
+        with pytest.raises(IntegrityError), db_engine.begin() as connection:
+            connection.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+    finally:
+        with db_engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM auth_sessions WHERE user_id = :id"), {"id": user_id}
+            )
+            connection.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})

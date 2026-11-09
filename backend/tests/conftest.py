@@ -184,8 +184,78 @@ def temp_user(db_engine: Any) -> Iterator[Any]:
     yield create
     with Session(db_engine) as session:
         for user_id in created:
+            # device sessions reference users (RESTRICT), so they go first
+            session.execute(text("DELETE FROM auth_sessions WHERE user_id = :id"), {"id": user_id})
             session.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
         session.commit()
+
+
+# ---- Operative device sessions (T-003b) -----------------------------------------------------
+import dataclasses  # noqa: E402
+
+DEVICE_SESSIONS = "/api/v1/auth/sessions"
+
+
+@dataclasses.dataclass
+class DeviceLogin:
+    """A device session as the app holds it after sign-in (updated by `refresh`)."""
+
+    access_token: str
+    refresh_token: str
+    session_id: str
+    device_id: str
+    user: dict[str, Any]
+    body: dict[str, Any]
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return bearer(self.access_token)
+
+
+def device_sign_in(
+    client: TestClient,
+    email: str,
+    password: str,
+    *,
+    device_id: str | None = None,
+    app_version: str = "1.0.0",
+) -> DeviceLogin:
+    device = device_id or str(uuid.uuid4())
+    response = client.post(
+        DEVICE_SESSIONS,
+        json={
+            "email": email,
+            "password": password,
+            "device_id": device,
+            "device_name": "Android 14",
+            "platform": "android",
+            "app_version": app_version,
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    return DeviceLogin(
+        access_token=body["access_token"],
+        refresh_token=body["refresh_token"],
+        session_id=body["session_id"],
+        device_id=device,
+        user=body["user"],
+        body=body,
+    )
+
+
+@pytest.fixture
+def operative_device_session(client: TestClient, db_engine: Any) -> Iterator[DeviceLogin]:
+    """Dan Hughes signed in on a phone; his device sessions are removed afterwards."""
+    yield device_sign_in(client, *PAINTER_LOGIN)
+    with db_engine.begin() as connection:
+        connection.execute(
+            text(
+                "DELETE FROM auth_sessions WHERE user_id = "
+                "(SELECT id FROM users WHERE email = :email)"
+            ),
+            {"email": PAINTER_LOGIN[0]},
+        )
 
 
 @pytest.fixture
@@ -224,7 +294,6 @@ def reseed(db_engine: Any) -> Iterator[None]:
 
 
 # ---- B11 scratch database (INFRA-3) --------------------------------------------------------
-import dataclasses  # noqa: E402
 
 B11_DATABASE = "jobproof_b11"
 B11_MIGRATOR_PASSWORD = "migrator-Pass-0123456789"  # noqa: S105

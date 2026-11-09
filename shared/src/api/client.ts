@@ -1,4 +1,5 @@
 import { client } from "../generated/client.gen";
+import { combineSignals } from "./abort";
 import { networkError, toApiError } from "./errors";
 import type { TokenStore } from "./tokenStore";
 
@@ -12,9 +13,17 @@ export interface ApiClientOptions {
   fetch?: typeof fetch;
   /** Called when the API answers 401 to an authenticated call (expired or invalid token). */
   onUnauthorized?: () => void;
+  /**
+   * Mobile hook point: called on a 401 other than `invalid_credentials` (single flight, one shared
+   * promise). Resolve true when a new access token is now available: the call is then retried once.
+   * Only if it resolves false (or rejects) does `onUnauthorized` run. Web passes nothing.
+   */
+  refresh?: () => Promise<boolean>;
 }
 
 let unauthorizedHandler: (() => void) | undefined;
+let refreshHandler: (() => Promise<boolean>) | undefined;
+let refreshInFlight: Promise<boolean> | undefined;
 let activeTokenStore: TokenStore | undefined;
 
 /** The token store given to configureApiClient, for the auth hooks. */
@@ -29,19 +38,22 @@ export function getTokenStore(): TokenStore {
  */
 export function configureApiClient(options: ApiClientOptions): void {
   unauthorizedHandler = options.onUnauthorized;
+  refreshHandler = options.refresh;
+  refreshInFlight = undefined;
   activeTokenStore = options.tokenStore;
   const baseFetch = options.fetch ?? ((input, init) => fetch(input, init));
   const timeoutFetch: typeof fetch = async (input, init) => {
     // Cancel on the caller's signal (TanStack Query aborts replaced requests) or on timeout.
-    const signal = AbortSignal.any(
-      [init?.signal, input instanceof Request ? input.signal : undefined, AbortSignal.timeout(REQUEST_TIMEOUT_MS)].filter(
-        (s): s is AbortSignal => s != null,
-      ),
+    const { signal, dispose } = combineSignals(
+      [init?.signal, input instanceof Request ? input.signal : undefined],
+      REQUEST_TIMEOUT_MS,
     );
     try {
       return await baseFetch(input, { ...init, signal });
     } catch (cause) {
-      throw networkError(cause);
+            throw networkError(cause);
+    } finally {
+      dispose();
     }
   };
   client.setConfig({
@@ -57,8 +69,23 @@ interface SdkResult<T> {
   response?: Response;
 }
 
+/** Runs the configured refresh once at a time; concurrent 401s share one promise. */
+function refreshOnce(): Promise<boolean> {
+  if (!refreshHandler) return Promise.resolve(false);
+  refreshInFlight ??= refreshHandler()
+    .catch(() => false)
+    .finally(() => {
+      refreshInFlight = undefined;
+    });
+  return refreshInFlight;
+}
+
 /** Unwraps an SDK call: returns data, or throws ApiError for any failure. */
 export async function callApi<T>(call: () => Promise<SdkResult<T>>): Promise<T> {
+  return attempt(call, true);
+}
+
+async function attempt<T>(call: () => Promise<SdkResult<T>>, mayRefresh: boolean): Promise<T> {
   let result: SdkResult<T>;
   try {
     result = await call();
@@ -72,7 +99,10 @@ export async function callApi<T>(call: () => Promise<SdkResult<T>>): Promise<T> 
       result.response?.headers.get("X-Request-ID"),
     );
     // A wrong password is also a 401, but it is not a lost session.
-    if (error.status === 401 && error.code !== "invalid_credentials") unauthorizedHandler?.();
+    if (error.status === 401 && error.code !== "invalid_credentials") {
+      if (mayRefresh && refreshHandler && (await refreshOnce())) return attempt(call, false);
+      unauthorizedHandler?.();
+    }
     throw error;
   }
   return result.data as T;

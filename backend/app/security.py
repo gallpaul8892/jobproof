@@ -41,10 +41,17 @@ class InvalidTokenError(Exception):
 
 
 def create_access_token(
-    *, user_id: str, role: str, secret: str, ttl_seconds: int, now: dt.datetime
+    *,
+    user_id: str,
+    role: str,
+    secret: str,
+    ttl_seconds: int,
+    now: dt.datetime,
+    sid: str | None = None,
 ) -> str:
+    """`sid` (device sessions only, T-003b) ties the token to a revocable `auth_sessions` row."""
     issued = int(now.timestamp())
-    claims = {
+    claims: dict[str, Any] = {
         "sub": user_id,
         "role": role,
         "iat": issued,
@@ -52,6 +59,8 @@ def create_access_token(
         "iss": ISSUER,
         "aud": AUDIENCE,
     }
+    if sid is not None:
+        claims["sid"] = sid
     return jwt.encode(claims, secret, algorithm=ALGORITHM)
 
 

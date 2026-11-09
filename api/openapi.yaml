@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: JobProof API
-  version: 0.5.0
+  version: 0.6.0
   summary: Contract between the JobProof backend and its web and mobile clients.
   description: |
     Source of truth for the JobProof API (see ARCHITECTURE.md section 5 for conventions).
@@ -21,7 +21,16 @@ info:
       `version_conflict` and nothing is saved.
     - Admin and Manager are separate roles. An Admin may be technical staff rather than a
       manager, so an Admin never reads or changes reports, customers or billing (403).
-    - `x-ticket` marks operations, parameters and properties added by a T-002 ticket. Backend
+    - Operative app (Phase 2b, T-003, v0.6.0): every `/api/v1/operative/*` operation requires
+      role `painter` (shown as "Operative") and acts only on jobs assigned to the caller; another
+      operative's job is 404 `not_found`, never 403. Operative responses never contain
+      `manager_notes`, money, customer email or billing details. Device sessions
+      (`/api/v1/auth/sessions*`) issue a 15-minute access token plus a rotating refresh token.
+      The app sends `X-App-Version` (semver) on every call; below the configured minimum,
+      operative and session operations answer 426 `app_update_required` (T-003n).
+      Client-generated UUIDs make writes safe to repeat: photo ids, and `submission_id` on submit.
+    - `x-ticket` marks operations, parameters and properties added by a ticket (T-002x, T-003x,
+      INFRA-n). Backend
       contract tests ignore items whose ticket is listed in `PENDING_TICKETS`
       (`backend/tests/contract.py`) until that ticket is built; the ticket's last step removes
       its id. Component schemas are never marked (only the operations, parameters and
@@ -45,6 +54,10 @@ tags:
     description: Manager-only endpoints (reports, review, edit, history, customers, billing).
   - name: photos
     description: Signed photo image delivery.
+  - name: app
+    description: Public app status (server time, minimum supported mobile app version).
+  - name: operative
+    description: Operative-only endpoints (role `painter`), scoped to the caller's own jobs.
 security:
   - bearerAuth: []
 
@@ -140,6 +153,94 @@ paths:
                 items: { $ref: "#/components/schemas/DemoAccount" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/auth/sessions:
+    post:
+      tags: [auth]
+      operationId: createDeviceSession
+      x-ticket: T-003b
+      summary: Operative sign-in on a device (mobile app); returns access and refresh tokens
+      description: |
+        Only role `painter` may create a device session. The password is checked first (wrong
+        email or password, or an inactive account: 401 `invalid_credentials`, same as
+        `login`); a correct password for a manager or admin gives 403 `operatives_only` and no
+        session is created. A new session for the same user and `device_id` revokes that
+        device's previous session. The access token is a JWT (claims as `login` plus `sid`),
+        valid `expires_in` seconds (default 900). The refresh token is opaque, single use
+        (rotated on every refresh) and expires after 30 days without use or 90 days after
+        sign-in, whichever is first (`refresh_expires_at`). Clients must not judge expiry by the
+        device clock: they try a refresh and let the server decide.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceSessionRequest" }
+      responses:
+        "201":
+          description: Signed in on this device
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceSession" }
+        "401":
+          description: Wrong email or password, or account inactive (code `invalid_credentials`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: Correct password but not an operative (code `operatives_only`); no session kept
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+
+  /api/v1/auth/sessions/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshDeviceSession
+      x-ticket: T-003b
+      summary: Exchange a refresh token for a new access token and a new refresh token
+      description: |
+        Rotation: the token sent is spent and a new pair is returned. Re-sending the token that
+        was just replaced, within 60 seconds of its rotation, is treated as a lost response and
+        returns another new pair (the unreceived one stops working). Re-sending any older token,
+        or the previous one after that window, revokes the whole session (theft detection).
+        401 `session_ended` for an unknown, expired, revoked or reused token; 401
+        `account_inactive` when the user has been deactivated (the session is revoked too).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceSession" }
+        "401":
+          description: Session over (code `session_ended`) or account deactivated (code `account_inactive`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+
+  /api/v1/auth/sessions/current:
+    delete:
+      tags: [auth]
+      operationId: endDeviceSession
+      x-ticket: T-003b
+      summary: Sign out this device (revoke the session of the bearer token)
+      description: |
+        Revokes the session named by the access token's `sid`; its refresh token stops working
+        at once. Idempotent: an already revoked session, or a token without `sid` (web), is 204.
+      responses:
+        "204":
+          description: Signed out
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
   /api/v1/branding:
     get:
       tags: [branding]
@@ -159,6 +260,25 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Branding" }
+
+  /api/v1/app/status:
+    get:
+      tags: [app]
+      operationId: getAppStatus
+      x-ticket: T-003a
+      summary: Server time and the minimum supported mobile app version
+      description: |
+        Public and cheap (no database access). The app calls it on launch and at the start of
+        each sync run to check it can reach the server, to measure the phone clock's offset
+        (`server_time` minus the device time at the midpoint of the request) and to learn the
+        minimum supported version. `Cache-Control: no-store`.
+      security: []
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppStatus" }
 
   /api/v1/admin/settings:
     get:
@@ -576,6 +696,286 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
+  /api/v1/operative/jobs:
+    get:
+      tags: [operative]
+      operationId: listOperativeJobs
+      x-ticket: T-003c
+      summary: The caller's jobs for today plus earlier unfinished ones, with full detail
+      description: |
+        `jobs_today` (`today` = Europe/London calendar day of the server clock): every job assigned to the
+        caller with `scheduled_start` today, whatever its state, ordered open jobs first
+        (`in_progress`, `to_do`), then `submitted`, `completed_by_office`, `cancelled`, then by
+        `reference`. `earlier_unfinished`: jobs assigned to the caller with `scheduled_start`
+        before today, not completed or cancelled, and with no submitted report, ordered by
+        `scheduled_start` then `reference`. Each item is a full `OperativeJob` so the app can
+        store every listed job for offline use with one request. A job reassigned to someone
+        else simply stops appearing.
+      responses:
+        "200":
+          description: My jobs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperativeJobList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+
+  /api/v1/operative/jobs/{job_id}:
+    get:
+      tags: [operative]
+      operationId: getOperativeJob
+      x-ticket: T-003d
+      summary: One of the caller's jobs (any date), with checklist, contact and report state
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperativeJob" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+
+  /api/v1/operative/jobs/{job_id}/report:
+    patch:
+      tags: [operative]
+      operationId: saveOperativeDraft
+      x-ticket: T-003f
+      summary: Save draft report fields (creates the draft on first use)
+      description: |
+        One report per job; the job id identifies it, so repeating a call is safe. The first
+        write (this, or registering a photo) creates the draft and moves a `scheduled` job to
+        `in_progress`. Only the fields sent change; per checklist item only `status` and/or
+        `note` sent change. Last write wins per field (the operative is the only writer of a
+        draft). `not_done` without a note is allowed in a draft and refused at submit. Notes
+        follow the multi-line text rule (NUL and lone surrogates refused). Order of checks: body
+        (422), job is the caller's (404), job not cancelled (409 `job_cancelled`) or closed by
+        the office (409 `job_closed`), report not submitted (409 `report_submitted`), item ids
+        belong to the job (422).
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DraftUpdate" }
+      responses:
+        "200":
+          description: Saved; the full job with its report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperativeJob" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`report_submitted`, `job_cancelled` or `job_closed`; nothing saved"
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+
+  /api/v1/operative/jobs/{job_id}/report/submit:
+    post:
+      tags: [operative]
+      operationId: submitOperativeReport
+      x-ticket: T-003h
+      summary: Submit the completion report (safe to repeat with the same submission_id)
+      description: |
+        Applies `draft` (if sent) and submits, in one transaction under a row lock on the job.
+        Repeating with the same `submission_id` after success returns 200 and the current job
+        (no change). A different `submission_id` on a submitted report is 409
+        `already_submitted` with `submitted_at` (the other device or attempt won). Every id in
+        `photo_ids` must already be registered (else 409 `photos_not_registered` listing the
+        missing ids; register them, then retry); photos registered but not yet uploaded count
+        as present and may upload afterwards (`pending_photo_count` on the manager's report).
+        Completeness (422 `submission_incomplete`, one `errors` entry per problem, `loc`
+        `["photos","before"]`, `["photos","after"]` or `["checklist","<item id>"]`): at least
+        one registered Before and one After photo; every checklist item not removed by the
+        office is done, or not done with a non-blank note. On success: report `submitted`,
+        `submitted_at` = server time, `review_status` `awaiting_review`, job `completed` with
+        `completed_on` = the later of `scheduled_start` and the London date of `submitted_at`,
+        and a `report.submitted` audit event. Order of checks: body (422), job is the caller's
+        (404), replay or `already_submitted` (409), `job_cancelled`/`job_closed` (409),
+        `photos_not_registered` (409), `submission_incomplete` (422).
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubmitRequest" }
+      responses:
+        "200":
+          description: Submitted (or already submitted by this same submission); the full job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperativeJob" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_submitted`, `photos_not_registered`, `job_cancelled` or `job_closed`"
+          content:
+            application/problem+json:
+              schema:
+                # anyOf, not oneOf: the two specific problems are also valid `Problem`s.
+                anyOf:
+                  - $ref: "#/components/schemas/AlreadySubmittedProblem"
+                  - $ref: "#/components/schemas/PhotosNotRegisteredProblem"
+                  - $ref: "#/components/schemas/Problem"
+        "422":
+          description: Invalid body (`validation_error`) or report not complete (`submission_incomplete`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+
+  /api/v1/operative/jobs/{job_id}/photos/{photo_id}:
+    put:
+      tags: [operative]
+      operationId: registerOperativePhoto
+      x-ticket: T-003g
+      summary: Register a photo's metadata (client-generated id), or change its stage, item or caption
+      description: |
+        Step 1 of 2 for a photo (step 2 uploads the file). Creates the draft if needed. 201 when
+        created, 200 when the photo already exists with the same evidence fields (a safe
+        repeat); `stage`, `checklist_item_id` and `caption` may change while the report is a
+        draft. Evidence fields are fixed at registration and any difference is 409
+        `photo_content_mismatch` (also when the id is used by another job): `source`,
+        `taken_at`, `taken_at_source`, `location`, `original`, `upload`. Limits: 60 photos per
+        report, 12 per checklist item (409 `photo_limit_reached`). The same `original.sha256`
+        twice in one report is 409 `duplicate_photo` with `existing_photo_id`. After
+        submission: an identical repeat is 200; any change is 409 `report_submitted`.
+        `clock_offset_seconds` = server time minus `device_sent_at`, so the app sets
+        `device_sent_at` when it sends the request, not when it queued it.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/PhotoId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhotoRegistration" }
+      responses:
+        "200":
+          description: Already registered (unchanged or mutable fields updated)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperativePhoto" }
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperativePhoto" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`photo_content_mismatch`, `duplicate_photo`, `photo_limit_reached`, `report_submitted`, `job_cancelled` or `job_closed`"
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+    delete:
+      tags: [operative]
+      operationId: deleteOperativePhoto
+      x-ticket: T-003g
+      summary: Delete a photo from a draft (row and stored files)
+      description: |
+        Draft only (409 `report_submitted` afterwards). Idempotent: an unknown photo id on the
+        caller's job is 204. No audit event: a draft photo never reached the office.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/PhotoId"
+      responses:
+        "204":
+          description: Deleted (or never existed)
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Report already submitted (code `report_submitted`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+
+  /api/v1/operative/jobs/{job_id}/photos/{photo_id}/content:
+    put:
+      tags: [operative]
+      operationId: uploadOperativePhotoContent
+      x-ticket: T-003g
+      summary: Upload the photo file (raw body), step 2 of 2
+      description: |
+        The body is the upload copy's bytes, exactly as registered: `Content-Type` equal to
+        `upload.content_type` (`image/jpeg` or `image/png`, checked against the file's magic
+        bytes), `Content-Length` required and at most 10 MiB (else 413 `photo_too_large` before
+        the body is read), SHA-256 equal to `upload.sha256` (else 422 `checksum_mismatch`;
+        retry), decodable with the registered `upload.width`/`upload.height` (else 415
+        `unsupported_photo_type`). Allowed after submission for photos registered before it.
+        Idempotent: once stored, the same bytes return 200 and nothing is rewritten; a stored
+        photo is never replaced (409 `photo_content_mismatch` for different bytes). The server
+        removes embedded metadata (EXIF, XMP, IPTC, PNG text chunks) without re-encoding, makes
+        a thumbnail, and stores both privately. 503 `busy` with `Retry-After` when the server is
+        processing its maximum number of uploads.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/PhotoId"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: { type: string, contentMediaType: image/jpeg }
+          image/png:
+            schema: { type: string, contentMediaType: image/png }
+      responses:
+        "200":
+          description: Stored (or already stored with these bytes)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperativePhoto" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Different bytes for an already stored photo (code `photo_content_mismatch`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413":
+          description: Over 10 MiB or over the pixel limit (code `photo_too_large`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "415":
+          description: Not a JPEG or PNG matching the registration (code `unsupported_photo_type`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422":
+          description: Checksum differs from the registration (code `checksum_mismatch`), or invalid path
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "426": { $ref: "#/components/responses/UpdateRequired" }
+        "503":
+          description: Too many uploads in progress (code `busy`); retry after `Retry-After` seconds
+          headers:
+            Retry-After:
+              schema: { type: integer, examples: [5] }
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /api/v1/photos/{photo_id}/image:
     get:
       tags: [photos]
@@ -584,8 +984,9 @@ paths:
       description: |
         Clients never build this URL; they use `url` / `thumb_url` from `ReportPhoto`. The
         signature is `hex(HMAC-SHA256(PHOTO_URL_SECRET, "{photo_id}:{variant}:{exp}"))`.
-        Phase 1 returns a generated SVG placeholder. Later phases redirect to an S3 presigned
-        URL instead; clients must treat the URL as opaque.
+        Serves the generated SVG placeholders of seeded photos (no stored file). Photos uploaded
+        from the app (T-003g) are not served here: their `url`/`thumb_url` are short-lived
+        presigned object-storage URLs on another origin. Clients must treat every URL as opaque.
       security: []
       parameters:
         - name: photo_id
@@ -638,8 +1039,24 @@ components:
       name: page_size
       in: query
       schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PhotoId:
+      name: photo_id
+      in: path
+      required: true
+      description: Generated on the phone (UUID v4) when the photo is taken; the idempotency key
+      schema: { type: string, format: uuid }
 
   responses:
+    UpdateRequired:
+      description: App version below the minimum supported (code `app_update_required`)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
     Unauthenticated:
       description: Missing, invalid or expired token (code `unauthenticated`)
       headers:
@@ -691,6 +1108,24 @@ components:
             - contrast_too_low
             - version_conflict
             - already_reviewed
+            # T-003 (operative app)
+            - operatives_only
+            - session_ended
+            - account_inactive
+            - app_update_required
+            - job_cancelled
+            - job_closed
+            - report_submitted
+            - already_submitted
+            - photos_not_registered
+            - submission_incomplete
+            - photo_limit_reached
+            - photo_content_mismatch
+            - duplicate_photo
+            - photo_too_large
+            - unsupported_photo_type
+            - checksum_mismatch
+            - busy
         request_id: { type: string }
         errors:
           type: array
@@ -925,25 +1360,75 @@ components:
 
     ChecklistItem:
       type: object
-      required: [id, label, done, note]
+      required: [id, label, done, note, cannot_do, removed]
       properties:
         id: { type: string, format: uuid }
         label: { type: string, examples: ["Walls filled, sanded and spot-primed"] }
         done: { type: boolean }
         note: { type: [string, "null"] }
+        cannot_do:
+          type: boolean
+          x-ticket: T-003k
+          description: The operative marked the item "Can't do this"; `note` holds the reason. Never true with `done`. A manager setting `done` true clears it.
+        removed:
+          type: boolean
+          x-ticket: T-003k
+          description: The office removed the item from the job after the operative recorded something on it; shown under "Other photos and notes"
 
     ReportPhoto:
       type: object
-      required: [id, stage, caption, taken_at, width, height, url, thumb_url]
+      required:
+        - id
+        - stage
+        - caption
+        - taken_at
+        - width
+        - height
+        - url
+        - thumb_url
+        - checklist_item_id
+        - source
+        - taken_at_source
+        - received_at
+        - clock_offset_seconds
+        - location
       properties:
         id: { type: string, format: uuid }
         stage: { $ref: "#/components/schemas/PhotoStage" }
         caption: { type: string }
-        taken_at: { type: string, format: date-time }
-        width: { type: integer, description: Full-size pixel width }
-        height: { type: integer, description: Full-size pixel height }
+        taken_at: { type: string, format: date-time, description: "Device time (see `taken_at_source`), UTC" }
+        width: { type: integer, description: Stored file pixel width }
+        height: { type: integer, description: Stored file pixel height }
         url: { type: string, format: uri, description: "Signed, short-lived, opaque full-size URL" }
         thumb_url: { type: string, format: uri, description: "Signed, short-lived, opaque thumbnail URL" }
+        checklist_item_id:
+          type: [string, "null"]
+          format: uuid
+          x-ticket: T-003k
+          description: The report checklist item (`ChecklistItem.id`) this photo proves, if any
+        source:
+          x-ticket: T-003k
+          $ref: "#/components/schemas/PhotoSource"
+        taken_at_source:
+          x-ticket: T-003k
+          $ref: "#/components/schemas/TakenAtSource"
+        received_at:
+          type: [string, "null"]
+          format: date-time
+          x-ticket: T-003k
+          description: Server time the file arrived; null for seeded placeholder photos
+        clock_offset_seconds:
+          type: [integer, "null"]
+          x-ticket: T-003k
+          description: |
+            Server time minus the phone's clock when the photo was registered (positive = phone
+            behind). Null for seeded photos. Clients flag an absolute value over 300 seconds.
+        location:
+          x-ticket: T-003k
+          description: Managers only. Null when no location was recorded
+          oneOf:
+            - $ref: "#/components/schemas/PhotoLocation"
+            - type: "null"
 
     JobDetail:
       type: object
@@ -1070,10 +1555,39 @@ components:
         - quote
         - invoice
         - payments
+        - submitted_by
+        - pending_photo_count
+        - device_submitted_at
+        - submit_clock_offset_seconds
+        - sign_off
       properties:
         id: { type: string, format: uuid }
         review_status: { $ref: "#/components/schemas/ReviewStatus" }
-        submitted_at: { type: string, format: date-time }
+        submitted_at: { type: string, format: date-time, description: Server time the submission was accepted }
+        submitted_by:
+          x-ticket: T-003h
+          description: The operative who submitted (for seeded reports, the report's painter)
+          $ref: "#/components/schemas/PersonRef"
+        pending_photo_count:
+          type: integer
+          minimum: 0
+          x-ticket: T-003h
+          description: Photos registered before submission whose file has not arrived yet ("2 photos still to arrive"); they are not in `photos` until they arrive
+        device_submitted_at:
+          type: [string, "null"]
+          format: date-time
+          x-ticket: T-003k
+          description: Phone time when the operative confirmed Submit (may be hours before `submitted_at` if offline). Null for seeded reports
+        submit_clock_offset_seconds:
+          type: [integer, "null"]
+          x-ticket: T-003k
+          description: Server time minus the phone clock at the moment the submit request was sent. Null for seeded reports
+        sign_off:
+          x-ticket: T-003o
+          description: Customer sign-off recorded by the operative, if any
+          oneOf:
+            - $ref: "#/components/schemas/SignOff"
+            - type: "null"
         reviewed_at: { type: [string, "null"], format: date-time }
         reviewed_by:
           oneOf:
@@ -1108,7 +1622,7 @@ components:
           items: { $ref: "#/components/schemas/ChecklistItem" }
         photos:
           type: array
-          description: Ordered before, during, after, then by `taken_at`. May be empty.
+          description: Ordered before, during, after, then by `taken_at`. May be empty. Only photos whose file has arrived (see `pending_photo_count`).
           items: { $ref: "#/components/schemas/ReportPhoto" }
         quote:
           oneOf:
@@ -1425,8 +1939,18 @@ components:
 
     AuditAction:
       type: string
-      description: "`customer.edited` added by T-002n."
-      enum: [report.reviewed, report.reopened, report.edited, settings.changed, customer.edited]
+      description: |
+        `customer.edited` added by T-002n. T-003h: `report.submitted` (actor = the operative;
+        no changes) and `report.photo_received` (a photo registered before submission arrived
+        after it; actor = the operative; no changes).
+      enum:
+        - report.reviewed
+        - report.reopened
+        - report.edited
+        - settings.changed
+        - customer.edited
+        - report.submitted
+        - report.photo_received
 
     AuditField:
       type: string
@@ -1491,3 +2015,386 @@ components:
           description: Newest first
           items: { $ref: "#/components/schemas/AuditEvent" }
         total: { type: integer, minimum: 0, description: All events for the record (may exceed items) }
+
+    # ---- T-003: operative app (design: specs/T-003-design.md) ----
+
+    SemVer:
+      type: string
+      pattern: '^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$'
+      examples: ["1.0.0"]
+
+    AppStatus:
+      type: object
+      required: [server_time, api_version, min_supported_versions]
+      properties:
+        server_time: { type: string, format: date-time, description: "Server clock, UTC, millisecond precision" }
+        api_version: { type: string, examples: ["0.6.0"] }
+        min_supported_versions:
+          type: object
+          required: [android]
+          properties:
+            android: { $ref: "#/components/schemas/SemVer" }
+
+    DevicePlatform:
+      type: string
+      enum: [android, ios]
+
+    DeviceSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, device_id, platform, app_version]
+      properties:
+        email: { type: string, minLength: 3, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 200 }
+        device_id:
+          type: string
+          format: uuid
+          description: Random UUID created by the app on first launch and kept in its secure store (not a hardware id)
+        device_name:
+          type: [string, "null"]
+          maxLength: 60
+          description: Shown to the office later, e.g. "Android 14". Free-text rule; no personal names
+        platform: { $ref: "#/components/schemas/DevicePlatform" }
+        app_version: { $ref: "#/components/schemas/SemVer" }
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string, minLength: 20, maxLength: 200 }
+
+    DeviceSession:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, refresh_expires_at, session_id, user]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, const: bearer }
+        expires_in: { type: integer, description: Seconds until the access token expires, examples: [900] }
+        refresh_token: { type: string, description: "Opaque, single use; keep only in the secure store" }
+        refresh_expires_at: { type: string, format: date-time, description: Informational; the server decides }
+        session_id: { type: string, format: uuid }
+        user: { $ref: "#/components/schemas/User" }
+
+    OperativeJobStatus:
+      type: string
+      description: |
+        The operative's view of a job: `to_do` (no report yet), `in_progress` (draft report),
+        `submitted` (report submitted), `completed_by_office` (job completed with no operative
+        report; not startable), `cancelled` (by the office).
+      enum: [to_do, in_progress, submitted, completed_by_office, cancelled]
+
+    ReportState:
+      type: string
+      enum: [draft, submitted]
+
+    ChecklistStatus:
+      type: string
+      description: "`not_done` = \"Can't do this\"; the note is the reason (required at submit)."
+      enum: [open, done, not_done]
+
+    OperativeJobList:
+      type: object
+      required: [as_of, today, jobs_today, earlier_unfinished]
+      properties:
+        as_of: { type: string, format: date-time, description: Server time of the list }
+        today: { type: string, format: date, description: The London calendar day used }
+        jobs_today:
+          type: array
+          items: { $ref: "#/components/schemas/OperativeJob" }
+        earlier_unfinished:
+          type: array
+          items: { $ref: "#/components/schemas/OperativeJob" }
+
+    OperativeContact:
+      type: object
+      required: [name, phone]
+      properties:
+        name: { type: string, description: "The customer's contact name, else the customer name" }
+        phone: { type: [string, "null"] }
+
+    OperativeChecklistItem:
+      type: object
+      required: [id, position, label, status, note, removed]
+      properties:
+        id: { type: string, format: uuid, description: Stable item id (the same id as the manager's `ChecklistItem.id`) }
+        position: { type: integer, minimum: 0 }
+        label: { type: string }
+        status: { $ref: "#/components/schemas/ChecklistStatus" }
+        note: { type: [string, "null"], maxLength: 500 }
+        removed:
+          type: boolean
+          description: Removed by the office after the operative recorded a status, note or photo on it; does not count for submission
+
+    OperativeJob:
+      type: object
+      required:
+        - id
+        - reference
+        - title
+        - job_type
+        - status
+        - scheduled_start
+        - site_address
+        - checklist_total
+        - checklist_dealt_with
+        - notes
+        - contact
+        - checklist
+        - report
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, examples: ["JP-1061"] }
+        title: { type: string, examples: ["Repaint lounge, hall and landing"] }
+        job_type: { $ref: "#/components/schemas/JobType" }
+        status: { $ref: "#/components/schemas/OperativeJobStatus" }
+        scheduled_start: { type: string, format: date }
+        site_address: { $ref: "#/components/schemas/Address" }
+        checklist_total: { type: integer, minimum: 0, description: Items not removed }
+        checklist_dealt_with: { type: integer, minimum: 0, description: "Items not removed that are done, or not done with a note (\"6 of 9 done\")" }
+        notes:
+          type: [string, "null"]
+          x-ticket: T-003d
+          description: Office/site notes (may be long)
+        contact:
+          x-ticket: T-003d
+          description: Who to ring on site. Never email or billing details
+          oneOf:
+            - $ref: "#/components/schemas/OperativeContact"
+            - type: "null"
+        checklist:
+          type: array
+          x-ticket: T-003d
+          description: By `position`; removed items (with operative data) last
+          items: { $ref: "#/components/schemas/OperativeChecklistItem" }
+        report:
+          x-ticket: T-003d
+          description: Null until the operative's first write creates the draft
+          oneOf:
+            - $ref: "#/components/schemas/OperativeReport"
+            - type: "null"
+
+    OperativeReport:
+      type: object
+      description: The operative's view of the report. Never contains `manager_notes`.
+      required:
+        - id
+        - state
+        - notes
+        - submitted_at
+        - submitted_by
+        - review_status
+        - reviewed_at
+        - reviewed_by
+        - submission_id
+        - device_submitted_at
+        - photos
+        - sign_off
+      properties:
+        id: { type: string, format: uuid }
+        state: { $ref: "#/components/schemas/ReportState" }
+        notes: { type: [string, "null"], description: The operative's job notes (stored as the report's painter notes) }
+        submitted_at: { type: [string, "null"], format: date-time }
+        submitted_by:
+          oneOf:
+            - $ref: "#/components/schemas/PersonRef"
+            - type: "null"
+        review_status:
+          description: Null while a draft
+          oneOf:
+            - $ref: "#/components/schemas/ReviewStatus"
+            - type: "null"
+        reviewed_at: { type: [string, "null"], format: date-time }
+        reviewed_by:
+          oneOf:
+            - $ref: "#/components/schemas/PersonRef"
+            - type: "null"
+        submission_id:
+          type: [string, "null"]
+          format: uuid
+          x-ticket: T-003h
+          description: The accepted submission; the app compares it with its own to tell "my submit" from "another device's"
+        device_submitted_at:
+          type: [string, "null"]
+          format: date-time
+          x-ticket: T-003h
+        photos:
+          type: array
+          x-ticket: T-003g
+          description: Every registered photo, ordered by stage then `taken_at`
+          items: { $ref: "#/components/schemas/OperativePhoto" }
+        sign_off:
+          x-ticket: T-003o
+          oneOf:
+            - $ref: "#/components/schemas/SignOff"
+            - type: "null"
+
+    DraftChecklistUpdate:
+      type: object
+      additionalProperties: false
+      required: [item_id]
+      minProperties: 2
+      properties:
+        item_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/ChecklistStatus" }
+        note: { type: [string, "null"], maxLength: 500, description: Empty or whitespace-only is stored as null }
+
+    DraftUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        notes: { type: [string, "null"], maxLength: 2000, description: Empty or whitespace-only is stored as null }
+        checklist:
+          type: array
+          minItems: 1
+          maxItems: 200
+          description: Item ids must be unique and belong to the job
+          items: { $ref: "#/components/schemas/DraftChecklistUpdate" }
+        sign_off:
+          x-ticket: T-003o
+          description: Null clears it
+          oneOf:
+            - $ref: "#/components/schemas/SignOff"
+            - type: "null"
+
+    SubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [submission_id, device_submitted_at, device_sent_at, photo_ids]
+      properties:
+        submission_id: { type: string, format: uuid, description: Created on the phone when the operative confirms Submit; reused for every retry }
+        device_submitted_at: { type: string, format: date-time, description: Phone time when Submit was confirmed }
+        device_sent_at: { type: string, format: date-time, description: Phone time when this request was sent (for the clock offset) }
+        photo_ids:
+          type: array
+          maxItems: 60
+          uniqueItems: true
+          description: Every photo the phone holds for this report (sent or not), excluding ones it deleted
+          items: { type: string, format: uuid }
+        draft: { $ref: "#/components/schemas/DraftUpdate" }
+
+    AlreadySubmittedProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [code, submitted_at]
+          properties:
+            code: { const: already_submitted }
+            submitted_at: { type: string, format: date-time }
+
+    PhotosNotRegisteredProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [code, missing_photo_ids]
+          properties:
+            code: { const: photos_not_registered }
+            missing_photo_ids:
+              type: array
+              items: { type: string, format: uuid }
+
+    PhotoSource:
+      type: string
+      enum: [camera, gallery]
+
+    TakenAtSource:
+      type: string
+      description: "`device_clock` (in-app camera), `file_metadata` (gallery photo's own date), `added_time` (gallery photo with no readable date: the time it was added)"
+      enum: [device_clock, file_metadata, added_time]
+
+    PhotoLocation:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude, accuracy_m, source]
+      properties:
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        accuracy_m: { type: [number, "null"], minimum: 0, maximum: 100000 }
+        source:
+          type: string
+          enum: [device, file]
+          description: "`device` = the phone's position when the photo was taken; `file` = read from a gallery photo's metadata"
+
+    PhotoFileFacts:
+      type: object
+      additionalProperties: false
+      required: [width, height, bytes, sha256]
+      properties:
+        width: { type: integer, minimum: 1, maximum: 20000 }
+        height: { type: integer, minimum: 1, maximum: 20000 }
+        bytes: { type: integer, minimum: 1 }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+
+    UploadFileFacts:
+      type: object
+      additionalProperties: false
+      required: [width, height, bytes, sha256, content_type]
+      properties:
+        width: { type: integer, minimum: 1, maximum: 4096 }
+        height: { type: integer, minimum: 1, maximum: 4096 }
+        bytes: { type: integer, minimum: 1, maximum: 10485760 }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        content_type: { type: string, enum: [image/jpeg, image/png] }
+
+    PhotoRegistration:
+      type: object
+      additionalProperties: false
+      description: |
+        A full representation (PUT): an omitted `checklist_item_id` means none, an omitted
+        `caption` means "". Evidence fields (`source`, `taken_at`, `taken_at_source`,
+        `location`, `original`, `upload`) can never change after the first registration.
+      required: [stage, source, taken_at, taken_at_source, device_sent_at, original, upload]
+      properties:
+        stage: { $ref: "#/components/schemas/PhotoStage" }
+        checklist_item_id: { type: [string, "null"], format: uuid, description: A checklist item of this job }
+        caption: { type: string, maxLength: 140, description: Single-line free-text rule; trimmed }
+        source: { $ref: "#/components/schemas/PhotoSource" }
+        taken_at: { type: string, format: date-time }
+        taken_at_source: { $ref: "#/components/schemas/TakenAtSource" }
+        device_sent_at: { type: string, format: date-time, description: Phone time when this request was sent }
+        location:
+          x-ticket: T-003k
+          oneOf:
+            - $ref: "#/components/schemas/PhotoLocation"
+            - type: "null"
+        original:
+          $ref: "#/components/schemas/PhotoFileFacts"
+          description: The full-size file kept on the phone (not uploaded); its fingerprint is evidence
+        upload:
+          $ref: "#/components/schemas/UploadFileFacts"
+          description: The resized copy that step 2 uploads (long edge at most 2560 px on the app's side)
+
+    OperativePhoto:
+      type: object
+      required: [id, stage, checklist_item_id, caption, source, taken_at, taken_at_source, registered_at, received_at, clock_offset_seconds, thumb_url]
+      properties:
+        id: { type: string, format: uuid }
+        stage: { $ref: "#/components/schemas/PhotoStage" }
+        checklist_item_id: { type: [string, "null"], format: uuid }
+        caption: { type: string }
+        source: { $ref: "#/components/schemas/PhotoSource" }
+        taken_at: { type: string, format: date-time }
+        taken_at_source: { $ref: "#/components/schemas/TakenAtSource" }
+        registered_at: { type: string, format: date-time }
+        received_at: { type: [string, "null"], format: date-time, description: Null until the file has arrived ("Sent" means not null) }
+        clock_offset_seconds: { type: [integer, "null"] }
+        thumb_url: { type: [string, "null"], format: uri, description: "Short-lived thumbnail URL once received; the app downloads only its own thumbnails" }
+
+    SignOffOutcome:
+      type: string
+      enum: [present_happy, present_concerns, not_present]
+
+    SignOff:
+      type: object
+      additionalProperties: false
+      required: [outcome, customer_name, note, recorded_at]
+      description: |
+        Not a signature. `customer_name` is required (non-blank) for the two "present"
+        outcomes and must be null for `not_present`. Single-line rule for the name, multi-line
+        rule for the note.
+      properties:
+        outcome: { $ref: "#/components/schemas/SignOffOutcome" }
+        customer_name: { type: [string, "null"], maxLength: 120 }
+        note: { type: [string, "null"], maxLength: 500 }
+        recorded_at: { type: string, format: date-time, description: Phone time it was recorded }

@@ -138,6 +138,36 @@ def test_app_role_has_dml_on_every_business_table(super_engine: Engine) -> None:
     assert _privileges(super_engine, "alembic_version") == set()
 
 
+def test_app_role_covers_auth_sessions_with_dml_and_no_truncate(
+    b11_reseeded: B11Database, app_engine: Engine, super_engine: Engine
+) -> None:
+    """T-003b: the table added by migration 0009 gets the app role's DML and nothing more."""
+    assert "auth_sessions" in _tables(super_engine)
+    assert _privileges(super_engine, "auth_sessions") == {"SELECT", "INSERT", "UPDATE", "DELETE"}
+    with app_engine.begin() as connection:
+        user_id = connection.execute(text("SELECT id FROM users LIMIT 1")).scalar_one()
+    insert = (
+        "INSERT INTO auth_sessions (user_id, device_id, platform, app_version, last_used_at, "
+        "idle_expires_at, absolute_expires_at, refresh_hash) VALUES (:u, gen_random_uuid(), "
+        "'android', '1.0.0', now(), now() + interval '1 day', now() + interval '2 days', "
+        "repeat('a', 64)) RETURNING id"
+    )
+    with app_engine.begin() as connection:
+        session_id = connection.execute(text(insert), {"u": user_id}).scalar_one()
+        connection.execute(
+            text("UPDATE auth_sessions SET generation = 2 WHERE id = :id"), {"id": session_id}
+        )
+        assert (
+            connection.execute(
+                text("SELECT generation FROM auth_sessions WHERE id = :id"), {"id": session_id}
+            ).scalar_one()
+            == 2
+        )
+        connection.execute(text("DELETE FROM auth_sessions WHERE id = :id"), {"id": session_id})
+    with pytest.raises(ProgrammingError, match="permission denied"), app_engine.begin() as c:
+        c.execute(text("TRUNCATE TABLE auth_sessions"))
+
+
 def test_app_role_cannot_create_objects(app_engine: Engine) -> None:
     with pytest.raises(ProgrammingError, match="permission denied"), app_engine.begin() as c:
         c.execute(text("CREATE TABLE sneaky (id int)"))

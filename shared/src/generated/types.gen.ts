@@ -16,7 +16,7 @@ export type Problem = {
     status: number;
     detail?: string;
     instance?: string;
-    code: 'unauthenticated' | 'invalid_credentials' | 'forbidden' | 'not_found' | 'validation_error' | 'invalid_signature' | 'internal_error' | 'contrast_too_low' | 'version_conflict' | 'already_reviewed';
+    code: 'unauthenticated' | 'invalid_credentials' | 'forbidden' | 'not_found' | 'validation_error' | 'invalid_signature' | 'internal_error' | 'contrast_too_low' | 'version_conflict' | 'already_reviewed' | 'operatives_only' | 'session_ended' | 'account_inactive' | 'app_update_required' | 'job_cancelled' | 'job_closed' | 'report_submitted' | 'already_submitted' | 'photos_not_registered' | 'submission_incomplete' | 'photo_limit_reached' | 'photo_content_mismatch' | 'duplicate_photo' | 'photo_too_large' | 'unsupported_photo_type' | 'checksum_mismatch' | 'busy';
     request_id: string;
     /**
      * Present for `validation_error` and `contrast_too_low`.
@@ -191,19 +191,30 @@ export type ChecklistItem = {
     label: string;
     done: boolean;
     note: string | null;
+    /**
+     * The operative marked the item "Can't do this"; `note` holds the reason. Never true with `done`. A manager setting `done` true clears it.
+     */
+    cannot_do: boolean;
+    /**
+     * The office removed the item from the job after the operative recorded something on it; shown under "Other photos and notes"
+     */
+    removed: boolean;
 };
 
 export type ReportPhoto = {
     id: string;
     stage: PhotoStage;
     caption: string;
+    /**
+     * Device time (see `taken_at_source`), UTC
+     */
     taken_at: string;
     /**
-     * Full-size pixel width
+     * Stored file pixel width
      */
     width: number;
     /**
-     * Full-size pixel height
+     * Stored file pixel height
      */
     height: number;
     /**
@@ -214,6 +225,26 @@ export type ReportPhoto = {
      * Signed, short-lived, opaque thumbnail URL
      */
     thumb_url: string;
+    /**
+     * The report checklist item (`ChecklistItem.id`) this photo proves, if any
+     */
+    checklist_item_id: string | null;
+    source: PhotoSource;
+    taken_at_source: TakenAtSource;
+    /**
+     * Server time the file arrived; null for seeded placeholder photos
+     */
+    received_at: string | null;
+    /**
+     * Server time minus the phone's clock when the photo was registered (positive = phone
+     * behind). Null for seeded photos. Clients flag an absolute value over 300 seconds.
+     *
+     */
+    clock_offset_seconds: number | null;
+    /**
+     * Managers only. Null when no location was recorded
+     */
+    location: PhotoLocation | null;
 };
 
 export type JobDetail = {
@@ -308,7 +339,30 @@ export type Payment = {
 export type ReportDetail = {
     id: string;
     review_status: ReviewStatus;
+    /**
+     * Server time the submission was accepted
+     */
     submitted_at: string;
+    /**
+     * The operative who submitted (for seeded reports, the report's painter)
+     */
+    submitted_by: PersonRef;
+    /**
+     * Photos registered before submission whose file has not arrived yet ("2 photos still to arrive"); they are not in `photos` until they arrive
+     */
+    pending_photo_count: number;
+    /**
+     * Phone time when the operative confirmed Submit (may be hours before `submitted_at` if offline). Null for seeded reports
+     */
+    device_submitted_at: string | null;
+    /**
+     * Server time minus the phone clock at the moment the submit request was sent. Null for seeded reports
+     */
+    submit_clock_offset_seconds: number | null;
+    /**
+     * Customer sign-off recorded by the operative, if any
+     */
+    sign_off: SignOff | null;
     reviewed_at: string | null;
     reviewed_by: PersonRef | null;
     /**
@@ -331,7 +385,7 @@ export type ReportDetail = {
     painter: PersonRef;
     checklist: Array<ChecklistItem>;
     /**
-     * Ordered before, during, after, then by `taken_at`. May be empty.
+     * Ordered before, during, after, then by `taken_at`. May be empty. Only photos whose file has arrived (see `pending_photo_count`).
      */
     photos: Array<ReportPhoto>;
     quote: QuoteSummary | null;
@@ -595,9 +649,12 @@ export type CustomerVersionConflictProblem = Problem & {
 };
 
 /**
- * `customer.edited` added by T-002n.
+ * `customer.edited` added by T-002n. T-003h: `report.submitted` (actor = the operative;
+ * no changes) and `report.photo_received` (a photo registered before submission arrived
+ * after it; actor = the operative; no changes).
+ *
  */
-export type AuditAction = 'report.reviewed' | 'report.reopened' | 'report.edited' | 'settings.changed' | 'customer.edited';
+export type AuditAction = 'report.reviewed' | 'report.reopened' | 'report.edited' | 'settings.changed' | 'customer.edited' | 'report.submitted' | 'report.photo_received';
 
 export type AuditField = 'review_status' | 'reviewed_by' | 'reviewed_at' | 'painter_notes' | 'manager_notes' | 'checklist_done' | 'checklist_note' | 'company_name' | 'theme_primary' | 'theme_accent' | 'uk_only_contact_details' | 'customer_name' | 'customer_contact_name' | 'customer_email' | 'customer_phone' | 'customer_billing_line1' | 'customer_billing_line2' | 'customer_billing_town' | 'customer_billing_county' | 'customer_billing_postcode';
 
@@ -641,9 +698,342 @@ export type AuditHistory = {
     total: number;
 };
 
+export type SemVer = string;
+
+export type AppStatus = {
+    /**
+     * Server clock, UTC, millisecond precision
+     */
+    server_time: string;
+    api_version: string;
+    min_supported_versions: {
+        android: SemVer;
+    };
+};
+
+export type DevicePlatform = 'android' | 'ios';
+
+export type DeviceSessionRequest = {
+    email: string;
+    password: string;
+    /**
+     * Random UUID created by the app on first launch and kept in its secure store (not a hardware id)
+     */
+    device_id: string;
+    /**
+     * Shown to the office later, e.g. "Android 14". Free-text rule; no personal names
+     */
+    device_name?: string | null;
+    platform: DevicePlatform;
+    app_version: SemVer;
+};
+
+export type RefreshRequest = {
+    refresh_token: string;
+};
+
+export type DeviceSession = {
+    access_token: string;
+    token_type: 'bearer';
+    /**
+     * Seconds until the access token expires
+     */
+    expires_in: number;
+    /**
+     * Opaque, single use; keep only in the secure store
+     */
+    refresh_token: string;
+    /**
+     * Informational; the server decides
+     */
+    refresh_expires_at: string;
+    session_id: string;
+    user: User;
+};
+
+/**
+ * The operative's view of a job: `to_do` (no report yet), `in_progress` (draft report),
+ * `submitted` (report submitted), `completed_by_office` (job completed with no operative
+ * report; not startable), `cancelled` (by the office).
+ *
+ */
+export type OperativeJobStatus = 'to_do' | 'in_progress' | 'submitted' | 'completed_by_office' | 'cancelled';
+
+export type ReportState = 'draft' | 'submitted';
+
+/**
+ * `not_done` = "Can't do this"; the note is the reason (required at submit).
+ */
+export type ChecklistStatus = 'open' | 'done' | 'not_done';
+
+export type OperativeJobList = {
+    /**
+     * Server time of the list
+     */
+    as_of: string;
+    /**
+     * The London calendar day used
+     */
+    today: string;
+    jobs_today: Array<OperativeJob>;
+    earlier_unfinished: Array<OperativeJob>;
+};
+
+export type OperativeContact = {
+    /**
+     * The customer's contact name, else the customer name
+     */
+    name: string;
+    phone: string | null;
+};
+
+export type OperativeChecklistItem = {
+    /**
+     * Stable item id (the same id as the manager's `ChecklistItem.id`)
+     */
+    id: string;
+    position: number;
+    label: string;
+    status: ChecklistStatus;
+    note: string | null;
+    /**
+     * Removed by the office after the operative recorded a status, note or photo on it; does not count for submission
+     */
+    removed: boolean;
+};
+
+export type OperativeJob = {
+    id: string;
+    reference: string;
+    title: string;
+    job_type: JobType;
+    status: OperativeJobStatus;
+    scheduled_start: string;
+    site_address: Address;
+    /**
+     * Items not removed
+     */
+    checklist_total: number;
+    /**
+     * Items not removed that are done, or not done with a note ("6 of 9 done")
+     */
+    checklist_dealt_with: number;
+    /**
+     * Office/site notes (may be long)
+     */
+    notes: string | null;
+    /**
+     * Who to ring on site. Never email or billing details
+     */
+    contact: OperativeContact | null;
+    /**
+     * By `position`; removed items (with operative data) last
+     */
+    checklist: Array<OperativeChecklistItem>;
+    /**
+     * Null until the operative's first write creates the draft
+     */
+    report: OperativeReport | null;
+};
+
+/**
+ * The operative's view of the report. Never contains `manager_notes`.
+ */
+export type OperativeReport = {
+    id: string;
+    state: ReportState;
+    /**
+     * The operative's job notes (stored as the report's painter notes)
+     */
+    notes: string | null;
+    submitted_at: string | null;
+    submitted_by: PersonRef | null;
+    /**
+     * Null while a draft
+     */
+    review_status: ReviewStatus | null;
+    reviewed_at: string | null;
+    reviewed_by: PersonRef | null;
+    /**
+     * The accepted submission; the app compares it with its own to tell "my submit" from "another device's"
+     */
+    submission_id: string | null;
+    device_submitted_at: string | null;
+    /**
+     * Every registered photo, ordered by stage then `taken_at`
+     */
+    photos: Array<OperativePhoto>;
+    sign_off: SignOff | null;
+};
+
+export type DraftChecklistUpdate = {
+    item_id: string;
+    status?: ChecklistStatus;
+    /**
+     * Empty or whitespace-only is stored as null
+     */
+    note?: string | null;
+};
+
+export type DraftUpdate = {
+    /**
+     * Empty or whitespace-only is stored as null
+     */
+    notes?: string | null;
+    /**
+     * Item ids must be unique and belong to the job
+     */
+    checklist?: Array<DraftChecklistUpdate>;
+    /**
+     * Null clears it
+     */
+    sign_off?: SignOff | null;
+};
+
+export type SubmitRequest = {
+    /**
+     * Created on the phone when the operative confirms Submit; reused for every retry
+     */
+    submission_id: string;
+    /**
+     * Phone time when Submit was confirmed
+     */
+    device_submitted_at: string;
+    /**
+     * Phone time when this request was sent (for the clock offset)
+     */
+    device_sent_at: string;
+    /**
+     * Every photo the phone holds for this report (sent or not), excluding ones it deleted
+     */
+    photo_ids: Array<string>;
+    draft?: DraftUpdate;
+};
+
+export type AlreadySubmittedProblem = Problem & {
+    code: 'already_submitted';
+    submitted_at: string;
+};
+
+export type PhotosNotRegisteredProblem = Problem & {
+    code: 'photos_not_registered';
+    missing_photo_ids: Array<string>;
+};
+
+export type PhotoSource = 'camera' | 'gallery';
+
+/**
+ * `device_clock` (in-app camera), `file_metadata` (gallery photo's own date), `added_time` (gallery photo with no readable date: the time it was added)
+ */
+export type TakenAtSource = 'device_clock' | 'file_metadata' | 'added_time';
+
+export type PhotoLocation = {
+    latitude: number;
+    longitude: number;
+    accuracy_m: number | null;
+    /**
+     * `device` = the phone's position when the photo was taken; `file` = read from a gallery photo's metadata
+     */
+    source: 'device' | 'file';
+};
+
+export type PhotoFileFacts = {
+    width: number;
+    height: number;
+    bytes: number;
+    sha256: string;
+};
+
+export type UploadFileFacts = {
+    width: number;
+    height: number;
+    bytes: number;
+    sha256: string;
+    content_type: 'image/jpeg' | 'image/png';
+};
+
+/**
+ * A full representation (PUT): an omitted `checklist_item_id` means none, an omitted
+ * `caption` means "". Evidence fields (`source`, `taken_at`, `taken_at_source`,
+ * `location`, `original`, `upload`) can never change after the first registration.
+ *
+ */
+export type PhotoRegistration = {
+    stage: PhotoStage;
+    /**
+     * A checklist item of this job
+     */
+    checklist_item_id?: string | null;
+    /**
+     * Single-line free-text rule; trimmed
+     */
+    caption?: string;
+    source: PhotoSource;
+    taken_at: string;
+    taken_at_source: TakenAtSource;
+    /**
+     * Phone time when this request was sent
+     */
+    device_sent_at: string;
+    location?: PhotoLocation | null;
+    /**
+     * The full-size file kept on the phone (not uploaded); its fingerprint is evidence
+     */
+    original: PhotoFileFacts;
+    /**
+     * The resized copy that step 2 uploads (long edge at most 2560 px on the app's side)
+     */
+    upload: UploadFileFacts;
+};
+
+export type OperativePhoto = {
+    id: string;
+    stage: PhotoStage;
+    checklist_item_id: string | null;
+    caption: string;
+    source: PhotoSource;
+    taken_at: string;
+    taken_at_source: TakenAtSource;
+    registered_at: string;
+    /**
+     * Null until the file has arrived ("Sent" means not null)
+     */
+    received_at: string | null;
+    clock_offset_seconds: number | null;
+    /**
+     * Short-lived thumbnail URL once received; the app downloads only its own thumbnails
+     */
+    thumb_url: string | null;
+};
+
+export type SignOffOutcome = 'present_happy' | 'present_concerns' | 'not_present';
+
+/**
+ * Not a signature. `customer_name` is required (non-blank) for the two "present"
+ * outcomes and must be null for `not_present`. Single-line rule for the name, multi-line
+ * rule for the note.
+ *
+ */
+export type SignOff = {
+    outcome: SignOffOutcome;
+    customer_name: string | null;
+    note: string | null;
+    /**
+     * Phone time it was recorded
+     */
+    recorded_at: string;
+};
+
 export type Page = number;
 
 export type PageSize = number;
+
+export type JobId = string;
+
+/**
+ * Generated on the phone (UUID v4) when the photo is taken; the idempotency key
+ */
+export type PhotoId = string;
 
 export type GetHealthData = {
     body?: never;
@@ -765,6 +1155,101 @@ export type ListDemoAccountsResponses = {
 
 export type ListDemoAccountsResponse = ListDemoAccountsResponses[keyof ListDemoAccountsResponses];
 
+export type CreateDeviceSessionData = {
+    body: DeviceSessionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/sessions';
+};
+
+export type CreateDeviceSessionErrors = {
+    /**
+     * Wrong email or password, or account inactive (code `invalid_credentials`)
+     */
+    401: Problem;
+    /**
+     * Correct password but not an operative (code `operatives_only`); no session kept
+     */
+    403: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type CreateDeviceSessionError = CreateDeviceSessionErrors[keyof CreateDeviceSessionErrors];
+
+export type CreateDeviceSessionResponses = {
+    /**
+     * Signed in on this device
+     */
+    201: DeviceSession;
+};
+
+export type CreateDeviceSessionResponse = CreateDeviceSessionResponses[keyof CreateDeviceSessionResponses];
+
+export type RefreshDeviceSessionData = {
+    body: RefreshRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/sessions/refresh';
+};
+
+export type RefreshDeviceSessionErrors = {
+    /**
+     * Session over (code `session_ended`) or account deactivated (code `account_inactive`)
+     */
+    401: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type RefreshDeviceSessionError = RefreshDeviceSessionErrors[keyof RefreshDeviceSessionErrors];
+
+export type RefreshDeviceSessionResponses = {
+    /**
+     * New token pair
+     */
+    200: DeviceSession;
+};
+
+export type RefreshDeviceSessionResponse = RefreshDeviceSessionResponses[keyof RefreshDeviceSessionResponses];
+
+export type EndDeviceSessionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/sessions/current';
+};
+
+export type EndDeviceSessionErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+};
+
+export type EndDeviceSessionError = EndDeviceSessionErrors[keyof EndDeviceSessionErrors];
+
+export type EndDeviceSessionResponses = {
+    /**
+     * Signed out
+     */
+    204: void;
+};
+
+export type EndDeviceSessionResponse = EndDeviceSessionResponses[keyof EndDeviceSessionResponses];
+
 export type GetBrandingData = {
     body?: never;
     path?: never;
@@ -780,6 +1265,22 @@ export type GetBrandingResponses = {
 };
 
 export type GetBrandingResponse = GetBrandingResponses[keyof GetBrandingResponses];
+
+export type GetAppStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/app/status';
+};
+
+export type GetAppStatusResponses = {
+    /**
+     * Status
+     */
+    200: AppStatus;
+};
+
+export type GetAppStatusResponse = GetAppStatusResponses[keyof GetAppStatusResponses];
 
 export type GetAdminSettingsData = {
     body?: never;
@@ -1312,6 +1813,345 @@ export type ListManagerInvoicesResponses = {
 };
 
 export type ListManagerInvoicesResponse = ListManagerInvoicesResponses[keyof ListManagerInvoicesResponses];
+
+export type ListOperativeJobsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/operative/jobs';
+};
+
+export type ListOperativeJobsErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type ListOperativeJobsError = ListOperativeJobsErrors[keyof ListOperativeJobsErrors];
+
+export type ListOperativeJobsResponses = {
+    /**
+     * My jobs
+     */
+    200: OperativeJobList;
+};
+
+export type ListOperativeJobsResponse = ListOperativeJobsResponses[keyof ListOperativeJobsResponses];
+
+export type GetOperativeJobData = {
+    body?: never;
+    path: {
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/v1/operative/jobs/{job_id}';
+};
+
+export type GetOperativeJobErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type GetOperativeJobError = GetOperativeJobErrors[keyof GetOperativeJobErrors];
+
+export type GetOperativeJobResponses = {
+    /**
+     * Job
+     */
+    200: OperativeJob;
+};
+
+export type GetOperativeJobResponse = GetOperativeJobResponses[keyof GetOperativeJobResponses];
+
+export type SaveOperativeDraftData = {
+    body: DraftUpdate;
+    path: {
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/v1/operative/jobs/{job_id}/report';
+};
+
+export type SaveOperativeDraftErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * `report_submitted`, `job_cancelled` or `job_closed`; nothing saved
+     */
+    409: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type SaveOperativeDraftError = SaveOperativeDraftErrors[keyof SaveOperativeDraftErrors];
+
+export type SaveOperativeDraftResponses = {
+    /**
+     * Saved; the full job with its report
+     */
+    200: OperativeJob;
+};
+
+export type SaveOperativeDraftResponse = SaveOperativeDraftResponses[keyof SaveOperativeDraftResponses];
+
+export type SubmitOperativeReportData = {
+    body: SubmitRequest;
+    path: {
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/v1/operative/jobs/{job_id}/report/submit';
+};
+
+export type SubmitOperativeReportErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * `already_submitted`, `photos_not_registered`, `job_cancelled` or `job_closed`
+     */
+    409: AlreadySubmittedProblem | PhotosNotRegisteredProblem | Problem;
+    /**
+     * Invalid body (`validation_error`) or report not complete (`submission_incomplete`)
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type SubmitOperativeReportError = SubmitOperativeReportErrors[keyof SubmitOperativeReportErrors];
+
+export type SubmitOperativeReportResponses = {
+    /**
+     * Submitted (or already submitted by this same submission); the full job
+     */
+    200: OperativeJob;
+};
+
+export type SubmitOperativeReportResponse = SubmitOperativeReportResponses[keyof SubmitOperativeReportResponses];
+
+export type DeleteOperativePhotoData = {
+    body?: never;
+    path: {
+        job_id: string;
+        /**
+         * Generated on the phone (UUID v4) when the photo is taken; the idempotency key
+         */
+        photo_id: string;
+    };
+    query?: never;
+    url: '/api/v1/operative/jobs/{job_id}/photos/{photo_id}';
+};
+
+export type DeleteOperativePhotoErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * Report already submitted (code `report_submitted`)
+     */
+    409: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type DeleteOperativePhotoError = DeleteOperativePhotoErrors[keyof DeleteOperativePhotoErrors];
+
+export type DeleteOperativePhotoResponses = {
+    /**
+     * Deleted (or never existed)
+     */
+    204: void;
+};
+
+export type DeleteOperativePhotoResponse = DeleteOperativePhotoResponses[keyof DeleteOperativePhotoResponses];
+
+export type RegisterOperativePhotoData = {
+    body: PhotoRegistration;
+    path: {
+        job_id: string;
+        /**
+         * Generated on the phone (UUID v4) when the photo is taken; the idempotency key
+         */
+        photo_id: string;
+    };
+    query?: never;
+    url: '/api/v1/operative/jobs/{job_id}/photos/{photo_id}';
+};
+
+export type RegisterOperativePhotoErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * `photo_content_mismatch`, `duplicate_photo`, `photo_limit_reached`, `report_submitted`, `job_cancelled` or `job_closed`
+     */
+    409: Problem;
+    /**
+     * Invalid parameters or body (code `validation_error`)
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+};
+
+export type RegisterOperativePhotoError = RegisterOperativePhotoErrors[keyof RegisterOperativePhotoErrors];
+
+export type RegisterOperativePhotoResponses = {
+    /**
+     * Already registered (unchanged or mutable fields updated)
+     */
+    200: OperativePhoto;
+    /**
+     * Registered
+     */
+    201: OperativePhoto;
+};
+
+export type RegisterOperativePhotoResponse = RegisterOperativePhotoResponses[keyof RegisterOperativePhotoResponses];
+
+export type UploadOperativePhotoContentData = {
+    body: string;
+    path: {
+        job_id: string;
+        /**
+         * Generated on the phone (UUID v4) when the photo is taken; the idempotency key
+         */
+        photo_id: string;
+    };
+    query?: never;
+    url: '/api/v1/operative/jobs/{job_id}/photos/{photo_id}/content';
+};
+
+export type UploadOperativePhotoContentErrors = {
+    /**
+     * Missing, invalid or expired token (code `unauthenticated`)
+     */
+    401: Problem;
+    /**
+     * Authenticated but role not allowed (code `forbidden`)
+     */
+    403: Problem;
+    /**
+     * Resource does not exist (code `not_found`)
+     */
+    404: Problem;
+    /**
+     * Different bytes for an already stored photo (code `photo_content_mismatch`)
+     */
+    409: Problem;
+    /**
+     * Over 10 MiB or over the pixel limit (code `photo_too_large`)
+     */
+    413: Problem;
+    /**
+     * Not a JPEG or PNG matching the registration (code `unsupported_photo_type`)
+     */
+    415: Problem;
+    /**
+     * Checksum differs from the registration (code `checksum_mismatch`), or invalid path
+     */
+    422: Problem;
+    /**
+     * App version below the minimum supported (code `app_update_required`)
+     */
+    426: Problem;
+    /**
+     * Too many uploads in progress (code `busy`); retry after `Retry-After` seconds
+     */
+    503: Problem;
+};
+
+export type UploadOperativePhotoContentError = UploadOperativePhotoContentErrors[keyof UploadOperativePhotoContentErrors];
+
+export type UploadOperativePhotoContentResponses = {
+    /**
+     * Stored (or already stored with these bytes)
+     */
+    200: OperativePhoto;
+};
+
+export type UploadOperativePhotoContentResponse = UploadOperativePhotoContentResponses[keyof UploadOperativePhotoContentResponses];
 
 export type GetPhotoImageData = {
     body?: never;

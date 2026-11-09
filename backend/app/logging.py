@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 # Extra attributes copied onto a log line when present (access logs).
-_EXTRA_FIELDS = ("method", "path", "status", "duration_ms", "user_id")
+_EXTRA_FIELDS = ("method", "path", "status", "duration_ms", "user_id", "session_id", "outcome")
 
 
 class JsonFormatter(logging.Formatter):

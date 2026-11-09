@@ -95,6 +95,12 @@ const photos: ReportPhoto[] = ["before", "during", "after"].map((stage, i) => ({
   height: 1200,
   url: `http://api.test/full/${i}`,
   thumb_url: `http://api.test/thumb/${i}`,
+  checklist_item_id: null,
+  source: "camera" as const,
+  taken_at_source: "device_clock" as const,
+  received_at: null,
+  clock_offset_seconds: null,
+  location: null,
 }));
 
 describe("PhotoGallery", () => {

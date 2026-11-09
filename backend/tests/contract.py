@@ -20,8 +20,18 @@ NOT_YET_IMPLEMENTED: set[tuple[str, str]] = set()
 # Tickets whose contract items (operations, parameters, schema properties marked `x-ticket`) are
 # not built yet. load_spec() hides them so the contract tests stay green while a package is built
 # ticket by ticket. Delete a ticket's id from this set as the last step of that ticket.
-# Empty since T-002o (the last ticket of Package 4); keep the mechanism for later epics.
-PENDING_TICKETS: set[str] = set()
+# T-003 (operative app, contract v0.6.0) staged by the architect on 2026-11-09: each ticket
+# removes its own id as its last step (specs/T-003-work-packages.md). T-003e, i, j, l, m, n and p
+# have no contract items of their own.
+PENDING_TICKETS: set[str] = {
+    "T-003c",
+    "T-003d",
+    "T-003f",
+    "T-003g",
+    "T-003h",
+    "T-003k",
+    "T-003o",
+}
 
 
 def _is_pending(node: Any, pending: set[str]) -> bool:

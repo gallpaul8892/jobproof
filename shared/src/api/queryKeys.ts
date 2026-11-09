@@ -2,6 +2,7 @@ import type { InvoiceFilters, ReportFilters } from "../filters";
 
 export const queryKeys = {
   health: ["health"] as const,
+  appStatus: ["app", "status"] as const,
   me: ["me"] as const,
   demoAccounts: ["demo-accounts"] as const,
   branding: ["branding"] as const,

@@ -9,13 +9,14 @@
   "workspaces": [
     "shared",
     "web",
+    "mobile",
     "e2e"
   ],
   "scripts": {
     "gen": "npm run gen -w @jobproof/shared",
     "gen:check": "npm run gen:check -w @jobproof/shared",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "npm test -w @jobproof/shared -w @jobproof/web",
+    "test": "npm test -w @jobproof/shared -w @jobproof/web -w @jobproof/mobile",
     "build": "npm run build -w @jobproof/web",
     "e2e": "npm run test -w @jobproof/e2e"
   },
@@ -24,6 +25,8 @@
   },
   "overrides": {
     "js-yaml": "^4.3.2",
-    "minimatch": "^11.0.1"
+    "minimatch": "^11.0.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   }
 }

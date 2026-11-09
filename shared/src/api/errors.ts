@@ -70,7 +70,7 @@ export function toApiError(body: unknown, status: number, headerRequestId?: stri
 }
 
 export function networkError(cause: unknown): ApiError {
-  const timedOut = cause instanceof DOMException && cause.name === "TimeoutError";
+  const timedOut = typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "TimeoutError";
   return new ApiError({
     status: 0,
     code: timedOut ? "timeout" : "network_error",

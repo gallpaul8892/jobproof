@@ -2,6 +2,7 @@
 
     python -m app.cli create-user --role admin|manager --email EMAIL --full-name NAME
     python -m app.cli create-admin --email EMAIL --full-name NAME     (= create-user --role admin)
+    python -m app.cli deactivate-user --email EMAIL   (also ends the user's device sessions)
     python -m app.cli db-roles     create the migrator and app roles (as the RDS master; B11)
     python -m app.cli migrate      alembic upgrade head, then grants (as the migrator role)
 
@@ -22,6 +23,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from app import dbroles
+from app.clock import now
 from app.config import get_settings
 from app.db import make_engine
 from app.models import User
@@ -29,6 +31,7 @@ from app.models.enums import UserRole
 from app.schemas.text import contains_forbidden_character
 from app.security import hash_password
 from app.services.auth import normalise_email
+from app.services.sessions import revoke_all_for_user
 
 MIN_PASSWORD = 12
 MAX_PASSWORD = 200
@@ -95,6 +98,36 @@ def create_user(email: str, full_name: str, role: UserRole, event: str) -> int:
     return 0
 
 
+def deactivate_user(email: str) -> int:
+    """Set is_active=false and revoke every device session, in one transaction (T-003b).
+
+    Idempotent. Prints the user id only (never the email).
+    """
+    email = normalise_email(email)
+    engine = make_engine(get_settings().database_url)
+    try:
+        with Session(engine) as session:
+            user = session.scalar(select(User).where(User.email == email))
+            if user is None:
+                print("No user with that email.", file=sys.stderr)
+                return 1
+            user.is_active = False
+            revoked = revoke_all_for_user(session, user.id, "deactivated", now())
+            session.commit()
+            print(
+                json.dumps(
+                    {
+                        "event": "user_deactivated",
+                        "user_id": str(user.id),
+                        "sessions_revoked": revoked,
+                    }
+                )
+            )
+    finally:
+        engine.dispose()
+    return 0
+
+
 def create_admin(email: str, full_name: str) -> int:
     return create_user(email, full_name, UserRole.admin, "admin_created")
 
@@ -143,6 +176,10 @@ def main(argv: list[str] | None = None) -> int:
     user.add_argument("--role", required=True, choices=["admin", "manager"])
     user.add_argument("--email", required=True)
     user.add_argument("--full-name", required=True)
+    deactivate = sub.add_parser(
+        "deactivate-user", help="deactivate an account and end its device sessions"
+    )
+    deactivate.add_argument("--email", required=True)
     sub.add_parser("db-roles", help="create the migrator and app database roles (RDS master)")
     sub.add_parser("migrate", help="alembic upgrade head, then grants (migrator role)")
     args = parser.parse_args(argv)
@@ -150,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
         return create_admin(args.email, args.full_name)
     if args.command == "create-user":
         return create_user(args.email, args.full_name, UserRole(args.role), "user_created")
+    if args.command == "deactivate-user":
+        return deactivate_user(args.email)
     if args.command == "db-roles":
         return run_db_roles()
     if args.command == "migrate":

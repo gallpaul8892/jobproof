@@ -5,6 +5,7 @@ export type { FieldError } from "./api/errors";
 export type { TokenStore } from "./api/tokenStore";
 export { queryKeys } from "./api/queryKeys";
 export { useHealth } from "./hooks/useHealth";
+export { useAppStatus } from "./hooks/useAppStatus";
 export {
   useDashboard,
   usePainters,
@@ -62,6 +63,7 @@ export type {
   User,
   AdminSettingsUpdate,
   AuditAction,
+  AppStatus,
   AuditChange,
   AuditEvent,
   AuditHistory,
@@ -69,3 +71,4 @@ export type {
   ReportEditableValues,
 } from "./generated";
 export * from "./format/address";
+export * from "./operative/semver";

@@ -7,6 +7,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY web/package.json web/
+COPY mobile/package.json mobile/
 COPY e2e/package.json e2e/
 RUN npm ci
 COPY shared shared

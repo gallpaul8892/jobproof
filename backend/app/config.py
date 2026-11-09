@@ -21,6 +21,7 @@ _DEV_SECRETS = frozenset({_DEV_JWT_SECRET.lower(), _DEV_PHOTO_URL_SECRET.lower()
 _APP_ENVS = ("local", "test", "staging", "production")
 # The RDS CA bundle (a public certificate), committed so no network is needed (INFRA spec 5.2).
 DEFAULT_DB_SSLROOTCERT = Path(__file__).resolve().parents[1] / "certs" / "rds-global-bundle.pem"
+_SEMVER = re.compile(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")  # twin of the contract's SemVer
 _PEM_CERT = re.compile(r"-----BEGIN CERTIFICATE-----([A-Za-z0-9+/=\s]+?)-----END CERTIFICATE-----")
 
 
@@ -74,6 +75,13 @@ class Settings(BaseSettings):
     db_sslrootcert: str | None = None
     jwt_secret: str = Field(default=_DEV_JWT_SECRET, min_length=32)
     jwt_ttl_seconds: int = Field(default=1800, ge=60)
+    # Operative app device sessions (T-003b, design section 4).
+    device_access_ttl_seconds: int = Field(default=900, ge=60)
+    device_session_idle_days: int = Field(default=30, ge=1)
+    device_session_max_days: int = Field(default=90, ge=1)
+    refresh_reuse_grace_seconds: int = Field(default=60, ge=0)
+    # Lowest mobile app version the server supports (T-003a reports it, T-003n enforces it).
+    mobile_min_version_android: str = "0.0.0"
     photo_url_secret: str = Field(default=_DEV_PHOTO_URL_SECRET, min_length=32)
     photo_url_ttl_seconds: int = Field(default=900, ge=30)
     public_api_base_url: str = "http://localhost:8000"
@@ -106,6 +114,19 @@ class Settings(BaseSettings):
         if "*" in value:
             raise ValueError("CORS_ALLOWED_ORIGINS must not contain a wildcard")
         return value
+
+    @field_validator("mobile_min_version_android")
+    @classmethod
+    def _semver(cls, value: str) -> str:
+        if not _SEMVER.fullmatch(value):
+            raise ValueError("MOBILE_MIN_VERSION_ANDROID must be a version such as 1.2.3")
+        return value
+
+    @model_validator(mode="after")
+    def _session_lifetimes(self) -> Self:
+        if self.device_session_idle_days > self.device_session_max_days:
+            raise ValueError("DEVICE_SESSION_IDLE_DAYS must not exceed DEVICE_SESSION_MAX_DAYS")
+        return self
 
     @field_validator("log_level")
     @classmethod

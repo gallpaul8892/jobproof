@@ -15,3 +15,17 @@ test-results/
 *.log
 .dev/
 e2e/.auth/
+
+# mobile (Expo)
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/dist/
+mobile/expo-env.d.ts
+mobile/.env.local
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+.env.local

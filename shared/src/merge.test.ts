@@ -11,8 +11,8 @@ const report = (over: Partial<ReportDetail> = {}): ReportDetail =>
     painter_notes: "Two coats.",
     manager_notes: null,
     checklist: [
-      { id: "c1", label: "Skirting boards gloss", done: false, note: null },
-      { id: "c2", label: "Ceilings", done: true, note: "Done twice" },
+      { id: "c1", label: "Skirting boards gloss", done: false, note: null, cannot_do: false, removed: false },
+      { id: "c2", label: "Ceilings", done: true, note: "Done twice", cannot_do: false, removed: false },
     ],
     ...over,
   }) as unknown as ReportDetail;
@@ -45,7 +45,7 @@ describe("mergeOnTop rules (report)", () => {
     const base0 = report();
     const theirs = report({
       version: 4,
-      checklist: [{ id: "c1", label: "Skirting boards gloss", done: true, note: null }, base0.checklist[1]!],
+      checklist: [{ id: "c1", label: "Skirting boards gloss", done: true, note: null, cannot_do: false, removed: false }, base0.checklist[1]!],
     });
     const mine = withItem(form(base0), "c1", { done: true });
     const r = mergeOnTop(adapter, form(base0), mine, form(theirs));
@@ -57,7 +57,7 @@ describe("mergeOnTop rules (report)", () => {
   it("rule 4: both changed differently is a clash that holds the latest value until resolved", () => {
     const theirs = report({
       version: 4,
-      checklist: [{ id: "c1", label: "Skirting boards gloss", done: false, note: "Second coat 17 Oct" }, report().checklist[1]!],
+      checklist: [{ id: "c1", label: "Skirting boards gloss", done: false, note: "Second coat 17 Oct", cannot_do: false, removed: false }, report().checklist[1]!],
     });
     const mine = withItem(form(base), "c1", { note: "Done 16 Oct" });
     const r = mergeOnTop(adapter, form(base), mine, form(theirs));
@@ -79,7 +79,7 @@ describe("mergeOnTop rules (report)", () => {
       version: 4,
       painter_notes: "T",
       manager_notes: "T2",
-      checklist: [{ id: "c1", label: "Skirting boards gloss", done: true, note: "y" }, report().checklist[1]!],
+      checklist: [{ id: "c1", label: "Skirting boards gloss", done: true, note: "y", cannot_do: false, removed: false }, report().checklist[1]!],
     });
     const mine = withItem(form(base, { painter_notes: "M", manager_notes: "M2" }), "c1", { done: false, note: "x" });
     const r = mergeOnTop(adapter, form(base), mine, form(theirs));

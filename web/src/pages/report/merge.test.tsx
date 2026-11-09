@@ -129,8 +129,8 @@ describe("Apply my changes on top (report form)", () => {
     const { patches } = await conflictThenApply(
       latestReport({
         checklist: [
-          { id: "c1", label: "Skirting boards gloss", done: true, note: null },
-          { id: "c2", label: "Ceilings", done: true, note: "Done twice" },
+          { id: "c1", label: "Skirting boards gloss", done: true, note: null, cannot_do: false, removed: false },
+          { id: "c2", label: "Ceilings", done: true, note: "Done twice", cannot_do: false, removed: false },
         ],
       }),
     );
@@ -222,8 +222,8 @@ describe("Apply my changes on top (report form)", () => {
           : {
               body: latestReport({
                 checklist: [
-                  { id: "c1", label: "Skirting boards gloss", done: false, note: "Second coat 17 Oct" },
-                  { id: "c2", label: "Ceilings", done: true, note: "Done twice" },
+                  { id: "c1", label: "Skirting boards gloss", done: false, note: "Second coat 17 Oct", cannot_do: false, removed: false },
+                  { id: "c2", label: "Ceilings", done: true, note: "Done twice", cannot_do: false, removed: false },
                 ],
               }),
             },

@@ -19,7 +19,8 @@ def load(engine: Engine, dataset: Dataset) -> dict[str, int]:
         # audit_events is append-only; the cascade from users/job_reports truncates it, which the
         # guard trigger allows only when this transaction-local setting is on (T-002f).
         connection.execute(text("SET LOCAL jobproof.allow_audit_truncate = 'on'"))
-        names = ", ".join(name for name, _ in reversed(tables))
+        # auth_sessions references users, so name it explicitly (it is not part of the dataset).
+        names = ", ".join(["auth_sessions", *(name for name, _ in reversed(tables))])
         connection.execute(text(f"TRUNCATE TABLE {names} RESTART IDENTITY CASCADE"))  # noqa: S608
         for name, rows in tables:
             counts[name] = len(rows)

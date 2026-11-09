@@ -4,12 +4,14 @@ from app.models.audit import AuditEvent
 from app.models.base import NAMING_CONVENTION, Base
 from app.models.billing import Invoice, Payment
 from app.models.people import Customer, User
+from app.models.sessions import AuthSession
 from app.models.settings import CompanySettings
 from app.models.work import Job, JobReport, Quote, ReportChecklistItem, ReportPhoto
 
 __all__ = [
     "NAMING_CONVENTION",
     "AuditEvent",
+    "AuthSession",
     "Base",
     "CompanySettings",
     "Customer",
