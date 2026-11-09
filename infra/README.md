@@ -1,8 +1,9 @@
 # infra
 
-Only the bootstrap template exists so far (INFRA-1). The plan (awaiting Paul's approval) is
-[specs/INFRA-aws-pipeline.md](../specs/INFRA-aws-pipeline.md); the summary and decisions are in
-[ARCHITECTURE.md](../ARCHITECTURE.md) section 10.
+The bootstrap template (INFRA-1) and the Terraform modules and environments (INFRA-4, see
+[terraform/README.md](terraform/README.md); not yet planned or applied) exist. The plan (awaiting
+Paul's approval) is [specs/INFRA-aws-pipeline.md](../specs/INFRA-aws-pipeline.md); the summary and
+decisions are in [ARCHITECTURE.md](../ARCHITECTURE.md) section 10.
 
 Decision: **Terraform** (1.17.x, AWS provider `~> 6.72`) for everything except the
 per-account bootstrap, which is one CloudFormation file uploaded in the console
