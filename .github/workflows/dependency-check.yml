@@ -1,0 +1,82 @@
+# Weekly vulnerability scan (backlog B7, B8). Opens or updates one issue when anything is found.
+# Terraform provider checks are added with INFRA-4. Spec: specs/INFRA-aws-pipeline.md section 4.1.
+name: dependency-check
+
+on:
+  schedule:
+    - cron: "17 5 * * 1" # Mondays, 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-check
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write # only to open or update the findings issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.32"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: pip-audit (locked backend dependencies, including dev)
+        id: pip
+        working-directory: backend
+        run: |
+          set +e
+          uv export --frozen --no-emit-project --no-header -o "$RUNNER_TEMP/requirements.txt" >/dev/null
+          uvx pip-audit@2.10.1 --requirement "$RUNNER_TEMP/requirements.txt" --no-deps --disable-pip \
+            > "$RUNNER_TEMP/pip-audit.txt" 2>&1
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/pip-audit.txt"
+      - name: npm audit (all workspaces, including dev)
+        id: npm
+        run: |
+          set +e
+          npm audit > "$RUNNER_TEMP/npm-audit.txt" 2>&1
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/npm-audit.txt"
+      - name: Open or update the findings issue
+        if: steps.pip.outputs.status != '0' || steps.npm.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PIP_STATUS: ${{ steps.pip.outputs.status }}
+          NPM_STATUS: ${{ steps.npm.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "The weekly dependency check found something. Run: $RUN_URL"
+            echo
+            echo "pip-audit exit status: $PIP_STATUS (0 = clean)"
+            echo '```'
+            head -c 20000 "$RUNNER_TEMP/pip-audit.txt"
+            echo '```'
+            echo
+            echo "npm audit exit status: $NPM_STATUS (0 = clean)"
+            echo '```'
+            head -c 20000 "$RUNNER_TEMP/npm-audit.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          gh label create dependencies --color 0366d6 --description "Dependency updates and audits" 2>/dev/null || true
+          existing="$(gh issue list --label dependencies --state open --search 'Weekly dependency check in:title' --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "Weekly dependency check: findings" --label dependencies --body-file "$RUNNER_TEMP/body.md"
+          fi
+      - name: Fail the run when there are findings (so the Actions tab shows it too)
+        if: steps.pip.outputs.status != '0' || steps.npm.outputs.status != '0'
+        run: exit 1
