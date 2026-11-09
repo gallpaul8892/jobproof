@@ -3,8 +3,9 @@
 # The password is never an input and never printed. The task reads it from the Secrets Manager
 # secret jobproof/<env>/admin-initial-password, which Paul creates by hand in the AWS console
 # first (runbook infra/README.md, section 1F). The task logs only the new user's id.
-# After a successful run the workflow tries to delete that secret; if the deploy role is not
-# allowed to, it says so and Paul deletes the secret in the console.
+# After a successful run the workflow deletes that secret (the deploy role may delete only
+# jobproof/<env>/admin-initial-password-*, decision Q3). If the delete fails it warns and Paul
+# deletes the secret in the console.
 name: create-user
 
 on:
@@ -87,7 +88,9 @@ jobs:
           COMMAND_JSON="$(jq -cn --arg role "$USER_ROLE" --arg email "$USER_EMAIL" --arg name "$USER_FULL_NAME" \
             '["python","-m","app.cli","create-user","--role",$role,"--email",$email,"--full-name",$name]')"
           export COMMAND_JSON
-          infra/scripts/run-task.sh create-user
+          # The revision that matches the release marker, so a rolled-back environment runs the
+          # old code, not the newest revision.
+          TASK_VERSION=release infra/scripts/run-task.sh create-user
       - name: Delete the one-time password secret
         env:
           SECRET_ID: jobproof/${{ inputs.environment }}/admin-initial-password

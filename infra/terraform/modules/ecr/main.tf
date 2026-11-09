@@ -48,6 +48,7 @@ resource "aws_ecr_repository_policy" "pull" {
       Action = [
         "ecr:BatchCheckLayerAvailability",
         "ecr:BatchGetImage",
+        "ecr:DescribeImages",
         "ecr:GetDownloadUrlForLayer",
       ]
       Condition = {

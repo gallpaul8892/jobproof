@@ -75,7 +75,7 @@ jobs:
           if [ "$MODE" = "reset" ]; then flag="--reset"; else flag="--if-empty"; fi
           COMMAND_JSON="$(jq -cn --arg flag "$flag" '["python","-m","app.seed.demo",$flag]')"
           export COMMAND_JSON
-          infra/scripts/run-task.sh seed-demo
+          TASK_VERSION=release infra/scripts/run-task.sh seed-demo
       - name: Summary
         run: |
           {

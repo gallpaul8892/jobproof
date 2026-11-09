@@ -11,6 +11,26 @@ variable "github_repo" {
   type = string
 }
 
+variable "github_owner_id" {
+  description = "Numeric GitHub owner (user or organisation) ID, as in the bootstrap stack's GitHubOwnerId."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must be the numeric owner ID (digits only). Look it up with: gh api users/<owner> --jq .id"
+  }
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub repository ID, as in the bootstrap stack's GitHubRepoId."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repo_id))
+    error_message = "github_repo_id must be the numeric repository ID (digits only). Look it up with: gh api repos/<owner>/<repo> --jq .id"
+  }
+}
+
 variable "subject_mode" {
   description = "workflow (decision P2 = yes): trust names the exact workflow file. branch (fallback): any workflow on main."
   type        = string

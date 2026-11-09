@@ -15,10 +15,12 @@ locals {
   region     = data.aws_region.current.region
   repo       = "${var.github_owner}/${var.github_repo}"
 
-  # Same subject format as the bootstrap template (infra/bootstrap/bootstrap.cfn.yaml).
+  # Same subject format as the bootstrap template (infra/bootstrap/bootstrap.cfn.yaml): the
+  # repository subject template adds repository_owner_id and repository_id to every token.
+  # check-env-parity.sh compares this format with the template.
   subjects = var.subject_mode == "workflow" ? [
     for wf in var.allowed_workflows :
-    "repo:${local.repo}:ref:refs/heads/main:job_workflow_ref:${local.repo}/.github/workflows/${wf}@refs/heads/main"
+    "repo:${local.repo}:ref:refs/heads/main:job_workflow_ref:${local.repo}/.github/workflows/${wf}@refs/heads/main:repository_owner_id:${var.github_owner_id}:repository_id:${var.github_repo_id}"
   ] : ["repo:${local.repo}:ref:refs/heads/main"]
 
   service_arn   = "arn:aws:ecs:${local.region}:${local.account_id}:service/${element(split("/", var.cluster_arn), 1)}/${var.service_name}"
@@ -52,7 +54,7 @@ data "aws_iam_policy_document" "trust" {
 
 resource "aws_iam_role" "deploy" {
   name                 = "jobproof-github-deploy"
-  description          = "GitHub Actions deploy steps: image, one-off tasks, service, web build. No Terraform, no secrets."
+  description          = "GitHub Actions deploy steps: image, one-off tasks, service, web build. No Terraform. Can run one-off tasks, so see spec 5.1 (accepted risk)."
   assume_role_policy   = data.aws_iam_policy_document.trust.json
   max_session_duration = 3600
 }
@@ -179,6 +181,13 @@ data "aws_iam_policy_document" "deploy" {
     sid       = "ReleaseParameter"
     actions   = ["ssm:GetParameter", "ssm:PutParameter"]
     resources = [local.release_param]
+  }
+
+  # create-user deletes the hand-made first-Admin password secret after success (decision Q3).
+  statement {
+    sid       = "DeleteAdminInitialPassword"
+    actions   = ["secretsmanager:DeleteSecret"]
+    resources = ["arn:aws:secretsmanager:${local.region}:${local.account_id}:secret:jobproof/${var.environment}/admin-initial-password-*"]
   }
 
   statement {

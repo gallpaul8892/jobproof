@@ -108,16 +108,16 @@ variable "alb_deletion_protection" {
 
 variable "image_tag" {
   description = <<-EOT
-    Backend image tag (the git commit SHA). Empty: use the SSM parameter /jobproof/<env>/release,
-    which the pipeline writes after each successful deploy, so a plain plan shows no image change.
-    The workflows pass -var image_tag=<sha>.
+    Backend image tag: the 40-hex git commit SHA. Required, no default: Terraform never looks the
+    release up (the plan role may not read SSM values). Every workflow passes -var image_tag=<sha>;
+    a local plan passes the SHA from `aws ssm get-parameter --name /jobproof/<env>/release`.
+    "unreleased" is allowed only before the first image exists (nothing starts from it).
   EOT
   type        = string
-  default     = ""
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9_.-]{0,128}$", var.image_tag))
-    error_message = "image_tag may contain letters, digits, dot, dash and underscore only."
+    condition     = can(regex("^([0-9a-f]{40}|unreleased)$", var.image_tag))
+    error_message = "image_tag must be a 40-character lowercase hex commit SHA, or the word unreleased (first plan only)."
   }
 }
 
@@ -237,6 +237,26 @@ variable "github_owner" {
 variable "github_repo" {
   type    = string
   default = "jobproof"
+}
+
+variable "github_owner_id" {
+  description = "Numeric GitHub owner ID (same value as the bootstrap stack's GitHubOwnerId). Set in terraform.tfvars."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must be the numeric owner ID (digits only). Replace the placeholder in terraform.tfvars: gh api users/<owner> --jq .id"
+  }
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub repository ID (same value as the bootstrap stack's GitHubRepoId). Set in terraform.tfvars."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repo_id))
+    error_message = "github_repo_id must be the numeric repository ID (digits only). Replace the placeholder in terraform.tfvars: gh api repos/<owner>/<repo> --jq .id"
+  }
 }
 
 variable "oidc_subject_mode" {

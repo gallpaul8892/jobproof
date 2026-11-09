@@ -33,24 +33,13 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# The pipeline records the deployed version here after each successful deploy. Terraform only
-# READS it (it never manages it, or it would fight the pipeline). by_path tolerates a parameter
-# that does not exist yet (first run).
-data "aws_ssm_parameters_by_path" "release" {
-  path      = "/jobproof/${var.environment}"
-  recursive = false
-}
-
 locals {
   name       = "jobproof-${var.environment}"
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.region
 
   release_param_name = "/jobproof/${var.environment}/release"
-  release_index      = try(index(data.aws_ssm_parameters_by_path.release.names, local.release_param_name), -1)
-  released_tag       = local.release_index >= 0 ? nonsensitive(data.aws_ssm_parameters_by_path.release.values[local.release_index]) : ""
-  # "unreleased" only lets a plan run before the first image exists. Nothing is started from it.
-  image_tag = var.image_tag != "" ? var.image_tag : (local.released_tag != "" ? local.released_tag : "unreleased")
+  image_tag          = var.image_tag
 
   is_dev  = var.environment == "dev"
   is_prod = var.environment == "prod"
@@ -200,6 +189,8 @@ module "ci_roles" {
   environment                     = var.environment
   github_owner                    = var.github_owner
   github_repo                     = var.github_repo
+  github_owner_id                 = var.github_owner_id
+  github_repo_id                  = var.github_repo_id
   subject_mode                    = var.oidc_subject_mode
   allowed_workflows               = var.deploy_workflows
   ecr_repository_arn              = module.ecr.repository_arn

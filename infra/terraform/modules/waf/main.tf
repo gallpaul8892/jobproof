@@ -30,8 +30,10 @@ resource "aws_wafv2_web_acl" "this" {
           and_statement {
             statement {
               byte_match_statement {
-                search_string         = "/api/v1/auth/login"
-                positional_constraint = "EXACTLY"
+                # Whole auth prefix, decoded then lowercased, so /api/v1/auth/log%69n and
+                # /API/V1/AUTH/Login cannot slip past the login rate limit (decision P6).
+                search_string         = "/api/v1/auth/"
+                positional_constraint = "STARTS_WITH"
 
                 field_to_match {
                   uri_path {}
@@ -39,7 +41,12 @@ resource "aws_wafv2_web_acl" "this" {
 
                 text_transformation {
                   priority = 0
-                  type     = "NONE"
+                  type     = "URL_DECODE"
+                }
+
+                text_transformation {
+                  priority = 1
+                  type     = "LOWERCASE"
                 }
               }
             }

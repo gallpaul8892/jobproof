@@ -65,7 +65,7 @@ jobs:
           version="$INPUT_VERSION"
           git cat-file -e "$version^{commit}" || { echo "::error::$version is not a commit of this repository."; exit 1; }
           git merge-base --is-ancestor "$version" HEAD || { echo "::error::$version is not on main."; exit 1; }
-          run_id="$(gh run list --workflow pipeline.yml --commit "$version" --status success --event push \
+          run_id="$(gh run list --workflow pipeline.yml --commit "$version" --branch main --status success --event push \
             --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
           if [ -z "$run_id" ]; then
             echo "::error::No successful pipeline run found for $version. Only a version that passed ci and deployed to dev can go to prod."; exit 1
@@ -116,8 +116,12 @@ jobs:
       run:
         working-directory: infra/terraform/envs/prod
     steps:
+      # Apply the Terraform of the promoted commit, not of the newest main, so the task-definition
+      # settings (env, secrets) match the image being promoted. The ref is the 40-hex version that
+      # the verify job validated (an ancestor of main with a successful pipeline run).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.verify.outputs.version }}
           persist-credentials: false
       - name: Check the account ids and the version
         run: |

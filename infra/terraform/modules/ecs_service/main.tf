@@ -84,7 +84,7 @@ locals {
         env       = merge(local.db_env, { DB_USER = local.app_user })
         secrets = merge(local.app_secrets, {
           DB_PASSWORD            = var.secret_arns["db-app-password"]
-          ADMIN_INITIAL_PASSWORD = var.admin_initial_password_name # by name (same region): the secret has no ARN suffix yet when this is planned
+          ADMIN_INITIAL_PASSWORD = "arn:aws:secretsmanager:${local.region}:${local.account_id}:secret:${var.admin_initial_password_name}" # partial ARN (no random suffix): ECS accepts it; the secret is hand-made, so its full ARN is not known
         })
       }
     },

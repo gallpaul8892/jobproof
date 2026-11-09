@@ -105,9 +105,12 @@ terraform plan  -var 'allowed_account_ids=["<dev account id>"]' -var image_tag=<
    move the service (`ignore_changes = [task_definition, desired_count]`). The pipeline then runs
    `db-roles`, `migrate`, (dev) `seed-demo`, and finally `ecs update-service`. Old revisions are kept
    (`skip_destroy`) so a rollback can point at them.
-4. Without `image_tag`, the tag is read from SSM `/jobproof/<env>/release`, which the pipeline
-   writes (Terraform never manages that parameter). If neither exists the tag is `unreleased`,
-   which only lets a plan run.
+4. `image_tag` is required (40-hex commit SHA, or `unreleased` before the first image exists).
+   Terraform never reads `/jobproof/<env>/release` (the plan role may not read parameter values);
+   for a local plan take the SHA from `aws ssm get-parameter --name /jobproof/<env>/release`.
+   Also replace the `github_owner_id` and `github_repo_id` placeholders in both `terraform.tfvars`
+   (`gh api users/<owner> --jq .id`, `gh api repos/<owner>/<repo> --jq .id`); validation rejects
+   them until you do. They must equal the bootstrap stack's GitHubOwnerId and GitHubRepoId.
 5. Commit the `.terraform.lock.hcl` that the first `terraform init` creates in each env directory,
    and use `terraform init -lockfile=readonly` in CI. It could not be generated offline.
 
@@ -172,8 +175,7 @@ npm and apt carry no Terraform, OpenTofu or tflint binary:
 - Resource arguments were written from knowledge of provider 6.x, not checked against its schema.
   Most likely to need a fix on first `validate`: `aws_cloudfront_vpc_origin` and the distribution's
   `vpc_origin_config`, `aws_ce_anomaly_subscription.threshold_expression`, the WAF rate-based
-  `scope_down_statement`, and `data.aws_ssm_parameters_by_path` returning empty lists (not an
-  error) when `/jobproof/<env>/release` does not exist yet.
+  `scope_down_statement`.
 - `terraform plan` and `apply` never ran (no AWS). Whether a CloudFront VPC origin accepts an ALB
   security group that allows only the origin-facing prefix list (the spec's design) is unproven.
   If the origin cannot reach the ALB, allow the `CloudFront-VPCOrigins-Service-SG` group instead.

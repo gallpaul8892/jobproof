@@ -44,6 +44,15 @@ force_destroy_buckets = false
 # the image from dev's ECR by digest (deploy-prod.yml).
 promotion_peer_account_id = ""
 
+# Numeric GitHub IDs for the OIDC trust (same values as the bootstrap stack parameters
+# GitHubOwnerId and GitHubRepoId). Placeholders on purpose: variable validation rejects them
+# until you replace them with the digits from
+#   gh api users/gallpaul8892 --jq .id
+#   gh api repos/gallpaul8892/jobproof --jq .id
+# Not secret.
+github_owner_id = "REPLACE-WITH-NUMERIC-OWNER-ID"
+github_repo_id  = "REPLACE-WITH-NUMERIC-REPO-ID"
+
 oidc_subject_mode = "workflow"
 deploy_workflows = [
   "deploy-prod.yml",

@@ -8,6 +8,12 @@
 #   CLUSTER, OPS_NETWORK, OPS_TASK_FAMILIES, LOG_GROUPS   required
 #   COMMAND_JSON      optional JSON array: replaces the task's default command
 #   TIMEOUT_SECONDS   default 900; the task is stopped after that
+#   TASK_VERSION      optional: "release" or a 40-hex commit SHA. Runs the task-definition revision
+#                     whose image tag is that version ("release" reads the SSM parameter in
+#                     RELEASE_PARAMETER, the version the environment is running). Use it for the
+#                     tasks that run outside a deploy (create-user, seed-demo from dev-demo-data),
+#                     so that after a rollback they do not run newer code against the database.
+#                     Unset (deploys): the newest revision, which is the one being deployed.
 #   AWS_BIN           default "aws" (tests substitute a stub)
 #
 # The task definition is resolved to an explicit revision ARN, which is what the deploy role's
@@ -29,8 +35,21 @@ family="$(jq -er --arg k "$KEY" '.[$k]' <<<"$OPS_TASK_FAMILIES")" || die "this e
 if [ "$KEY" = "migrate" ]; then group_key="migrate"; else group_key="ops"; fi
 log_group="$(jq -er --arg k "$group_key" '.[$k]' <<<"$LOG_GROUPS")" || die "no log group '$group_key'"
 
-td_arn="$("$AWS_BIN" ecs describe-task-definition --task-definition "$family" \
-  --query 'taskDefinition.taskDefinitionArn' --output text)"
+TASK_VERSION="${TASK_VERSION:-}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -n "$TASK_VERSION" ]; then
+  if [ "$TASK_VERSION" = "release" ]; then
+    : "${RELEASE_PARAMETER:?RELEASE_PARAMETER is required when TASK_VERSION=release}"
+    TASK_VERSION="$("$AWS_BIN" ssm get-parameter --name "$RELEASE_PARAMETER" \
+      --query 'Parameter.Value' --output text)" || die "could not read the release marker $RELEASE_PARAMETER"
+  fi
+  [[ "$TASK_VERSION" =~ ^[0-9a-f]{40}$ ]] || die "the release marker is not a 40 character commit SHA (has the environment been deployed yet?)"
+  td_arn="$(API_FAMILY="$family" VERSION="$TASK_VERSION" AWS_BIN="$AWS_BIN" "$HERE/find-task-definition.sh")" \
+    || die "no $family revision for the running version $TASK_VERSION"
+else
+  td_arn="$("$AWS_BIN" ecs describe-task-definition --task-definition "$family" \
+    --query 'taskDefinition.taskDefinitionArn' --output text)"
+fi
 case "$td_arn" in arn:aws:ecs:*) ;; *) die "could not resolve the task definition for $family" ;; esac
 
 network="$(jq -c '{awsvpcConfiguration: {subnets: .subnets, securityGroups: .security_groups,
