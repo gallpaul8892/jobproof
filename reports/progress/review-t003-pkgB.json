@@ -1,0 +1,36 @@
+{
+  "id": "review-t003-pkgB",
+  "title": "Code review report: T-003 Package B (T-003c my jobs today; T-003d job detail and checklist)",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-09",
+  "summary": "Round 1 for Package B (dac216c backend, cf4b357 mobile and shared): CHANGES REQUESTED, with 0 blockers, 2 majors and 7 minors. The backend is sound: the operative router is painter-only with the role from the database, ownership is one filter and another operative's job is 404, the operative schemas leak no manager_notes, money or email, every manager query path filters state = 'submitted', migration 0010 follows the spec and the refresh-order fix proves possession before revealing or revoking anything. Mobile persists only the operative's own successful queries per user, wipes on sign-out and builds tel: and geo: URLs safely. MAJOR 1 (claimed by the reviewer, who could not run the database suite; the orchestrator's own full run of the same tree passed 1974, so this is to be re-verified on a clean HEAD): test_managers_and_admins_are_refused_on_every_operative_operation may iterate over operations not yet built. MAJOR 2: the offline list (up to 7 days old) is shown under 'Today' with only a time, so the next morning an operative could see yesterday's jobs as today's.",
+  "blocks": [
+    {
+      "heading": "Round 1 (0 BLOCKER, 2 MAJOR, 7 MINOR)",
+      "type": "table",
+      "columns": ["Severity", "Finding", "Resolution"],
+      "rows": [
+        ["MAJOR", "backend/tests/test_operative_scope.py:157-174: loops over every /api/v1/operative operation in the contract including operations not built until T-003f/g/h (404 at HEAD per the reviewer's app probe) and asserts 403 or 422; 422 is also too loose because require_roles answers 403 first. Owner: tests", "Open. Skip operations whose x-ticket is in PENDING_TICKETS, assert exactly 403 with code forbidden, drop 422, and re-run the full suite on a clean checkout of HEAD (the orchestrator will verify whether the test really failed)"],
+        ["MAJOR", "mobile/src/features/jobs/JobsScreen.tsx:23,109,121: the saved list can be up to 7 days old but the screen ignores data.today, so next morning offline it shows yesterday's jobs under 'Today'. The scenario 9 test asserts exactly that. Owner: mobile", "Open. Compare data.today with the current London date; when they differ show 'Offline. Showing jobs from Mon 9 Nov, 07:42.' and head the section 'Jobs for Mon 9 Nov'. Add an RNTL case with the clock a day on"],
+        ["MINOR", "mobile/src/api/queryClient.ts:4: gcTime is the 5-minute default while the persister maxAge is 7 days, so detail entries and an unmounted list are garbage-collected and dropped from the next snapshot. Owner: mobile", "Open. setQueryDefaults(['operative'], { gcTime: PERSIST_MAX_AGE_MS }) and a fake-timer test"],
+        ["MINOR", "backend/app/services/operative_jobs.py:178-187: earlier_unfinished has no limit. Owner: architect", "Decision: 30 days back and at most 50 rows, recorded in the listOperativeJobs description; backend implements with a test"],
+        ["MINOR", "migration 0010 downgrade silently drops job_checklist_items holding data the old schema cannot keep. Owner: backend", "Open. Also refuse when a job item has no matching report item or removed_at is set, with a refusal test"],
+        ["MINOR", "migration 0010 runs in one transaction with ACCESS EXCLUSIVE locks and no lock_timeout. Owner: architect", "Open. SET LOCAL lock_timeout = '5s' at the start of upgrade, as a convention for hot tables; record the expected run time"],
+        ["MINOR", "sessions.py reuse rule changed: only the immediately previous token after the grace window revokes. Design section 4 and ARCHITECTURE line 307 still describe the old rule. Owner: architect", "Decision: new rule accepted; update design section 4 and ARCHITECTURE"],
+        ["MINOR", "mobile JobsScreen.test.tsx:311 'a corrupt stored list is ignored and removed' never checks removal. Owner: tests", "Open. Launch offline with the corrupt entry, assert no list, the load-failed notice and no crash, and that the entry is gone or replaced"]
+      ]
+    },
+    {
+      "heading": "Questions for the architect and decisions",
+      "type": "list",
+      "items": [
+        "Reassignment with an existing draft: decision: a draft belongs to the operative who started it; a different operative gets 409 draft_owned_by_other on read or write of that draft until the office resolves it; recorded as backlog B15 (no reassignment UI exists yet).",
+        "Refresh reuse rule: accepted (only the previous token after the grace window revokes).",
+        "earlier_unfinished bound: 30 days back, at most 50 rows.",
+        "Involuntary session end (session_ended or account_inactive): decision: also wipe the persisted job cache (customer phone numbers, addresses, notes); unsent photos and drafts stay in app-private storage."
+      ]
+    }
+  ]
+}
