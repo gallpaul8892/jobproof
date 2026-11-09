@@ -3,7 +3,7 @@ variable "name" {
 }
 
 variable "login_rate_limit" {
-  description = "Requests per evaluation window per IP to POST /api/v1/auth/login before blocking (spec: for example 100 per 5 minutes)."
+  description = "Requests per evaluation window per IP to POST /api/v1/auth/ (login, device sign-in sessions and refresh) before blocking (spec: for example 100 per 5 minutes)."
   type        = number
   default     = 100
 
