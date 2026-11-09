@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@jobproof/shared";
+import { clearPersistedQueries } from "../../api/queryPersister";
 import { Button } from "../../ui/Button";
 import { ConfirmDialog } from "../../ui/ConfirmDialog";
 import { useSession } from "./SessionProvider";
@@ -36,12 +37,15 @@ export function SignOutControl() {
     if (busy || !manager) return;
     setBusy(true);
     setStep({ kind: "idle" });
+    const userId = state.user?.id;
     try {
       await manager.signOut();
       // Cached server answers belong to the user who has left. Branding and status are public.
       queryClient.removeQueries({
         predicate: (q) => q.queryKey[0] !== queryKeys.branding[0] && q.queryKey[0] !== queryKeys.appStatus[0],
       });
+      // After the in-memory clear, so a pending save cannot bring the stored copy back.
+      if (userId) clearPersistedQueries(userId);
     } finally {
       setBusy(false);
     }

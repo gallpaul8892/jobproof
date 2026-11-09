@@ -14,5 +14,7 @@ export const queryKeys = {
   reportHistory: (id: string) => ["report-history", id] as const,
   customer: (id: string) => ["customer", id] as const,
   customerHistory: (id: string) => ["customer-history", id] as const,
+  operativeJobs: ["operative", "jobs"] as const,
+  operativeJob: (id: string) => ["operative", "job", id] as const,
   invoices: (filters: InvoiceFilters) => ["invoices", filters] as const,
 };

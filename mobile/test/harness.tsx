@@ -15,6 +15,7 @@ import type { fakeServer } from "./fakeServer";
 const SignInRoute = require("../app/sign-in").default;
 const AppGroupLayout = require("../app/(app)/_layout").default;
 const MyJobsRoute = require("../app/(app)/index").default;
+const JobRoute = require("../app/(app)/jobs/[jobId]/index").default;
 const SettingsRoute = require("../app/(app)/settings").default;
 
 export interface Launched {
@@ -55,6 +56,7 @@ export async function launch(server: ReturnType<typeof fakeServer>, unsent: Unse
       "(app)/_layout": AppGroupLayout,
       "(app)/index": MyJobsRoute,
       "(app)/settings": SettingsRoute,
+      "(app)/jobs/[jobId]/index": JobRoute,
     },
     { initialUrl: "/" },
   );

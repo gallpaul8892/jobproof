@@ -65,6 +65,14 @@ export type {
   User,
   AdminSettingsUpdate,
   AuditAction,
+  OperativeJob,
+  OperativeJobList,
+  OperativeJobStatus,
+  OperativeChecklistItem,
+  OperativeContact,
+  OperativeReport,
+  ChecklistStatus,
+  ReportState,
   AppStatus,
   DeviceSession,
   DeviceSessionRequest,
@@ -77,3 +85,5 @@ export type {
 } from "./generated";
 export * from "./format/address";
 export * from "./operative/semver";
+export * from "./operative/status";
+export { useOperativeJobs, useOperativeJob } from "./hooks/useOperative";

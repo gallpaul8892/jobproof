@@ -1,4 +1,4 @@
-import type { User } from "@jobproof/shared";
+import type { OperativeJob, OperativeJobList, User } from "@jobproof/shared";
 import { DAN, PRIYA, json, problemResponse } from "./helpers";
 
 export const MANAGER: User = { id: "33333333-3333-4333-8333-333333333333", email: "manager@jobproof.test", full_name: "Mia Manager", role: "manager" } as User;
@@ -30,11 +30,27 @@ interface ServerSession {
 export function fakeServer() {
   const sessions = new Map<string, ServerSession>();
   const deactivated = new Set<string>();
+  const operative = {
+    list: { as_of: "2026-11-09T07:42:00Z", today: "2026-11-09", jobs_today: [], earlier_unfinished: [] } as OperativeJobList,
+    /** Every job Dan may open, by id. Anything else is a 404, like another operative's job. */
+    jobs: new Map<string, OperativeJob>(),
+    /** When set, the list and detail answer with this status instead. */
+    failWith: undefined as number | undefined,
+    /** Resolves when the list is allowed to answer (to hold a request in flight). */
+    hold: undefined as Promise<void> | undefined,
+  };
   const requests: { method: string; path: string; body?: unknown }[] = [];
   let counter = 0;
   const server = {
     sessions,
     requests,
+    operative,
+    /** Sets today's list and makes every job in it openable. */
+    setJobs: (list: Partial<OperativeJobList>) => {
+      operative.list = { ...operative.list, ...list };
+      operative.jobs.clear();
+      for (const j of [...operative.list.jobs_today, ...operative.list.earlier_unfinished]) operative.jobs.set(j.id, j);
+    },
     offline: false,
     /** A session that already exists on the server, as left behind by an earlier run of the app. */
     seedSession: (user: User, device: string): string => {
@@ -89,6 +105,13 @@ export function fakeServer() {
         return new Response(null, { status: 204 });
       }
       if (path === "/auth/me" || path === "/me") return json(owner.user);
+      if (path.startsWith("/operative/jobs") && request.method === "GET") {
+        if (operative.hold) await operative.hold;
+        if (operative.failWith) return problemResponse(operative.failWith, operative.failWith === 404 ? "not_found" : "server_error");
+        if (path === "/operative/jobs") return json(operative.list);
+        const job = operative.jobs.get(path.slice("/operative/jobs/".length));
+        return job ? json(job) : problemResponse(404, "not_found");
+      }
       return problemResponse(404, "not_found");
     },
   };

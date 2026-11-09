@@ -1,5 +1,5 @@
-import { MyJobsPlaceholder } from "../../src/features/session/MyJobsPlaceholder";
+import { JobsScreen } from "../../src/features/jobs/JobsScreen";
 
 export default function MyJobs() {
-  return <MyJobsPlaceholder />;
+  return <JobsScreen />;
 }
