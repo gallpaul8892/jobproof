@@ -3,11 +3,11 @@
 Owner: architect. This is the system's memory: read it first, edit sections in place, link to
 files instead of copying code. Entries marked **(planned)** are specified but not yet built;
 everything else describes the code as it stands.
-Last updated: 2026-11-08 (Phase 1 built; Phase 2a T-002a to T-002l, T-002n, T-002o and T-002p
+Last updated: 2026-11-09 (Phase 1 built; Phase 2a T-002a to T-002l, T-002n, T-002o and T-002p
 built and checked against the code; only the optional T-002m is unbuilt: decisions in section
-16, build plan in [specs/T-002-work-packages.md](specs/T-002-work-packages.md)). AWS environments and pipeline
-**(planned, awaiting Paul's approval)**: section 10 and
-[specs/INFRA-aws-pipeline.md](specs/INFRA-aws-pipeline.md).
+16, build plan in [specs/T-002-work-packages.md](specs/T-002-work-packages.md)). AWS: INFRA-1
+to INFRA-3 built (round 1 review REQUEST CHANGES, fixes in progress, section 10); INFRA-4 to
+INFRA-8 **(planned)**: [specs/INFRA-aws-pipeline.md](specs/INFRA-aws-pipeline.md).
 
 ## 1. System overview
 
@@ -52,8 +52,15 @@ Still web only and mock data. One deployment per company (D1).
 | `web/scripts/` | `check-dist.mjs` / `dist-origins.mjs`: build fails on any external URL not in the exact allowlist |
 | `shared/src/` | `@jobproof/shared`: `generated/` (hey-api output, committed), `api/` (client Adapter, `ApiError`, query keys, `TokenStore`), `auth/hooks.ts`, `hooks/` (health, manager), `filters.ts`, `format/` (money, dates, labels, address) |
 | `e2e/` | Playwright: auth, dashboard, reports, report detail, billing, states, layout, CSP, screenshots; helpers in `tests/support.ts` |
-| `api/openapi.yaml` | The contract. Hand-written OpenAPI 3.1, v0.4.0: 20 operations, all built; `PENDING_TICKETS` is empty (`x-ticket` markers remain as provenance). Backend conforms; clients generated from it |
-| `mobile/`, `infra/` | README only (Phase 2 and the AWS phase; `infra/` plan in section 10) |
+| `api/openapi.yaml` | The contract. Hand-written OpenAPI 3.1, v0.5.0: 21 operations (INFRA-3 added `GET /health/live`), all built; `PENDING_TICKETS` is empty (`x-ticket` markers remain as provenance). Backend conforms; clients generated from it |
+| `mobile/` | README only (Phase 2) |
+| `backend/app/dbroles.py`, `backend/app/cli.py` | `ensure_roles` (migrator and app roles), `apply_grants`, `migrate` (alembic head, then grants). CLI commands `create-admin`, `create-user --role admin\|manager`, `db-roles`, `migrate` (INFRA-3, section 10) |
+| `backend/app/seed/demo.py` | Dev-AWS-only demo seed `python -m app.seed.demo [--reset]` with its guards (section 9) |
+| `backend/certs/` | `rds-global-bundle.pem`: **placeholder** until the INFRA-6 entry gate (section 12); `README.md` |
+| `infra/bootstrap/` | `bootstrap.cfn.yaml` (CloudFormation, one stack per account: OIDC provider, state bucket, plan and terraform roles; parameter `SubjectMode`) and its README; runbook `infra/README.md` |
+| `infra/scripts/` | `upload-web.sh` (asset-first upload order, `config.js`), `smoke-test.sh`, `local-edge.mjs` (local CloudFront test double for the smoke test; never deployed) |
+| `infra/terraform/modules/web_static/csp.txt` | The CloudFront CSP text; parity test `web/nginx/csp-parity.test.ts`. The rest of `infra/terraform/` is INFRA-4 **(planned)** |
+| `.github/` | `workflows/ci.yml` (jobs `backend`, `web`, `e2e`, `workflows` = actionlint), `workflows/dependency-check.yml` (weekly Monday), `dependabot.yml` (actions, npm, uv, docker, docker-compose). Owner: infra engineer |
 | `backend/app/branding/` | `defaults.py` (the only backend copy of the default name and theme), `contrast.py` (WCAG ratio) |
 | `backend/app/routers/branding.py`, `admin.py`; `services/settings.py`; `models/settings.py`; `cli.py` | Branding (public), Admin router, the one settings accessor, settings model, `create-admin` command. `services/audit.py`, `review.py`, `report_edit.py`; `models/audit.py`: audit store, review and edit writes |
 | `backend/app/schemas/text.py`, `schemas/customer_write.py`; `services/customers.py` | Free-text rule shared by company name and customer fields; customer validators and `CustomerUpdate`; customer read (with impact), diff, `validate_contact_fields` (phone/postcode by the UK-only setting) and `update_customer` (T-002n, T-002p) |
@@ -99,7 +106,9 @@ security overrides (js-yaml, minimatch): section 13.1.
 | DB | PostgreSQL | 16 | `postgres:16-alpine`; RDS 16.x (16.15 latest, standard support to 2029-02-28; 18 deferred, section 13.2) |
 | Web serve | nginx | `nginxinc/nginx-unprivileged:stable-alpine` | **tag not verified** (Docker Hub blocked); backlog B6 |
 | IaC | Terraform / AWS provider | 1.17.1 / 6.72.0 (`~> 6.72`) | verified 2026-11-08; not written yet (planned, INFRA-4) |
-| CI | GitHub Actions: checkout v6, setup-node v6, setup-uv v8 (full tag/SHA only), configure-aws-credentials v6, setup-terraform v4 | | verified 2026-11-08; pinned by SHA in INFRA-2. Unverified rows: spec INFRA "Versions" |
+| IaC | CloudFormation bootstrap; cfn-lint | 1.60.0 | clean in review 2026-11-09 |
+| CI (in use) | `actions/checkout` v7.0.1, `actions/setup-node` v7.1.0, `astral-sh/setup-uv` v10.3.3 (no major tags), `actions/upload-artifact` v7.0.2; actionlint v1.7.12 | | each pinned by full commit SHA with the tag in a comment (SHAs matched their tags in review 2026-11-09); Dependabot bumps them. Source of truth: `.github/workflows/*.yml` |
+| CI (INFRA-5, planned) | configure-aws-credentials v6, setup-terraform v4; others: spec INFRA "Versions" | | verified 2026-11-08; pinned by SHA when the workflows are written |
 
 ## 4. Data model summary
 
@@ -161,7 +170,8 @@ customer equals the job's customer is guaranteed only by the seed and applicatio
 
 ## 5. API conventions
 
-- Base path `/api/v1`; health at `/health` (unversioned; 200, or 503 when the DB is unreachable).
+- Base path `/api/v1`; health at `/health` (unversioned; 200, or 503 when the DB is unreachable)
+  and `/health/live` (unversioned liveness for the ALB: 200 `{"status":"ok"}`, no DB check).
 - JSON, snake_case fields. UUIDs as strings. Datetimes ISO 8601 UTC with `Z`. Dates `YYYY-MM-DD`.
 - Money: `*_pence` integers plus `currency: "GBP"`.
 - Auth: `Authorization: Bearer <jwt>`. Photo images use short-lived signed URLs (no header).
@@ -234,7 +244,7 @@ customer equals the job's customer is guaranteed only by the seed and applicatio
 
 | Capability | Manager | Admin | Painter | Customer | Anonymous |
 |---|---|---|---|---|---|
-| `GET /health`, `POST /auth/login` | yes | yes | yes | n/a | yes |
+| `GET /health`, `GET /health/live`, `POST /auth/login` | yes | yes | yes | n/a | yes |
 | `GET /branding` | yes | yes | yes | n/a | yes |
 | `GET /auth/demo-accounts` | yes when `DEMO_ACCOUNTS_ENABLED`, else 404 | same | same | n/a | same |
 | `GET /auth/me` | yes | yes | yes | n/a | 401 |
@@ -274,11 +284,18 @@ bearer contract stays the same.
   (case-insensitive). `DEMO_ACCOUNTS_ENABLED=true` is refused unless APP_ENV is local or test (the list includes the admin password); production also refuses `FIXED_NOW`.
   CORS origins may not contain `*`. Tests: `backend/tests/test_config.py`.
 - **Seed guard**: `python -m app.seed` truncates and reloads, so it refuses unless APP_ENV is
-  local or test (`backend/app/seed/__main__.py`) and stays so. **(planned, INFRA-3)** The AWS dev
-  environment (`APP_ENV=staging`) gets demo data only from a separate `python -m app.seed.demo`
-  guarded by `APP_ENV=staging`, `DEMO_SEED_ALLOWED=true` (dev task definition only) and a
-  secret `DEMO_PASSWORD` that must differ from every repository password; `--if-empty` by
-  default, `--reset` as the migrator role. Spec INFRA section 4.5.
+  local or test (`backend/app/seed/__main__.py`) and stays so. The AWS dev environment
+  (`APP_ENV=staging`) gets demo data only from the separate `python -m app.seed.demo`
+  (`backend/app/seed/demo.py`, INFRA-3), guarded by `APP_ENV=staging`, `DEMO_SEED_ALLOWED=true`
+  (dev task definition only) and a secret `DEMO_PASSWORD` (>= 16 chars) that must differ from
+  every repository password; load-if-empty by default, `--reset` as the migrator role. Spec INFRA
+  section 4.5.
+- **Database TLS (INFRA-3):** `backend/app/config.py` accepts `DB_HOST/PORT/NAME/USER/PASSWORD`
+  as an alternative to `DATABASE_URL` (password URL-encoded). With `APP_ENV` staging or
+  production, `DB_SSLMODE` must be `verify-full` and `DB_SSLROOTCERT` (default
+  `backend/certs/rds-global-bundle.pem`) must contain a valid PEM certificate, or the backend
+  refuses to start. Known gap (review minor, backend): a `DATABASE_URL` bypasses the
+  verify-full check in staging/production.
 - **NUL input** rejected with 422 before it reaches Postgres (section 5).
 - **Open redirect**: `safeRedirect` in `web/src/auth/redirect.ts` accepts only a same-origin
   path, refusing control characters, backslashes, `//` and `/login` targets; unit tested.
@@ -310,8 +327,9 @@ bearer contract stays the same.
   `uk_only_contact_details` switch (strict boolean: null, strings and 0/1 are 422), and read
   settings history. Nothing else: no reports, billing, users or audit of reports.
 - **Account creation:** no user-management UI. Local/test: seeded `admin@jobproof.test`. Other
-  environments: `python -m app.cli create-admin --email ... --full-name ...` (password from
-  `ADMIN_INITIAL_PASSWORD` or a prompt, >= 12 chars, never logged; refuses existing emails).
+  environments: `python -m app.cli create-user --role admin|manager --email ... --full-name ...`
+  (INFRA-3; `create-admin` is kept as the admin form; password from `ADMIN_INITIAL_PASSWORD` or
+  a prompt, >= 12 chars, never logged; refuses existing emails).
 - **Input handling:** company name: only the ordinary space is trimmed, 1 to 60 code points, no control characters (U+0000-001F, U+007F-009F) and no zero-width or bidi formatting characters (U+200B-200F, U+202A-202E, U+2066-2069, U+FEFF), identical on server and web; rendered
   only as text (JSX, `document.title`). Colours must match `#RRGGBB` before contrast is checked,
   are stored upper case under a DB check, and are validated again on the client before
@@ -342,32 +360,57 @@ immediately; with no snapshot the brand area stays empty until `/branding` answe
 default theme and the neutral "Sign in" heading are used. CloudFront must forward the API's
 `Cache-Control` unchanged if it ever fronts the API.
 
-## 10. AWS deployment and pipeline (planned, awaiting approval)
+## 10. AWS deployment and pipeline
 
 Full plan, decisions P1 to P11 for Paul, costs and tickets INFRA-1 to INFRA-8:
-[specs/INFRA-aws-pipeline.md](specs/INFRA-aws-pipeline.md). Nothing is built yet. In short:
+[specs/INFRA-aws-pipeline.md](specs/INFRA-aws-pipeline.md). No AWS resource exists yet.
+
+**Built (INFRA-1 to INFRA-3; commits 5fe6834, d676c4c, 322808d; round 1 review
+`reports/progress/review-infra-123.json`: REQUEST CHANGES, fixes in progress):**
+- INFRA-1: `infra/bootstrap/bootstrap.cfn.yaml` and runbook `infra/README.md`. OIDC trust
+  requires `aud` `sts.amazonaws.com`; terraform role = exact `sub` match on one workflow file on
+  `main` per account; state bucket private, versioned, encrypted, TLS-only, retained; cfn-lint
+  clean.
+- INFRA-2: `ci.yml`, `dependency-check.yml`, `dependabot.yml`; minimal permissions,
+  `persist-credentials: false`, no `pull_request_target`, no secrets, actions SHA-pinned. Not
+  yet run on GitHub (backlog B3 to B6).
+- INFRA-3: contract v0.5.0 with `GET /health/live`; `DB_*` settings with `verify-full`
+  (section 9); `app/dbroles.py` and CLI `db-roles`/`migrate`; `create-user --role`;
+  `app.seed.demo`; `csp.txt` plus parity test; `infra/scripts/`. The CA bundle is still a
+  placeholder (INFRA-6 entry gate, section 12).
+
+Open review findings (owner): db-roles cannot run as the non-superuser RDS master (backend;
+being fixed, B11); B11 tests must run `ensure_roles` as a NOSUPERUSER CREATEROLE role (tests);
+role passwords must reach the server as SCRAM verifiers, never clear text (backend); plan role
+must deny RDS log download and other data-bearing reads (infra); plus minors (spec INFRA,
+"Review status").
+
+**Planned (INFRA-4 to INFRA-8):**
 
 - **Accounts:** AWS Organizations with a management account and two member accounts, `jobproof-dev`
   (`APP_ENV=staging`) and `jobproof-prod` (`APP_ENV=production`), in eu-west-2. Humans sign in
-  through IAM Identity Center. A CloudFormation bootstrap per account
-  (`infra/bootstrap/bootstrap.cfn.yaml`) creates the GitHub OIDC provider, the state bucket and
-  the plan and terraform roles. No long-lived keys anywhere.
+  through IAM Identity Center. The bootstrap stack above runs once per account. No long-lived
+  keys anywhere.
 - **Terraform** in `infra/terraform/`: the same `modules/` for `envs/dev` and `envs/prod` (spec
-  section 3); state per account in S3 with native locking. Secrets are generated through
-  write-only arguments, so they are not stored in state.
+  section 3); state per account in S3 with native locking. **Hard requirement: no secret value
+  in Terraform state** (write-only arguments and ephemeral values only), because the plan role
+  that every pull request uses can read the state bucket. Code review checks it on every
+  Terraform change.
 - **Same origin:** one CloudFront distribution serves the SPA from S3 (OAC) and routes `/api/*`
   and `/health` to an **internal** ALB through a CloudFront VPC origin. This gives HTTPS on the
   AWS-provided address without a domain, and `connect-src 'self'`. SPA routing uses a
   CloudFront Function, not custom error pages, so API 403/404 responses stay `problem+json`.
-  The CSP lives in `infra/terraform/modules/web_static/csp.txt`, with a parity test against
-  `web/nginx/40-jobproof-config.sh`. A custom domain comes later (INFRA-8).
+  The CSP lives in `infra/terraform/modules/web_static/csp.txt` (built), with a parity test
+  against `web/nginx/40-jobproof-config.sh`. A custom domain comes later (INFRA-8).
 - **Runtime:** ECS Fargate (dev: tasks in public subnets with no NAT and inbound only from the
   ALB; prod: private subnets and one NAT), RDS Postgres 16 in private DB subnets with TLS
   `verify-full`. The backend reads `DB_*` parts plus a `DB_PASSWORD` secret; `GET /health/live`
-  serves the ALB (INFRA-3).
-- **DB roles (B11):** RDS-managed master used only by `app.cli db-roles`. `jobproof_migrator`
-  owns the schema and runs `app.cli migrate` (alembic plus grants). `jobproof_app` has DML, only
-  SELECT and INSERT on `audit_events`, and no TRUNCATE anywhere.
+  serves the ALB.
+- **DB roles (B11, built in INFRA-3):** RDS-managed master used only by `app.cli db-roles`.
+  **The RDS master is not a superuser** (it has CREATEROLE and CREATEDB, owns the database), so
+  `db-roles` must work as such a role on first and later runs. `jobproof_migrator` owns the
+  schema and runs `app.cli migrate` (alembic plus grants). `jobproof_app` has DML, only SELECT
+  and INSERT on `audit_events`, and no TRUNCATE anywhere. Local and compose keep one superuser.
 - **Pipeline (GitHub Actions):** `ci.yml` (Postgres service container, compose e2e on the
   runner); `pipeline.yml` on push to `main`: build once, then deploy dev (image to ECR,
   `terraform apply`, `db-roles`, `migrate`, dev-only `seed-demo --if-empty`, service update,
@@ -391,8 +434,9 @@ this way: lint, pytest, Vitest and Playwright pass.
 web` (db, migrate and seed come in through `depends_on`); `make down [V=1]`, `make logs`,
 `make seed` (`docker compose run --rm seed`). The compose file and both Dockerfiles were written
 and checked with `docker compose config` only. **No image has been built and the stack has never
-run under Docker**, because the build workspace has no Docker daemon. If `make up` fails, check
-in this order:
+run under Docker**, because the build workspace has no Docker daemon. The CI `e2e` job
+(`.github/workflows/ci.yml`) runs exactly `make up` and `make e2e`; its first GitHub run will be
+the first real Docker run (B4). If `make up` fails, check in this order:
 1. Docker Compose v2.24+ (needed for `env_file` with `required: false` and `--wait`) and
    BuildKit (needed for `COPY --chmod` in `web/Dockerfile`).
 2. Registry access for the first build: `postgres:16-alpine`, `python:3.13-slim`,
@@ -427,8 +471,11 @@ running afterwards needs none. Details: [specs/T-000-bootstrap.md](specs/T-000-b
 | Generated SVG placeholder photos via signed URLs | No image dependencies, deterministic, offline; same shape as S3 presigned URLs |
 | Stdlib `logging` JSON formatter | Avoids structlog for a small surface |
 | TanStack Query in shared hooks | Loading/error/retry semantics once, reused by mobile |
-| CORS explicit allowlist locally (web 8080, API 8000) | **(planned change, INFRA)** AWS serves web and API from one CloudFront origin (HTTPS without a domain, internal ALB); CORS stays configured with that origin. Local stays cross-origin, so both modes remain tested (e2e locally, smoke test in dev) |
-| CloudFormation for the per-account bootstrap only | **(planned, INFRA-1)** Solves the chicken-and-egg problem (state bucket and OIDC role must exist before Terraform runs) with one console upload instead of a laptop; everything else is Terraform |
+| CORS explicit allowlist locally (web 8080, API 8000) | **(planned change, INFRA-4/5)** AWS serves web and API from one CloudFront origin (HTTPS without a domain, internal ALB); CORS stays configured with that origin. Local stays cross-origin, so both modes remain tested (e2e locally, smoke test in dev) |
+| CloudFormation for the per-account bootstrap only (built, INFRA-1) | Solves the chicken-and-egg problem (state bucket and OIDC role must exist before Terraform runs) with one console upload instead of a laptop; everything else is Terraform |
+| No secret value in Terraform state (2026-11-09, hard INFRA-4 requirement) | The plan role, assumable by any pull-request run, reads the state bucket. Secrets come only from write-only arguments and ephemeral values; if a provider cannot do that, the secret is created outside Terraform (never a state fallback). A code-review check on every Terraform change |
+| Real RDS CA bundle is the INFRA-6 entry gate, not an INFRA-3 merge condition (2026-11-09) | The placeholder fails closed (staging/production refuse to start), so merging is safe; INFRA-6 cannot start until `backend/certs/rds-global-bundle.pem` is the AWS global bundle and `test_rds_bundle.py` passes instead of XFAIL. Owner: backend engineer, with Paul fetching the file if the workspace cannot. The weekly comparison against AWS's copy already runs in `dependency-check.yml` |
+| `.github/` and `infra/bootstrap/` fixes are owned by the infra engineer (2026-11-09) | One owner for CI and bootstrap security (OIDC trust, plan-role denies, workflow permissions); backend fixes stay with the backend engineer |
 | Overdue/part-paid derived, not stored | Always consistent with payments and today |
 | Built-bundle URL check is an exact-string allowlist | Seven inert strings; any new URL fails the build. List: [specs/T-000-bootstrap.md](specs/T-000-bootstrap.md) §7.1 |
 | Injectable clock (`FIXED_NOW`, refused in production) | Deterministic "this month" figures in tests |
@@ -467,8 +514,9 @@ override when eslint, config-array and typescript-estree all accept >=11.0.1: de
 dependency ticket, at the latest 2027-02-01. Residual risk: an eslint behaviour change from the
 minimatch major, caught by `npm run lint` failing.
 
-**Backend audit gap:** `pip-audit` has never run (needs network). Run it on a networked machine
-before any deployment (backlog B7).
+**Backend audit:** `pip-audit` 2.10.1 runs weekly (and on demand) in
+`.github/workflows/dependency-check.yml` with `npm audit`; findings open or update one GitHub
+issue (B7, B8 done). Its first run on GitHub is still pending, so no clean result is recorded yet.
 
 ### 13.2 Deferrals
 
@@ -485,17 +533,17 @@ before any deployment (backlog B7).
 |---|---|---|---|
 | B1 | `page` has no upper bound and the contract has no `maximum`. Architect adds `maximum` (e.g. 10000) to the `Page` parameter in `api/openapi.yaml`, regenerates the client (`npm run gen`); backend adds `le=` in `backend/app/routers/manager.py`; add a 422 test | architect, then backend | T-003 hardening |
 | B2 | Invoice customer must equal the job's customer: enforced by seed and app only. Option: unique `(id, customer_id)` on jobs and a composite FK `(job_id, customer_id)` from invoices (new Alembic revision, next free number after the head) | architect, then backend | T-003 hardening |
-| B3 | Pin Docker base image tags and digests. Search `TODO(pin)` (compose, `backend/Dockerfile`); also `web/Dockerfile` (`node:22-alpine`, nginx), which has no `TODO(pin)` marker | backend, web | First Docker run ticket |
-| B4 | First real `make up` and `make e2e` under Docker (section 11). First run found the entrypoint used a `tr` class busybox lacks (fixed; rule in section 9). Remaining web-image steps (nginx start, healthcheck) still unverified | orchestrator on a Docker host | INFRA-2 (CI `e2e` job on a GitHub runner; with B3, B6) |
-| B5 | Blackhole connect-timeout test (`backend/tests/test_health.py`) skips in the sandbox; needs CI or a local accept-but-never-reply socket | backend | INFRA-2 (CI) |
-| B6 | nginx image tag `stable-alpine` not verified | web | First Docker run ticket |
-| B7 | Run `pip-audit` (never run) | dependency-checker | Weekly dependency ticket |
-| B8 | Weekly dependency-check schedule once the repo is on GitHub | orchestrator | INFRA-2 (`dependency-check.yml`, Dependabot) |
+| B3 | **Open.** Pin Docker base image digests. Search `TODO(pin)` (compose, `backend/Dockerfile`, `ci.yml` service container); also `web/Dockerfile` (`node:22-alpine`, nginx). The CI `e2e` job prints the digests it pulled; pin from the first GitHub run | backend, web (`ci.yml`: infra) | after the first GitHub run |
+| B4 | **Open.** First real `make up` and `make e2e` under Docker (section 11). Earlier run found the busybox `tr` issue (fixed; rule in section 9). Now wired as the CI `e2e` job; first GitHub run pending | orchestrator | first GitHub run of `ci.yml` |
+| B5 | **Open.** Blackhole connect-timeout test (`backend/tests/test_health.py`) skips in the sandbox; the CI `backend` job runs it (`pytest -rs`); first GitHub run pending | backend | first GitHub run of `ci.yml` |
+| B6 | **Open.** nginx image tag `stable-alpine` not verified; digest reported by the CI `e2e` job | web | first GitHub run, with B3 |
+| B7 | **Done (INFRA-2).** `pip-audit` automated weekly in `dependency-check.yml` (section 13.1) | dependency-checker | - |
+| B8 | **Done (INFRA-2).** Weekly `dependency-check.yml` (Monday 05:17 UTC) and `dependabot.yml` | - | - |
 | B9 | Naming debt: API/DB say `painter` (`painter_id`, role `painter`, `/manager/painters`) while the UI says "Operative" (T-002l). Rename with a contract version bump when the field-worker app is specified | architect | Phase 2 painter-app spec |
 | B10 | A non-painting production deployment needs its own job types; 0009 only inserts painting types and there is no management screen (T-002m) | architect, product owner | before the first Arbour production deployment |
 | B12 | Invoices have no billing-address/name snapshot, so a customer edit (T-002n) changes what issued invoices show. Snapshot name and billing address onto the invoice at issue before invoice documents or Stripe links exist | architect | Stripe/invoice-document ticket |
-| B11 | Separate migrator and app DB roles (audit append-only defence in depth, section 9.1). The AWS app role must not own `audit_events` and must lack TRUNCATE on `audit_events`, `users` and `job_reports` (the tables that cascade into it); otherwise the `jobproof.allow_audit_truncate` setting (settable by any role) and the trigger owner could be misused (T-002 review, finding 9). **Designed:** spec INFRA section 5.4 | backend, infra | INFRA-3 |
-| B13 | No password change and no user management: users come only from the seed and `app.cli create-admin` (`create-user --role` planned in INFRA-3, P9). Needed before real users | architect | before prod go-live (spec INFRA section 5.7) |
+| B11 | Separate migrator and app DB roles (audit append-only defence in depth, section 9.1). The AWS app role must not own `audit_events` and must lack TRUNCATE on `audit_events`, `users` and `job_reports` (the tables that cascade into it); otherwise the `jobproof.allow_audit_truncate` setting (settable by any role) and the trigger owner could be misused (T-002 review, finding 9). **Fixed pending reviewer re-check:** built in INFRA-3 (`backend/app/dbroles.py`, spec INFRA section 5.4); round 1 found it fails as the non-superuser RDS master, now being fixed by the backend engineer together with the non-superuser test | backend, infra | INFRA-3 round 2 review |
+| B13 | No password change and no user management: users come only from the seed and `app.cli create-user --role admin\|manager` (`create-admin` remains, INFRA-3). Needed before real users | architect | before prod go-live (spec INFRA section 5.7) |
 
 ## 15. Phase 2 starting points (painter mobile app, Expo)
 

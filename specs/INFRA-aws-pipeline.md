@@ -1,7 +1,41 @@
 # INFRA: AWS environments and delivery pipeline (plan for approval)
 
-Status: **draft for Paul's approval. Nothing here is built.** No Terraform, workflow or AWS
-resource exists yet. Owner: architect. Date: 2026-11-08.
+Status: **INFRA-1, INFRA-2 and INFRA-3 built** (commits 5fe6834, d676c4c, 322808d); round 1
+code review REQUEST CHANGES, fixes in progress (see "Review status" below). INFRA-4 to INFRA-8
+**planned**: no Terraform beyond `csp.txt`, no deploy workflow and no AWS resource exists yet.
+Owner: architect. Created 2026-11-08, updated 2026-11-09.
+
+## Review status (round 1, 2026-11-09, `reports/progress/review-infra-123.json`)
+
+Decisions recorded 2026-11-09:
+- **RDS CA bundle = INFRA-6 entry gate**, not an INFRA-3 merge condition. The committed
+  `backend/certs/rds-global-bundle.pem` is still a placeholder; staging and production refuse to
+  start with it (fail-closed), so merging is safe. INFRA-6 does not start until the real AWS
+  global bundle is committed and `backend/tests/test_rds_bundle.py` passes instead of XFAIL.
+- **Fixes in `.github/` and `infra/bootstrap/` are owned by the infra engineer.** Backend and
+  test fixes stay with the backend engineer.
+- **No secret value in Terraform state** is a hard INFRA-4 requirement and a code-review check
+  (section 3 `secrets` row, Risk 4).
+
+Open findings and owners:
+
+| Severity | Finding | Owner | Required change |
+|---|---|---|---|
+| BLOCKER | `db-roles` fails as the RDS master, which is not a superuser (5.4) | backend (in progress) | As 5.4 "Running as the RDS master" |
+| MAJOR | B11 tests run `ensure_roles` as the superuser | backend (tests) | Run as a NOSUPERUSER CREATEROLE CREATEDB role that owns the scratch DB, twice, then migrate; assert the second run succeeds and passwords rotate |
+| MAJOR | Role passwords sent in clear in SQL text (a failing statement logs them) | backend | Send a client-side SCRAM-SHA-256 verifier; test `pg_authid.rolpassword` starts with `SCRAM-SHA-256$` |
+| MAJOR | Plan role's `ReadOnlyAccess` includes `rds:Download*` (RDS logs readable by any pull request) | infra | Extra denies in 5.1 |
+| MAJOR | RDS CA bundle is a placeholder | backend / Paul | INFRA-6 entry gate (above) |
+| MINOR | Trust names the repo only by owner/repo | infra | Add `repository_owner_id` and `repository_id` to the subject template and trust conditions |
+| MINOR | `ci.yml` has no `infra` job (4.2) | infra | Add it with pinned cfn-lint (Terraform steps join in INFRA-4) |
+| MINOR | `ci.yml` concurrency group identical for every `main` push via `pipeline.yml` | infra | Key on `run_id` for non-`pull_request` events |
+| MINOR | `smoke-test.sh` builds login JSON with `printf`; bearer token on the command line | infra | `jq`/`json.dumps` and a header file; test a password with quote and backslash |
+| MINOR | `DATABASE_URL` bypasses verify-full in staging/production | backend | Require `sslmode=verify-full` and `sslrootcert` in it there, or refuse it |
+| MINOR | `/health/live` lacks `x-ticket: INFRA-3`; response `status` is `str`, contract enum `[ok]` | backend | Add `x-ticket` and `Literal["ok"]` |
+
+Backlog: B3 to B6 stay open (image digests unpinned; first GitHub run pending). B7 and B8 are
+done (`dependency-check.yml`, `dependabot.yml`). B11 is fixed pending the reviewer's re-check of
+the BLOCKER fix.
 
 ## Summary (plain English)
 
@@ -220,7 +254,7 @@ accepts only `local`, `test`, `staging` and `production`.
 | `network` | VPC over 2 availability zones: public subnets, private app subnets, private DB subnets; internet gateway; S3 gateway endpoint (free) | `10.20.0.0/16`; **no NAT**: tasks run in the public subnets with a public IP, and their security group lets in only traffic from the ALB | `10.30.0.0/16`; tasks in private subnets; **one NAT gateway** |
 | `ecr` | Repository `jobproof-backend`: immutable tags, scan on push, keeps the last 30 images. Prod's repository policy lets nothing else in; dev's lets the prod deploy role pull (for promotion) | yes | yes |
 | `rds` | Postgres 16 (latest 16.x minor, auto minor upgrades in a Sunday 03:00 UK window), gp3 20 GB, encrypted, not publicly accessible, DB subnet group, security group allowing 5432 only from the app and ops task security groups, parameter group with `rds.force_ssl=1`; master password managed by RDS in Secrets Manager (`manage_master_user_password`); automated backups and point-in-time restore | `db.t4g.micro`, single-AZ, 7-day backups, no deletion protection | `db.t4g.micro` single-AZ at first (P3), then `db.t4g.small` Multi-AZ, 14-day backups, deletion protection, final snapshot, `prevent_destroy` |
-| `secrets` | Secrets Manager: `jwt-secret`, `photo-url-secret`, `db-app-password`, `db-migrator-password`, and `demo-password` (dev only). Values come from ephemeral random passwords written through **write-only arguments**, so they are **never stored in Terraform state** (exact provider support verified in INFRA-4). AWS-managed encryption keys (no £1-a-month custom key) | yes | yes, no demo secret |
+| `secrets` | Secrets Manager: `jwt-secret`, `photo-url-secret`, `db-app-password`, `db-migrator-password`, and `demo-password` (dev only). Values come from ephemeral random passwords written through **write-only arguments**. **Hard requirement: no secret value is ever stored in Terraform state or plan output**, because the plan role used by every pull request reads the state bucket (5.1). INFRA-4 verifies provider support first; if a secret cannot be written without entering state, it is generated outside Terraform (e.g. by a one-off task), never stored in state as a fallback. The code reviewer checks every Terraform change for this (no `random_password` resource, no non-write-only secret argument, `terraform show -json` of a plan contains no secret value). AWS-managed encryption keys (no £1-a-month custom key) | yes | yes, no demo secret |
 | `alb` | **Internal** ALB in the private app subnets, HTTP listener on 80, target group (type `ip`, port 8000, health check `GET /health/live`, deregistration delay 20 s); security group allowing only the CloudFront origin-facing prefix list | yes | yes |
 | `ecs_service` | Cluster; app task definition (environment variables, secrets per container, `awslogs` to a log group); **one-off task definitions** `db-roles`, `migrate`, `create-user`, and `seed-demo` (dev only), all from the same image; two execution roles (app: reads app secrets only; ops: reads master, migrator and admin secrets); task roles with no permissions yet; service with rolling deploy (min 100%, max 200%), deployment circuit breaker with automatic rollback, stop timeout 30 s; ECS Exec off by default (break-glass switch) | 1 task, 0.25 vCPU / 0.5 GB, logs kept 14 days | 1 task (0.25 / 0.5) at first, then 2 to 4 tasks of 0.5 vCPU / 1 GB with CPU autoscaling, logs kept 90 days |
 | `web_static` | Private S3 web bucket (OAC only); a private releases bucket (`web/<sha>.tar.gz`, kept 180 days) for rollback; CloudFront distribution (PriceClass_100, HTTP/2 and HTTP/3), S3 origin with OAC, VPC origin for the ALB, behaviours as in section 2, SPA CloudFront Function, two response-headers policies (web: CSP and others; api: nosniff, HSTS, referrer) | yes | yes, plus WAF (P6) |
@@ -265,7 +299,10 @@ CloudFront origin), `LOG_LEVEL=INFO`, `DEMO_ACCOUNTS_ENABLED=false`. From Secret
 | `.github/workflows/dependency-check.yml` | weekly and manual | `pip-audit` (B7), `npm audit`, Terraform provider check. Opens an issue on findings (B8). Plus `.github/dependabot.yml` for GitHub Actions, npm, uv and Docker base images |
 
 All third-party actions are **pinned to a full commit SHA**, with the version in a comment, and
-Dependabot updates them. `setup-uv` v8 no longer publishes `@v8` tags at all (verified). Each
+Dependabot updates them. `setup-uv` publishes no major tags (`@v10` does not exist), so only the
+full version or SHA works. Built in INFRA-2: `ci.yml`, `dependency-check.yml` (weekly, Monday
+05:17 UTC: pip-audit, npm audit, RDS CA bundle comparison; one findings issue) and
+`dependabot.yml`; the other workflows are INFRA-5 **(planned)**. Each
 workflow sets `permissions:` to the minimum (`contents: read`, plus `id-token: write` only on
 jobs that talk to AWS). AWS jobs are skipped while `vars.AWS_DEV_ACCOUNT_ID` is empty, so CI is
 useful before the bootstrap.
@@ -277,7 +314,7 @@ useful before the bootstrap.
 | `backend` | `actions/checkout`, `astral-sh/setup-uv`, `uv sync --frozen`; **Postgres as a GitHub service container**: `postgres:16-alpine` (pinned digest), `POSTGRES_USER=jobproof`, `POSTGRES_PASSWORD=jobproof`, `POSTGRES_DB=jobproof_test`, port `5544:5432`, health option `pg_isready`. The Makefile's default `TEST_DATABASE_URL` (`127.0.0.1:5544/jobproof_test`) then works unchanged. Run ruff, format check, mypy and `uv run pytest`. The blackhole connect-timeout test that skips in the workspace runs here (B5) |
 | `web` | `actions/setup-node` (Node 22), `npm ci`, `npm run lint`, `redocly lint`, `npm run gen:check`, `npm test`, `npm run build -w @jobproof/web` (includes the bundle origin check), busybox regression test for `web/nginx/*.sh` |
 | `e2e` | `cp .env.example .env`; `make up` (the first real `docker compose` run: closes B4, verifies the nginx tag B6, pins image digests B3); `npx playwright install --with-deps chromium`; `make e2e`; upload the Playwright report on failure. GitHub's hosted runners have Docker. Claude's workspace does not, which is why this has never run |
-| `infra` | `terraform fmt -check -recursive`, `terraform validate` for both envs, `tflint`, `cfn-lint` on the bootstrap file, `actionlint` on workflows, and the CSP parity test (5.5) |
+| `infra` | `terraform fmt -check -recursive`, `terraform validate` for both envs, `tflint`, `cfn-lint` on the bootstrap file, `actionlint` on workflows. **As built:** `actionlint` (v1.7.12) runs in a job named `workflows`; the CSP parity test runs in the `web` job (`web/nginx/csp-parity.test.ts`); the `infra` job with pinned cfn-lint is a review minor (infra engineer); Terraform steps join in INFRA-4 |
 | `plan` (pull requests only, after bootstrap) | Assume `jobproof-github-plan` in each account and run `terraform plan -lock=false` (read-only role). Post the plan summary to the job summary |
 
 Rough runner time: about 20 minutes per push. The free plan's 2,000 private-repo minutes a month
@@ -372,7 +409,7 @@ database, so this rule matters only from the second deploy on.
 | Identity | Assumed by | Allowed |
 |---|---|---|
 | Paul (Identity Center, MFA) | you, in the browser | Admin in all three accounts; read-only permission set for looking around. This is also the break-glass route (section 7) |
-| `jobproof-github-plan` (bootstrap) | `ci.yml` on pull requests, `prod-preview` | `ReadOnlyAccess`, plus read on the state bucket, **with explicit denies** on `s3:GetObject` for the photos, web and releases buckets, `secretsmanager:GetSecretValue`, `ssm:GetParameter*` on SecureStrings, `kms:Decrypt` and `logs:GetLogEvents`. A pull request can see the shape of the infrastructure but never data or secrets |
+| `jobproof-github-plan` (bootstrap) | `ci.yml` on pull requests, `prod-preview` | `ReadOnlyAccess`, plus **read on the state bucket** (so state must hold no secret, section 3), **with explicit denies** on `s3:GetObject` for the photos, web and releases buckets, `secretsmanager:GetSecretValue`, `ssm:GetParameter*` on SecureStrings, `kms:Decrypt`, `logs:GetLogEvents`, and (review round 1, to add) `rds:DownloadDBLogFilePortion`, `rds:DownloadCompleteDBLogFile`, `lambda:GetFunction`, DynamoDB item reads, `ec2:GetConsoleOutput` and `cloudformation:GetTemplate`. A pull request can see the shape of the infrastructure but never data or secrets |
 | `jobproof-github-terraform` (bootstrap) | dev: only `pipeline.yml` on `main`; prod: only `deploy-prod.yml` on `main` (P2) | AdministratorAccess. Terraform creates IAM roles, so it effectively needs admin. The control is **who** can assume it: OIDC trust on the repo, branch and workflow file, with audience `sts.amazonaws.com` |
 | `jobproof-github-deploy` (Terraform) | the same workflows as above, plus `rollback`, `create-user`, `dev-demo-data`, `dev-power` | Only the narrow actions in the `ci_roles` row (section 3) |
 | App execution role | ECS agent | Pull the image, write logs, read the **app** secrets only |
@@ -392,7 +429,9 @@ keys exist anywhere.**
   from the app and ops task security groups. There is **no public database and no bastion**.
   TLS is enforced by the server (`rds.force_ssl`), and the client uses `verify-full` against
   the RDS CA bundle, committed at `backend/certs/rds-global-bundle.pem` (a public certificate;
-  the weekly job checks it against AWS's published copy).
+  the weekly job checks it against AWS's published copy). **Today it is a placeholder**: the
+  backend refuses to start in staging/production with it, and replacing it is the INFRA-6 entry
+  gate.
 - Storage is encrypted at rest: RDS, all S3 buckets and Secrets Manager.
 - The ALB is internal and reachable only through CloudFront (section 2). Dev tasks have a public
   IP for outbound traffic only. Their security group allows inbound connections only from the
@@ -414,22 +453,39 @@ the state buckets. A cross-region backup copy (AWS Backup to eu-west-1) is a lat
 recorded as a deferral to revisit before real customer data. Restores are tested once in dev as
 part of INFRA-6 (section 7).
 
-### 5.4 B11: separate database roles (built in INFRA-3, used from the first deploy)
+### 5.4 B11: separate database roles (built in INFRA-3 in `backend/app/dbroles.py`, used from the first deploy)
 
 - `jobproof_master`: RDS master user, password managed and rotated by RDS. Used **only** by the
   `db-roles` task.
-- `python -m app.cli db-roles` (new, idempotent): creates `jobproof_migrator` (LOGIN, owns the
-  schema) and `jobproof_app` (LOGIN, owns nothing) if they are missing, and sets their passwords
-  from their secrets.
+- `python -m app.cli db-roles` (idempotent; reads `DB_MIGRATOR_PASSWORD` and `DB_APP_PASSWORD`,
+  >= 16 chars): creates `jobproof_migrator` (LOGIN, owns the schema) and `jobproof_app` (LOGIN,
+  owns nothing) if they are missing, and sets their passwords from their secrets.
+- **Running as the RDS master (review round 1 BLOCKER).** The RDS master is **not a
+  superuser**: it is a member of `rds_superuser` with CREATEROLE and CREATEDB and owns the
+  database, nothing more. `db-roles` must succeed as such a role on the first run and on every
+  later run. Concretely:
+  - `GRANT CREATE ON DATABASE` to `jobproof_migrator` **before** `ALTER SCHEMA public OWNER TO
+    jobproof_migrator` (the new owner needs CREATE on the database, otherwise "permission denied
+    for database").
+  - The full attribute list (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`
+    etc.) goes on `CREATE ROLE` only. For an existing role, run only `ALTER ROLE %I WITH LOGIN
+    PASSWORD ...` (a non-superuser may not set or clear SUPERUSER, REPLICATION or BYPASSRLS, so
+    PG16 refuses the full list), then read `pg_roles` and raise `RoleError` if any privileged
+    attribute is set.
+  - Passwords reach the server as client-side SCRAM-SHA-256 verifiers, never as clear text in
+    SQL (a failing statement is written to the RDS log).
+  - Tests run `ensure_roles` as a `LOGIN CREATEROLE CREATEDB NOSUPERUSER` role that owns the
+    scratch database, twice, then `migrate`; the second run must succeed and rotate passwords.
+    Running the tests as a superuser is not sufficient.
 - `python -m app.cli migrate` (new): runs `alembic upgrade head` as `jobproof_migrator`, then
   applies the grants idempotently. `jobproof_app` gets SELECT, INSERT, UPDATE and DELETE on
   business tables and USAGE on sequences. On `audit_events` it gets **only SELECT and INSERT**.
   It never gets TRUNCATE on any table, and it owns no table and no trigger function. That
   closes the B11 finding: `jobproof.allow_audit_truncate` is useless without TRUNCATE.
-- Local and compose keep the single superuser. A new pytest module creates the two roles in the
-  test database and asserts that the app role is refused UPDATE, DELETE and TRUNCATE on
-  `audit_events` and TRUNCATE on `users` and `job_reports`, and that ordinary app operations
-  still work.
+- Local and compose keep the single superuser. `backend/tests/test_db_roles.py` creates the two
+  roles in a scratch database and asserts that the app role is refused UPDATE, DELETE and
+  TRUNCATE on `audit_events` and TRUNCATE on `users` and `job_reports`, and that ordinary app
+  operations still work (grants confirmed correct in review round 1).
 
 ### 5.5 Web runtime config and CSP under CloudFront
 
@@ -442,7 +498,7 @@ part of INFRA-6 (section 7).
   `default-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`.
   Also `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
   `X-Frame-Options: DENY`, and `Strict-Transport-Security: max-age=31536000` (no preload).
-- **Parity test** (Vitest, in `web/nginx/`): run the script with a same-origin API URL, parse
+- **Parity test** (Vitest, built: `web/nginx/csp-parity.test.ts`): run the script with a same-origin API URL, parse
   both CSPs into directive sets, treat the API origin as `'self'`, and assert they are equal. A
   change to one without the other fails CI.
 - The e2e CSP test keeps covering the local cross-origin policy. The dev smoke test covers the
@@ -451,8 +507,8 @@ part of INFRA-6 (section 7).
 ### 5.6 First Admin and Managers
 
 There is no seed in prod. `create-user.yml` runs the one-off `create-user` task:
-`python -m app.cli create-admin ...` today, generalised to `create-user --role admin|manager`
-if P9 is accepted. `ADMIN_INITIAL_PASSWORD` comes from the short-lived secret you create (1F).
+`python -m app.cli create-user --role admin|manager --email ... --full-name ...` (built in
+INFRA-3; `create-admin` remains for the admin case). `ADMIN_INITIAL_PASSWORD` comes from the short-lived secret you create (1F).
 The workflow deletes that secret after success (forced, no recovery window), and the task logs
 only the user ID. There is still **no password-change screen**. Backlog B13: add one before
 real users.
@@ -556,12 +612,12 @@ chain the first deploy applies.
 
 | Ticket | Content | Claude without AWS? | Needs Paul |
 |---|---|---|---|
-| **INFRA-1** Bootstrap template and runbook | `infra/bootstrap/bootstrap.cfn.yaml` (OIDC provider, state bucket, plan and terraform roles, parameters `Environment`, `GitHubOwner`, `GitHubRepo`, `SubjectMode`); runbook for section 1 in `infra/README.md`; `cfn-lint` clean | yes, fully | approve the spec |
-| **INFRA-2** CI on GitHub | `ci.yml` (4.2), `dependency-check.yml`, `dependabot.yml`, pinned actions, image digests pinned (B3). Closes B3 to B8 once green | writes it; **the first run happens on GitHub** (no AWS) | none beyond the push |
-| **INFRA-3** App readiness for AWS | Backend: `DB_*` settings as an alternative to `DATABASE_URL` (ECS can inject secret fields but cannot assemble a URL), `DB_SSLMODE`/`DB_SSLROOTCERT` with the committed RDS bundle, `GET /health/live` (contract change: unversioned, 200 `{status:"ok"}`, no DB check, so a database failover does not make the ALB kill every task), `app.cli db-roles`, `app.cli migrate` with grants and the B11 tests, `app.seed.demo` with its guards and tests, `create-user --role` (P9). Web/infra: `csp.txt` and the parity test, `infra/scripts/upload-web.sh` (upload order, `config.js`), smoke-test script. All tested locally with `scripts/dev.sh` | yes, fully | none |
-| **INFRA-4** Terraform modules and envs | The modules in section 3, `envs/dev` and `envs/prod`, `fmt`/`validate`/`tflint` clean; verify the write-only argument and ephemeral random-password support in the chosen provider versions; pricing calculator link | writes and validates (provider download only); **cannot plan or apply** | none |
+| **INFRA-1** Bootstrap template and runbook (**built**, 5fe6834; review minors open) | `infra/bootstrap/bootstrap.cfn.yaml` (OIDC provider, state bucket, plan and terraform roles, parameters `Environment`, `GitHubOwner`, `GitHubRepo`, `SubjectMode`); runbook for section 1 in `infra/README.md`; `cfn-lint` 1.60.0 clean | yes, fully | approve the spec |
+| **INFRA-2** CI on GitHub (**built**, d676c4c; first GitHub run pending) | `ci.yml` (4.2), `dependency-check.yml`, `dependabot.yml`, actions SHA-pinned. Closed B7, B8. B3 to B6 close after the first green GitHub run (digests are reported by the `e2e` job, then pinned) | writes it; **the first run happens on GitHub** (no AWS) | none beyond the push |
+| **INFRA-3** App readiness for AWS (**built**, 322808d; BLOCKER fix in progress, 5.4) | As built: contract v0.5.0 (21 operations), `backend/app/dbroles.py`, `backend/app/seed/demo.py`, CLI `create-user`/`db-roles`/`migrate`, `DB_*` settings with verify-full, CA bundle placeholder (INFRA-6 entry gate), `csp.txt`, `infra/scripts/` (`upload-web.sh`, `smoke-test.sh`, `local-edge.mjs` test double). Original scope: Backend: `DB_*` settings as an alternative to `DATABASE_URL` (ECS can inject secret fields but cannot assemble a URL), `DB_SSLMODE`/`DB_SSLROOTCERT` with the committed RDS bundle, `GET /health/live` (contract change: unversioned, 200 `{status:"ok"}`, no DB check, so a database failover does not make the ALB kill every task), `app.cli db-roles`, `app.cli migrate` with grants and the B11 tests, `app.seed.demo` with its guards and tests, `create-user --role` (P9). Web/infra: `csp.txt` and the parity test, `infra/scripts/upload-web.sh` (upload order, `config.js`), smoke-test script. All tested locally with `scripts/dev.sh` | yes, fully | none |
+| **INFRA-4** Terraform modules and envs | The modules in section 3, `envs/dev` and `envs/prod`, `fmt`/`validate`/`tflint` clean; verify the write-only argument and ephemeral random-password support in the chosen provider versions first; **hard requirement and review check: no secret value in state or plan output** (section 3 `secrets` row); pricing calculator link | writes and validates (provider download only); **cannot plan or apply** | none |
 | **INFRA-5** Workflows | `pipeline.yml`, `deploy-prod.yml`, `rollback.yml`, `create-user.yml`, `dev-demo-data.yml`, `dev-power.yml`; `actionlint` clean; AWS jobs skip until bootstrap | writes; **cannot run AWS jobs** | none |
-| **INFRA-6** First dev deploy | You do sections 1A to 1E (and P2). Then a push to `main` deploys dev. Claude reads the GitHub run logs and fixes forward. Restore test in dev; runbook finished | partly: Claude sees GitHub logs, not the AWS console | **yes**: 1A to 1E; you open the dev URL and sign in with the demo password |
+| **INFRA-6** First dev deploy | **Entry gate:** the real RDS CA bundle is committed (`test_rds_bundle.py` passes, no XFAIL). You do sections 1A to 1E (and P2). Then a push to `main` deploys dev. Claude reads the GitHub run logs and fixes forward. Restore test in dev; runbook finished | partly: Claude sees GitHub logs, not the AWS console | **yes**: 1A to 1E; you open the dev URL and sign in with the demo password |
 | **INFRA-7** First prod deploy | Click **Deploy to prod**; 1F for the Admin (and a Manager if P9); check alarm emails arrive (confirm the SNS subscription email) | no | **yes** |
 | **INFRA-8** (later) Custom domain | `dns` module: certificates, alternate domain, ALB HTTPS, TLS policy, `CORS`/`PUBLIC_API_BASE_URL`/`config.js` switch to the domain | yes, except DNS changes at the registrar | buy the domain; registrar or Route 53 steps |
 
@@ -572,11 +628,11 @@ chain the first deploy applies.
   plug into the existing `PhotoStore` Strategy later. Terraform uses plain module composition.
 - **Data:** no table changes. New database roles and grants (5.4). New SSM parameter
   `/jobproof/<env>/release`.
-- **API:** add `GET /health/live` (INFRA-3, `x-ticket: INFRA-3`; the contract is edited when the
-  ticket starts, not now). No other contract change. Base URL in AWS is the CloudFront origin
-  plus `/api/v1`.
-- **Backend:** INFRA-3 row. `create-admin` keeps working (it becomes an alias of
-  `create-user --role admin`).
+- **API:** `GET /health/live` added in INFRA-3 (contract v0.5.0, 21 operations; the
+  `x-ticket: INFRA-3` marker is a review minor still to add). No other contract change. Base URL
+  in AWS is the CloudFront origin plus `/api/v1`.
+- **Backend:** INFRA-3 row. `create-admin` keeps working alongside
+  `create-user --role admin|manager`.
 - **Shared:** no change. Generated client and adapter unchanged; the base URL still comes from
   runtime config.
 - **Web:** no source change. `config.js` and headers come from the pipeline and CloudFront
@@ -586,12 +642,14 @@ chain the first deploy applies.
 - **Infra / local:** local `docker compose` and `scripts/dev.sh` are unchanged. New
   `.env.example` entries (commented): the `DB_*` alternative and `DEMO_SEED_ALLOWED` (documented
   as dev-AWS-only).
-- **Test notes:** CI runs the full existing suite plus new tests: B11 role permissions; seed-demo
+- **Test notes:** CI runs the full existing suite plus new tests: B11 role permissions, with
+  `ensure_roles` run twice as a non-superuser CREATEROLE role (5.4); seed-demo
   guards (refuses production, local, test, a missing flag, a short password, a repository
   password; `--if-empty` does nothing when users exist); `DB_*` URL assembly with special
   characters in the password (URL-encoded); `/health/live` returns 200 when the database is
   down; CSP parity; dev smoke checks (4.3 step 10), including a 401 that stays `problem+json`
-  through CloudFront.
+  through CloudFront. Code review of every Terraform change checks that no secret value can
+  reach state or plan output (section 3).
 - **Out of scope:** multi-tenancy (D1), mobile builds and EAS, Stripe, `S3PhotoStore` and photo
   upload, cross-region disaster recovery, Graviton, Postgres 18 upgrade.
 
@@ -604,32 +662,37 @@ chain the first deploy applies.
 3. **OIDC subject customisation changes the `sub` claim for the whole repository.** It must be
    set before the roles are first used, and never changed afterwards without updating both
    bootstrap stacks.
-4. **Write-only arguments and ephemeral resources** are recent Terraform features. If the
-   provider versions lack one, the fallback is a generated value in state, mitigated by the
-   state bucket being private, encrypted and readable only by the terraform role. INFRA-4
-   verifies support first.
+4. **Write-only arguments and ephemeral resources** are recent Terraform features. The state
+   bucket is private and encrypted, but it is **not** readable only by the terraform role: the
+   plan role, which any pull-request run can assume, reads it to run `terraform plan`. So a
+   secret in state would be readable from a pull request. **No secret value in Terraform state
+   is therefore a hard INFRA-4 requirement, not a mitigated risk:** INFRA-4 verifies
+   write-only and ephemeral support first; if a provider version lacks it, that secret is
+   generated outside Terraform, never stored in state. The code reviewer checks this on every
+   Terraform change (corrected 2026-11-09, review round 1).
 5. **One NAT gateway in prod** is a single-zone dependency for outbound calls.
 6. **Dev is public.** It is protected by a strong secret demo password, and the rule is that no
    real data goes there.
 7. **CloudFront address is not permanent** (P11). Buy the domain before mobile or customer
    links.
 
-## Versions (verified 2026-11-08)
+## Versions (verified 2026-11-08; actions in use updated 2026-11-09 from the INFRA-2 pins)
 
 | Item | Version | Source / note |
 |---|---|---|
 | Terraform CLI | 1.17.1 (2026-10-28) | endoflife.date. ARCHITECTURE.md said 1.15.x: updated |
 | Terraform AWS provider | 6.72.0 (2026-11-04) → `~> 6.72` | releases.sh |
 | RDS PostgreSQL | 16.15 latest 16.x; standard support to 28 Feb 2029. 17.11 (to 28 Feb 2030), 18.6 (to 28 Feb 2031) also available | AWS RDS release calendar |
-| `actions/checkout` | v6 | Dependabot bump PRs; release page not reachable today |
-| `actions/setup-node` | v6 (6.4.0) | mirror of the repository tags |
-| `astral-sh/setup-uv` | v8 (no major tags; pin full version or SHA) | release notes |
+| `actions/checkout` | v7.0.1 (SHA `3d3c42e5aac5ba805825da76410c181273ba90b1`) | pinned in INFRA-2; SHA matched the tag in review 2026-11-09 |
+| `actions/setup-node` | v7.1.0 (SHA `949feb2413d6458794dcd2491c4babbbce0c15c1`) | as above |
+| `astral-sh/setup-uv` | v10.3.3 (SHA `68559e99cc807c1eb7e9238fd43a15bba460eec2`; no major tags) | as above |
+| `actions/upload-artifact` | v7.0.2 (SHA `cf430e030ddbb5b0abf93d22962f4752f3646cd9`) | as above; `download-artifact` (INFRA-5) pinned to the matching major then |
+| actionlint / cfn-lint / pip-audit | 1.7.12 / 1.60.0 / 2.10.1 | `ci.yml`, review, `dependency-check.yml` |
 | `aws-actions/configure-aws-credentials` | v6 (6.3.0, 2026-09) | GitHub releases |
 | `hashicorp/setup-terraform` | v4 (4.0.1) | GitHub releases |
 | `docker/build-push-action` | v7 | mirror; exact latest patch **unverified** |
 | `aws-actions/amazon-ecr-login` | v2 (2.0.2 seen) | **unverified** as latest |
-| `actions/upload-artifact` / `download-artifact` | **not verified**. Cross-run download needs v4 or later | INFRA-2 checks |
 | `random` provider (ephemeral `random_password`) | **not verified** | INFRA-4 checks |
 
-INFRA-2 pins each action to the SHA of its latest release at build time, so the unverified rows
-are settled then.
+INFRA-5 pins each remaining action to the SHA of its latest release when it writes the deploy
+workflows, which settles the unverified rows.
