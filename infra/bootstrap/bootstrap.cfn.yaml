@@ -1,0 +1,275 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  JobProof bootstrap (one stack per AWS account, ticket INFRA-1). Creates exactly three kinds of
+  thing: the GitHub OIDC sign-in link, the Terraform state bucket, and the two roles GitHub
+  Actions may assume (plan = read-only, terraform = administrator). No access keys, no passwords.
+  Everything else is created later by Terraform. See infra/bootstrap/README.md.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Which account is this?
+        Parameters: [Environment]
+      - Label:
+          default: Which GitHub repository may sign in?
+        Parameters: [GitHubOwner, GitHubRepo, SubjectMode]
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+    Description: >-
+      dev or prod. Decides which workflow file may use the terraform role in this account
+      (dev: pipeline.yml, prod: deploy-prod.yml).
+  GitHubOwner:
+    Type: String
+    Default: gallpaul8892
+    AllowedPattern: "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+    ConstraintDescription: A GitHub user or organisation name (letters, digits, hyphens).
+    Description: GitHub user or organisation that owns the repository.
+  GitHubRepo:
+    Type: String
+    Default: jobproof
+    AllowedPattern: "^[A-Za-z0-9._-]{1,100}$"
+    ConstraintDescription: A GitHub repository name (letters, digits, dot, underscore, hyphen).
+    Description: GitHub repository name.
+  SubjectMode:
+    Type: String
+    Default: workflow
+    AllowedValues: [workflow, branch]
+    Description: >-
+      workflow (default, decision P2 = yes): roles are tied to specific workflow files. Needs the
+      repository's OIDC subject template set to repo, context, job_workflow_ref (see
+      infra/bootstrap/README.md). branch (fallback, P2 = no): roles are tied to the main branch
+      and to pull requests only, using GitHub's default subject.
+
+Rules:
+  LondonOnly:
+    Assertions:
+      - Assert: !Equals [!Ref "AWS::Region", eu-west-2]
+        AssertDescription: Use the Europe (London) region, eu-west-2, for every JobProof stack.
+
+Conditions:
+  WorkflowMode: !Equals [!Ref SubjectMode, workflow]
+  IsProd: !Equals [!Ref Environment, prod]
+
+Resources:
+  # ---------------------------------------------------------------------------------------------
+  # 1. The sign-in link: lets GitHub Actions prove who it is to this account.
+  #    AWS validates GitHub's certificate chain itself, so no thumbprint is needed.
+  # ---------------------------------------------------------------------------------------------
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      Tags:
+        - { Key: Project, Value: jobproof }
+        - { Key: Environment, Value: !Ref Environment }
+
+  # ---------------------------------------------------------------------------------------------
+  # 2. The Terraform state bucket. Kept (not deleted) even if this stack is deleted.
+  # ---------------------------------------------------------------------------------------------
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub jobproof-tfstate-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-state-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 365
+          - Id: abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - { Key: Project, Value: jobproof }
+        - { Key: Environment, Value: !Ref Environment }
+
+  StateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StateBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt StateBucket.Arn
+              - !Sub "${StateBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  # ---------------------------------------------------------------------------------------------
+  # 3a. Plan role: read-only. Used for pull requests and the prod preview.
+  #     ReadOnlyAccess lets it see the shape of the infrastructure; the explicit denies below
+  #     stop it reading any data or secret (a deny always beats an allow).
+  # ---------------------------------------------------------------------------------------------
+  PlanRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: jobproof-github-plan
+      Description: GitHub Actions, read-only. Plans Terraform changes. Cannot read data or secrets.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOidcProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !If
+                  - WorkflowMode
+                  # Subject template is repo, context, job_workflow_ref.
+                  # ci.yml on a pull request, or pipeline.yml (prod-preview) on main.
+                  - - !Sub "repo:${GitHubOwner}/${GitHubRepo}:pull_request:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/ci.yml@refs/pull/*"
+                    - !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/pipeline.yml@refs/heads/main"
+                  # Fallback: GitHub's default subject.
+                  - - !Sub "repo:${GitHubOwner}/${GitHubRepo}:pull_request"
+                    - !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+      Policies:
+        - PolicyName: read-state-and-deny-data
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadTerraformState
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub "${StateBucket.Arn}/*"
+              - Sid: ListTerraformState
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource: !GetAtt StateBucket.Arn
+              # Photos, web, releases and log buckets all live outside the state bucket, so deny
+              # object reads everywhere except the state bucket. Covers future buckets too.
+              - Sid: DenyReadingObjectsOutsideState
+                Effect: Deny
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetObjectTorrent
+                NotResource: !Sub "${StateBucket.Arn}/*"
+              - Sid: DenyReadingSecrets
+                Effect: Deny
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:BatchGetSecretValue
+                Resource: "*"
+              # IAM cannot tell a SecureString from a plain String, so deny every parameter
+              # except the one non-secret release marker Terraform needs (/jobproof/<env>/release).
+              - Sid: DenyReadingParameterValues
+                Effect: Deny
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                  - ssm:GetParameterHistory
+                NotResource: !Sub "arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/jobproof/*/release"
+              - Sid: DenyDecrypting
+                Effect: Deny
+                Action:
+                  - kms:Decrypt
+                  - kms:ReEncryptFrom
+                Resource: "*"
+              - Sid: DenyReadingLogContents
+                Effect: Deny
+                Action:
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                  - logs:GetLogRecord
+                  - logs:StartQuery
+                  - logs:GetQueryResults
+                  - logs:StartLiveTail
+                Resource: "*"
+      Tags:
+        - { Key: Project, Value: jobproof }
+        - { Key: Environment, Value: !Ref Environment }
+
+  # ---------------------------------------------------------------------------------------------
+  # 3b. Terraform role: AdministratorAccess (Terraform creates IAM roles, so it effectively needs
+  #     it). The control is WHO may assume it: this repository, the main branch, and exactly one
+  #     workflow file (dev: pipeline.yml, prod: deploy-prod.yml).
+  # ---------------------------------------------------------------------------------------------
+  TerraformRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: jobproof-github-terraform
+      Description: GitHub Actions, administrator. Runs terraform apply. Only the named workflow on main may assume it.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOidcProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !If
+                  - WorkflowMode
+                  - !Sub
+                    - "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main:job_workflow_ref:${GitHubOwner}/${GitHubRepo}/.github/workflows/${Workflow}@refs/heads/main"
+                    - Workflow: !If [IsProd, deploy-prod.yml, pipeline.yml]
+                  - !Sub "repo:${GitHubOwner}/${GitHubRepo}:ref:refs/heads/main"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      Tags:
+        - { Key: Project, Value: jobproof }
+        - { Key: Environment, Value: !Ref Environment }
+
+Outputs:
+  AccountId:
+    Description: This account's ID (not a secret). Goes in the GitHub variable AWS_DEV_ACCOUNT_ID or AWS_PROD_ACCOUNT_ID.
+    Value: !Ref "AWS::AccountId"
+  StateBucketName:
+    Description: Terraform state bucket.
+    Value: !Ref StateBucket
+  PlanRoleArn:
+    Description: Read-only role for terraform plan.
+    Value: !GetAtt PlanRole.Arn
+  TerraformRoleArn:
+    Description: Administrator role for terraform apply.
+    Value: !GetAtt TerraformRole.Arn
+  OidcProviderArn:
+    Description: GitHub OIDC provider.
+    Value: !GetAtt GitHubOidcProvider.Arn
+  SubjectMode:
+    Description: Which trust style this stack was created with.
+    Value: !Ref SubjectMode
