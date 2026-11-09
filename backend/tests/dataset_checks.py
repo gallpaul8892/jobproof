@@ -26,6 +26,8 @@ def invoice_statuses(ds: Dataset, today: date) -> dict[object, InvoiceStatus]:
 
 
 def check_consistency(ds: Dataset) -> None:
+    """Rules of the original 60-job dataset; the operative's day has its own tests."""
+    ds = ds.without_operative_day()
     anchor = ds.anchor
     jobs = {j.id: j for j in ds.jobs}
     customers = {c.id: c for c in ds.customers}

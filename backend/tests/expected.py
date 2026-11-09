@@ -170,14 +170,20 @@ def non_user_tables_checksum(ds: Dataset) -> str:
     import hashlib
 
     digest = hashlib.sha256()
+    ds = ds.without_operative_day()  # T-003c rows are new; the original rows must not change
     for name, rows in sorted(ds.tables()):
-        if name == "users":
+        if name in ("users", "job_checklist_items"):
             continue
         normalised = []
         for row in rows:
             fields = dataclasses.asdict(row)  # type: ignore[call-overload]
             if fields.get("manager_notes", "") is None:
                 del fields["manager_notes"]  # T-002i column, null in the seed: hash as before
+            # T-003c columns, default-valued for every original row: hash as before
+            if name == "job_reports":
+                del fields["state"], fields["submitted_by_id"]
+            if name == "report_checklist_items":
+                del fields["cannot_do"]
             normalised.append(
                 sorted(
                     (

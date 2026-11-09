@@ -24,8 +24,6 @@ NOT_YET_IMPLEMENTED: set[tuple[str, str]] = set()
 # removes its own id as its last step (specs/T-003-work-packages.md). T-003e, i, j, l, m, n and p
 # have no contract items of their own.
 PENDING_TICKETS: set[str] = {
-    "T-003c",
-    "T-003d",
     "T-003f",
     "T-003g",
     "T-003h",

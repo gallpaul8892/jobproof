@@ -11,7 +11,7 @@ from app.models.enums import InvoiceState, ReviewStatus
 from app.schemas.manager import Dashboard
 from app.services.billing import InvoiceStatus
 from app.services.billing_sql import balance_expr, invoice_status_expr, paid_expr
-from app.services.reports import recent_reports, review_queue
+from app.services.reports import recent_reports, review_queue, submitted_reports
 
 
 def month_bounds(today: dt.date) -> tuple[dt.date, dt.date]:
@@ -25,8 +25,7 @@ def get_dashboard(session: Session, *, now: dt.datetime, today: dt.date) -> Dash
     paid = paid_expr(inv)
 
     awaiting = (
-        select(func.count())
-        .select_from(JobReport)
+        submitted_reports(func.count())
         .where(JobReport.review_status == ReviewStatus.awaiting_review)
         .scalar_subquery()
     )

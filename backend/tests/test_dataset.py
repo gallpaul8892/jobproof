@@ -25,15 +25,17 @@ ANCHORS = [ANCHOR, date(2026, 11, 1), date(2027, 3, 31)]
 
 @pytest.fixture(scope="module")
 def ds() -> Dataset:
-    return build_dataset(ANCHOR)
+    """The original 60-job dataset; the operative's day is covered by test_operative_seed.py."""
+    return build_dataset(ANCHOR).without_operative_day()
 
 
 def test_build_dataset_is_deterministic(ds: Dataset) -> None:
-    assert build_dataset(ANCHOR) == ds
+    assert build_dataset(ANCHOR) == build_dataset(ANCHOR)
+    assert build_dataset(ANCHOR).without_operative_day() == ds
 
 
 def test_different_anchors_give_different_dates(ds: Dataset) -> None:
-    assert build_dataset(date(2026, 11, 1)) != ds
+    assert build_dataset(date(2026, 11, 1)).without_operative_day() != ds
 
 
 def test_users_and_customers(ds: Dataset) -> None:
@@ -171,7 +173,7 @@ def test_dataset_is_internally_consistent(anchor: date) -> None:
     check_consistency(built)
     statuses = Counter(invoice_statuses(built, anchor).values())
     assert statuses[InvoiceStatus.paid] == 30 and statuses[InvoiceStatus.overdue] == 6
-    assert sum(1 for r in built.reports if r.review_status is ReviewStatus.awaiting_review) == 9
+    assert sum(1 for r in built.reports if r.review_status is ReviewStatus.awaiting_review) == 10
     m0 = month_start(anchor, 0)
     if anchor.day >= 10:
         assert sum(1 for i in built.invoices if i.issue_date and i.issue_date >= m0) >= 3

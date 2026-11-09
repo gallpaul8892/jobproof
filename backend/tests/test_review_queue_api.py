@@ -25,11 +25,11 @@ def test_queue_is_the_first_five_awaiting_reports_oldest_first(
     assert_contract(response, "getManagerDashboard")
     body = response.json()
     expected = awaiting_reports(ds)
-    assert len(expected) == 9
+    assert len(expected) == 10
     assert [r["id"] for r in body["review_queue"]] == _ids(expected[:5])
     assert all(r["review_status"] == "awaiting_review" for r in body["review_queue"])
     assert {"customer", "site_address", "painter", "submitted_at"} <= set(body["review_queue"][0])
-    assert body["reports_awaiting_review"] == 9
+    assert body["reports_awaiting_review"] == 10
     assert [r["id"] for r in body["recent_reports"]] != [r["id"] for r in body["review_queue"]]
 
 
@@ -44,7 +44,7 @@ def test_sort_submitted_asc_lists_the_awaiting_reports_in_queue_order(
     assert response.status_code == 200
     assert_contract(response, "listManagerReports")
     body = response.json()
-    assert body["total"] == 9
+    assert body["total"] == 10
     assert [r["id"] for r in body["items"]] == _ids(awaiting_reports(ds))
 
 
@@ -131,7 +131,7 @@ def test_reviewing_the_oldest_removes_it_and_the_sixth_moves_up(
     _mark_reviewed(db_engine, [expected[0].id])
     body = dashboard(client, manager_headers)
     assert [r["id"] for r in body["review_queue"]] == _ids(expected[1:6])
-    assert body["reports_awaiting_review"] == 8
+    assert body["reports_awaiting_review"] == 9
 
 
 def test_fewer_than_five_and_none(

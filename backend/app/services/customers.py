@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import ProblemError
 from app.models import Customer, Invoice, Job, JobReport, User
-from app.models.enums import AuditAction, InvoiceState, ReviewStatus
+from app.models.enums import AuditAction, InvoiceState, ReportState, ReviewStatus
 from app.schemas import manager as schemas
 from app.schemas.common import Address, PersonRef
 from app.schemas.customer_write import CustomerUpdate, validate_phone, validate_postcode
@@ -55,7 +55,11 @@ def get_customer_record(session: Session, customer_id: uuid.UUID) -> schemas.Cus
             select(func.count())
             .select_from(JobReport)
             .join(Job, Job.id == JobReport.job_id)
-            .where(Job.customer_id == Customer.id, *where)
+            .where(
+                Job.customer_id == Customer.id,
+                JobReport.state == ReportState.submitted,
+                *where,
+            )
             .correlate(Customer)
             .scalar_subquery()
         )

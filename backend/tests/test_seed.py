@@ -77,10 +77,20 @@ def test_seed_loads_the_specified_volumes(engine: Engine) -> None:
             ).all()
         )
     assert types == {"homeowner": 8, "landlord": 2, "business": 2}
-    assert counts["jobs"] == 60 and counts["job_reports"] == 60
+    # 60 original jobs and reports, plus the operative day (T-003c): 10 jobs, 2 reports (1 draft)
+    assert counts["jobs"] == 70 and counts["job_reports"] == 62
+    assert counts["job_checklist_items"] == len(build_dataset(ANCHOR).job_checklist_items)
+    assert (
+        _scalar(
+            engine,
+            "SELECT count(*) FROM report_checklist_items i "
+            "JOIN job_checklist_items j ON j.id = i.id",
+        )
+        == counts["report_checklist_items"]
+    )
     assert (
         _scalar(engine, "SELECT count(*) FROM job_reports WHERE review_status = 'awaiting_review'")
-        == 9
+        == 10
     )
     assert (
         _scalar(
@@ -88,7 +98,7 @@ def test_seed_loads_the_specified_volumes(engine: Engine) -> None:
             "SELECT min(n) FROM "
             "(SELECT count(*) n FROM report_checklist_items GROUP BY report_id) x",
         )
-        >= 5
+        >= 4
     )
     assert (
         _scalar(
@@ -96,7 +106,7 @@ def test_seed_loads_the_specified_volumes(engine: Engine) -> None:
             "SELECT max(n) FROM "
             "(SELECT count(*) n FROM report_checklist_items GROUP BY report_id) x",
         )
-        <= 8
+        <= 9
     )
     per_report = Counter(
         dict(
@@ -106,8 +116,8 @@ def test_seed_loads_the_specified_volumes(engine: Engine) -> None:
             )
         ).values()
     )
-    assert sum(per_report.values()) == 59
-    assert all(4 <= n <= 10 for n in per_report)
+    assert sum(per_report.values()) == 61
+    assert all(2 <= n <= 10 for n in per_report)
     assert counts["quotes"] == 24
     assert _scalar(engine, "SELECT count(*) FROM payments WHERE kind = 'deposit'") == 14
     assert counts["invoices"] == 52
@@ -149,7 +159,8 @@ def test_database_invoice_statuses_match_the_dataset(engine: Engine) -> None:
         _scalar(
             engine,
             "SELECT count(*) FROM jobs j "
-            "WHERE NOT EXISTS (SELECT 1 FROM invoices i WHERE i.job_id = j.id)",
+            "WHERE NOT EXISTS (SELECT 1 FROM invoices i WHERE i.job_id = j.id) "
+            "AND j.status = 'completed' AND j.reference <= 'JP-1060'",  # the original 60 jobs
         )
         == 8
     )
@@ -197,7 +208,7 @@ def test_loader_replaces_existing_data(engine: Engine) -> None:
     load(engine, other)
     assert _scalar(engine, "SELECT max(completed_on) FROM jobs") <= date(2026, 11, 1)
     load(engine, build_dataset(ANCHOR))  # restore for the other tests
-    assert _scalar(engine, "SELECT count(*) FROM jobs") == 60
+    assert _scalar(engine, "SELECT count(*) FROM jobs") == 70
 
 
 @pytest.mark.parametrize("env", ["staging", "production"])

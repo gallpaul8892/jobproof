@@ -6,12 +6,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import JobReport, ReportPhoto
+from app.models.enums import ReportState
 
 
 def get_photo(session: Session, photo_id: uuid.UUID) -> ReportPhoto | None:
-    """The photo with its report and job loaded (the placeholder renderer prints the job ref)."""
+    """The photo with its report and job loaded (the placeholder renderer prints the job ref).
+
+    Photos of draft reports are not served here (T-003c): this endpoint is the manager's.
+    """
     return session.scalars(
         select(ReportPhoto)
-        .where(ReportPhoto.id == photo_id)
+        .join(JobReport, JobReport.id == ReportPhoto.report_id)
+        .where(ReportPhoto.id == photo_id, JobReport.state == ReportState.submitted)
         .options(joinedload(ReportPhoto.report).joinedload(JobReport.job))
     ).one_or_none()

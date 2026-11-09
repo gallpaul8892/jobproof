@@ -238,7 +238,8 @@ def test_no_photo_report_has_an_empty_list(
 def test_long_address_and_notes_are_returned_unchanged(
     client: TestClient, manager_headers: dict[str, str], ds: Any, by_reference: dict[str, Any]
 ) -> None:
-    long_job = max(ds.jobs, key=lambda j: len(j.notes or ""))
+    reported = {r.job_id for r in ds.reports}
+    long_job = max((j for j in ds.jobs if j.id in reported), key=lambda j: len(j.notes or ""))
     assert len(long_job.notes or "") > 1000
     report = next(r for r in ds.reports if r.job_id == long_job.id)
     assert len(report.painter_notes or "") > 600

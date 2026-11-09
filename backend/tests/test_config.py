@@ -264,3 +264,13 @@ def test_validation_errors_never_echo_secret_values(monkeypatch: pytest.MonkeyPa
         Settings()
     # str() is what tracebacks and logs print. (.errors() is the programmatic API and keeps inputs.)
     assert canary not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("field", "limit"),
+    [("refresh_reuse_grace_seconds", 300), ("device_access_ttl_seconds", 3600)],
+)
+def test_device_session_timings_have_upper_bounds(field: str, limit: int) -> None:
+    assert getattr(Settings(**BASE, **{field: limit}), field) == limit  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        Settings(**BASE, **{field: limit + 1})  # type: ignore[arg-type]

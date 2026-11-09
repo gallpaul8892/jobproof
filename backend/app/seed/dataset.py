@@ -35,6 +35,7 @@ from app.models.enums import (
     PaymentMethod,
     PhotoStage,
     QuoteStatus,
+    ReportState,
     ReviewStatus,
     UserRole,
 )
@@ -171,14 +172,16 @@ class ReportRow:
     id: uuid.UUID
     job_id: uuid.UUID
     painter_id: uuid.UUID
-    submitted_at: datetime
+    submitted_at: datetime | None  # None only for a draft (T-003c)
     painter_notes: str | None
-    review_status: ReviewStatus
+    review_status: ReviewStatus | None  # None only for a draft
     reviewed_at: datetime | None
     reviewed_by_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
     manager_notes: str | None = None  # T-002i: never set by the seed
+    state: ReportState = ReportState.submitted
+    submitted_by_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -189,6 +192,20 @@ class ChecklistItemRow:
     label: str
     done: bool
     note: str | None
+    created_at: datetime
+    updated_at: datetime
+    cannot_do: bool = False
+
+
+@dataclass(frozen=True)
+class JobChecklistItemRow:
+    """The job's planned checklist item; the report item with the same id extends it."""
+
+    id: uuid.UUID
+    job_id: uuid.UUID
+    position: int
+    label: str
+    removed_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -254,6 +271,35 @@ class Dataset:
     photos: tuple[PhotoRow, ...]
     invoices: tuple[InvoiceRow, ...]
     payments: tuple[PaymentRow, ...]
+    job_checklist_items: tuple[JobChecklistItemRow, ...] = ()
+    # Drafts are the operative's, not the manager's: `reports`, `checklist_items` and `photos`
+    # hold only what managers can see, so code that mirrors the manager API never meets a draft.
+    draft_reports: tuple[ReportRow, ...] = ()
+    draft_checklist_items: tuple[ChecklistItemRow, ...] = ()
+    draft_photos: tuple[PhotoRow, ...] = ()
+    # Ids of every row added by the operative day (T-003c): lets tests tell the original
+    # 60-job dataset from the operative's "today".
+    operative_row_ids: frozenset[uuid.UUID] = frozenset()
+
+    def without_operative_day(self) -> "Dataset":
+        """The original 60-job dataset: the operative day's rows removed (T-003c)."""
+        gone = self.operative_row_ids
+
+        def keep[T](rows: tuple[T, ...]) -> tuple[T, ...]:
+            return tuple(r for r in rows if r.id not in gone)  # type: ignore[attr-defined]
+
+        return dataclasses.replace(
+            self,
+            jobs=keep(self.jobs),
+            reports=keep(self.reports),
+            checklist_items=keep(self.checklist_items),
+            photos=keep(self.photos),
+            job_checklist_items=keep(self.job_checklist_items),
+            draft_reports=keep(self.draft_reports),
+            draft_checklist_items=keep(self.draft_checklist_items),
+            draft_photos=keep(self.draft_photos),
+            operative_row_ids=frozenset(),
+        )
 
     def tables(self) -> list[tuple[str, tuple[object, ...]]]:
         """(table name, rows) in foreign-key order."""
@@ -261,10 +307,11 @@ class Dataset:
             ("users", self.users),
             ("customers", self.customers),
             ("jobs", self.jobs),
+            ("job_checklist_items", self.job_checklist_items),
             ("quotes", self.quotes),
-            ("job_reports", self.reports),
-            ("report_checklist_items", self.checklist_items),
-            ("report_photos", self.photos),
+            ("job_reports", self.reports + self.draft_reports),
+            ("report_checklist_items", self.checklist_items + self.draft_checklist_items),
+            ("report_photos", self.photos + self.draft_photos),
             ("invoices", self.invoices),
             ("payments", self.payments),
         ]
@@ -824,6 +871,7 @@ def build_dataset(anchor: date) -> Dataset:  # noqa: PLR0915 - one linear build,
     quote_rows: list[QuoteRow] = []
     report_rows: list[ReportRow] = []
     checklist_rows: list[ChecklistItemRow] = []
+    job_item_rows: list[JobChecklistItemRow] = []
     photo_rows: list[PhotoRow] = []
     payment_rows: list[PaymentRow] = []
     job_ids: dict[str, uuid.UUID] = {}
@@ -888,6 +936,7 @@ def build_dataset(anchor: date) -> Dataset:  # noqa: PLR0915 - one linear build,
                 manager_id if reviewed else None,
                 plan.submitted_at,
                 plan.reviewed_at or plan.submitted_at,
+                submitted_by_id=painter_ids[plan.painter_index],
             )
         )
 
@@ -901,14 +950,26 @@ def build_dataset(anchor: date) -> Dataset:  # noqa: PLR0915 - one linear build,
                 note: str | None = rng.choice(cat.SNAG_NOTES)
             else:
                 note = rng.choice(cat.CHECKLIST_DONE_NOTES) if rng.random() < 0.15 else None
+            item_id = uid("checklist", f"{ref}:{position}")
             checklist_rows.append(
                 ChecklistItemRow(
-                    uid("checklist", f"{ref}:{position}"),
+                    item_id,
                     report_id,
                     position,
                     pool[pool_index],
                     done,
                     note,
+                    plan.submitted_at,
+                    plan.submitted_at,
+                )
+            )
+            job_item_rows.append(
+                JobChecklistItemRow(
+                    item_id,
+                    job_id,
+                    position,
+                    pool[pool_index],
+                    None,
                     plan.submitted_at,
                     plan.submitted_at,
                 )
@@ -1023,9 +1084,12 @@ def build_dataset(anchor: date) -> Dataset:  # noqa: PLR0915 - one linear build,
         tuple(photo_rows),
         tuple(invoice_rows),
         tuple(sorted(payment_rows, key=lambda p: (p.received_at, str(p.id)))),
+        tuple(job_item_rows),
     )
     _verify(dataset)
-    return dataset
+    from app.seed.operative_day import add_operative_day  # noqa: PLC0415 - avoids an import cycle
+
+    return add_operative_day(dataset)
 
 
 def _photos(rng: random.Random, plan: Plan, report_id: uuid.UUID) -> list[PhotoRow]:

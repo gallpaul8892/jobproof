@@ -119,7 +119,10 @@ def update_report(
         elif change.field == "manager_notes":
             report.manager_notes = edits.manager_notes
         elif change.field == "checklist_done":
-            items[change.item_id].done = bool(change.new_value)  # type: ignore[index]
+            target = items[change.item_id]  # type: ignore[index]
+            target.done = bool(change.new_value)
+            if target.done:
+                target.cannot_do = False  # never both (ck done_and_cannot_do_exclusive)
         else:
             items[change.item_id].note = change.new_value  # type: ignore[index, assignment]
     report.version += 1

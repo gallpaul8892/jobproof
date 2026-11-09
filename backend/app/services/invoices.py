@@ -2,10 +2,11 @@
 
 import datetime as dt
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Customer, Invoice, Job, JobReport
+from app.models.enums import ReportState
 from app.schemas import manager as schemas
 from app.schemas.common import PersonRef
 from app.services.billing import InvoiceStatus, balance_pence, invoice_status
@@ -46,7 +47,10 @@ def list_invoices(
             .select_from(Invoice)
             .join(Job, Job.id == Invoice.job_id)
             .join(Customer, Customer.id == Invoice.customer_id)
-            .outerjoin(JobReport, JobReport.job_id == Job.id)
+            .outerjoin(
+                JobReport,
+                and_(JobReport.job_id == Job.id, JobReport.state == ReportState.submitted),
+            )
             .where(*where)
             # Drafts (no issue date) first; the number breaks ties so pages are stable.
             .order_by(Invoice.issue_date.desc().nulls_first(), Invoice.number.desc())

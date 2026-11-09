@@ -19,6 +19,7 @@ from tests.conftest import (
     MANAGER_LOGIN,
     B11Database,
     bearer,
+    login_token,
 )
 
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
@@ -444,3 +445,42 @@ def test_cli_db_roles_never_prints_passwords(
     captured = capsys.readouterr()
     assert B11_APP_PASSWORD not in captured.out + captured.err
     assert B11_MIGRATOR_PASSWORD not in captured.out + captured.err
+
+
+def test_app_role_covers_the_operative_work_tables(
+    b11_reseeded: B11Database, app_engine: Engine, super_engine: Engine
+) -> None:
+    """T-003c: the table added by migration 0010 gets DML and no TRUNCATE; drafts are writable."""
+    assert "job_checklist_items" in _tables(super_engine)
+    assert _privileges(super_engine, "job_checklist_items") == {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+    }
+    with app_engine.begin() as connection:
+        job_id = connection.execute(text("SELECT id FROM jobs LIMIT 1")).scalar_one()
+        item_id = connection.execute(
+            text(
+                "INSERT INTO job_checklist_items (job_id, position, label) "
+                "VALUES (:j, 999, 'Role test') RETURNING id"
+            ),
+            {"j": job_id},
+        ).scalar_one()
+        connection.execute(
+            text("UPDATE job_checklist_items SET removed_at = now() WHERE id = :i"), {"i": item_id}
+        )
+        # the draft report's rows are ordinary DML for the app role too
+        connection.execute(text("UPDATE job_reports SET painter_notes = 'x' WHERE state = 'draft'"))
+        connection.execute(text("DELETE FROM job_checklist_items WHERE id = :i"), {"i": item_id})
+    with pytest.raises(ProgrammingError, match="permission denied"), app_engine.begin() as c:
+        c.execute(text("TRUNCATE TABLE job_checklist_items"))
+
+
+def test_the_api_serves_the_operative_jobs_as_the_app_role(b11_reseeded: B11Database) -> None:
+    settings = get_settings().model_copy(update={"database_url": b11_reseeded.app_url})
+    with TestClient(create_app(settings)) as client:
+        token = login_token(client, "painter@jobproof.test", "Painter123!")
+        response = client.get("/api/v1/operative/jobs", headers=bearer(token))
+    assert response.status_code == 200, response.text
+    assert len(response.json()["jobs_today"]) == 3

@@ -6,7 +6,14 @@ from app.models.billing import Invoice, Payment
 from app.models.people import Customer, User
 from app.models.sessions import AuthSession
 from app.models.settings import CompanySettings
-from app.models.work import Job, JobReport, Quote, ReportChecklistItem, ReportPhoto
+from app.models.work import (
+    Job,
+    JobChecklistItem,
+    JobReport,
+    Quote,
+    ReportChecklistItem,
+    ReportPhoto,
+)
 
 __all__ = [
     "NAMING_CONVENTION",
@@ -17,6 +24,7 @@ __all__ = [
     "Customer",
     "Invoice",
     "Job",
+    "JobChecklistItem",
     "JobReport",
     "Payment",
     "Quote",

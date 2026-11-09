@@ -85,11 +85,11 @@ test.describe("T-002h: review a report", () => {
   test("the lists and the dashboard show the new state without a reload", async ({ page, request }) => {
     const api = await ManagerApi.create(request);
     const awaiting = await api.awaiting();
-    expect(awaiting.length).toBe(9);
+    expect(awaiting.length).toBe(10); // 9 originals + Priya's morning report (T-003c)
     await signInViaApi(page);
     await page.goto("/");
     await expect(page.getByTestId("queue-row")).toHaveCount(5);
-    await expect(page.getByTestId("stat-awaiting-review")).toContainText("9");
+    await expect(page.getByTestId("stat-awaiting-review")).toContainText(String(awaiting.length));
     const sixth = awaiting[5];
 
     await page.getByTestId("queue-review").first().click();
@@ -98,13 +98,13 @@ test.describe("T-002h: review a report", () => {
 
     // client-side navigation only: the cache must have been invalidated
     await page.getByRole("navigation").getByRole("link", { name: "Dashboard" }).click();
-    await expect(page.getByTestId("stat-awaiting-review")).toContainText("8");
+    await expect(page.getByTestId("stat-awaiting-review")).toContainText(String(awaiting.length - 1));
     const refs = page.getByTestId("queue-ref");
     await expect(refs).toHaveCount(5);
     expect(await refs.allTextContents()).toEqual(awaiting.slice(1, 6).map((r) => r.job_reference));
     await expect(page.getByTestId("queue-row").getByText(awaiting[0].job_reference)).toHaveCount(0);
     await expect(refs.last()).toHaveText(sixth.job_reference);
-    await expect(page.getByRole("link", { name: "View all 8 awaiting review" })).toBeVisible();
+    await expect(page.getByRole("link", { name: `View all ${awaiting.length - 1} awaiting review` })).toBeVisible();
 
     await page.getByRole("navigation").getByRole("link", { name: "Reports" }).click();
     const row = page.getByTestId("report-row").filter({ hasText: awaiting[0].job_reference });

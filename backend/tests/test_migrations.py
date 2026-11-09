@@ -23,6 +23,7 @@ TABLES = {
     "company_settings",
     "audit_events",
     "auth_sessions",
+    "job_checklist_items",
 }
 ENUMS = {
     "user_role": ["manager", "painter", "admin"],
@@ -50,6 +51,7 @@ ENUMS = {
         "customer.edited",
     ],
     "audit_entity": ["report", "settings", "customer"],
+    "report_state": ["draft", "submitted"],
 }
 SCRATCH = make_url(TEST_DATABASE_URL).set(database="jobproof_migrations_scratch")
 
@@ -88,8 +90,9 @@ def test_upgrade_downgrade_upgrade_and_no_drift() -> None:
 
 def test_history_is_linear_with_one_head() -> None:
     script = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL))
-    assert script.get_heads() == ["0009"]
+    assert script.get_heads() == ["0010"]
     assert [r.revision for r in script.walk_revisions()] == [
+        "0010",
         "0009",
         "0008",
         "0007",
@@ -123,6 +126,8 @@ def test_constraints_indexes_and_naming_convention(scratch_engine: Engine) -> No
             column = fk["constrained_columns"][0]
             assert fk["name"] == f"fk_{table}_{column}_{fk['referred_table']}"
             expected = "CASCADE" if table.startswith("report_") else "RESTRICT"
+            if fk["referred_table"] == "job_checklist_items":
+                expected = "RESTRICT"  # a report item extends a job item (0010)
             assert (fk["options"].get("ondelete") or "").upper() == expected, (table, column)
         for ck in inspector.get_check_constraints(table):
             assert re.fullmatch(rf"ck_{table}_[a-z0-9_]+", ck["name"] or ""), ck
@@ -231,17 +236,21 @@ def test_package_2_migrations_keep_existing_rows_and_downgrade_cleanly() -> None
 
         from app.models import Base
 
-        dataset = build_dataset(ANCHOR)
-        legacy = {"manager_notes"}
+        dataset = build_dataset(ANCHOR).without_operative_day()
+        legacy = {"manager_notes", "state", "submitted_by_id", "cannot_do"}
         with engine.begin() as connection:
             for name, rows in dataset.tables():
-                if not rows:
+                if not rows or name == "job_checklist_items":
                     continue
                 table = Base.metadata.tables[name]
                 import dataclasses
 
                 payload = [
-                    {k: v for k, v in dataclasses.asdict(r).items() if k not in legacy}  # type: ignore[call-overload]
+                    {
+                        k: v
+                        for k, v in dataclasses.asdict(r).items()
+                        if not (k in legacy and (k != "state" or name == "job_reports"))
+                    }  # type: ignore[call-overload]
                     for r in rows
                 ]
                 connection.execute(insert(table).execution_options(), payload)
@@ -365,11 +374,6 @@ def test_0007_constraints_reject_bad_customer_rows(db_engine: Engine) -> None:
 
 def test_0007_upgrade_keeps_existing_customers_and_downgrade_restores_the_enums() -> None:
     """Customers present before 0007 become version 1; downgrade and upgrade round-trip."""
-    from sqlalchemy import insert
-
-    from app.models import Base
-    from app.seed.dataset import build_dataset
-    from tests.conftest import ANCHOR
 
     url = SCRATCH.render_as_string(hide_password=False)
     ensure_database(url)
@@ -378,14 +382,7 @@ def test_0007_upgrade_keeps_existing_customers_and_downgrade_restores_the_enums(
     command.upgrade(config, "0006")
     engine = create_engine(url)
     try:
-        import dataclasses
-
-        dataset = build_dataset(ANCHOR)
-        with engine.begin() as connection:
-            for name, rows in dataset.tables():
-                if rows:
-                    payload = [dataclasses.asdict(r) for r in rows]  # type: ignore[call-overload]
-                    connection.execute(insert(Base.metadata.tables[name]), payload)
+        _legacy_seed(engine)
         command.upgrade(config, "0007")
         with engine.connect() as connection:
             total, at_one = connection.execute(
@@ -394,7 +391,7 @@ def test_0007_upgrade_keeps_existing_customers_and_downgrade_restores_the_enums(
                     "AND last_changed_at IS NULL AND last_changed_by_id IS NULL) FROM customers"
                 )
             ).one()
-            assert total == len(dataset.customers) == at_one
+            assert total == 12 == at_one
             labels = connection.execute(
                 text(
                     "SELECT t.typname, array_agg(e.enumlabel::text ORDER BY e.enumsortorder) "
@@ -443,9 +440,7 @@ def test_0007_upgrade_keeps_existing_customers_and_downgrade_restores_the_enums(
                 "audit_entity": ["report", "settings"],
             }
             assert connection.execute(text("SELECT count(*) FROM audit_events")).scalar() == 1
-            assert connection.execute(text("SELECT count(*) FROM customers")).scalar() == len(
-                dataset.customers
-            )
+            assert connection.execute(text("SELECT count(*) FROM customers")).scalar() == 12
         # the append-only triggers still guard the table after the enum swap
         from sqlalchemy.exc import DBAPIError
 
@@ -497,7 +492,7 @@ def test_0007_downgrade_is_refused_while_a_customer_event_exists() -> None:
             }
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == "0009"
+                == "0010"
             )
     finally:
         with engine.begin() as connection:
@@ -719,3 +714,187 @@ def test_a_user_with_sessions_cannot_be_deleted(db_engine: Engine) -> None:
                 text("DELETE FROM auth_sessions WHERE user_id = :id"), {"id": user_id}
             )
             connection.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+
+
+# ---- 0010 operative work model (T-003c) -----------------------------------------------------
+def _legacy_seed(engine: Engine) -> None:
+    """Load the original 60-job dataset into a database at revision 0009."""
+    import dataclasses
+
+    from sqlalchemy import insert
+
+    from app.models import Base
+    from app.seed.dataset import build_dataset
+    from tests.conftest import ANCHOR
+
+    legacy = {"state", "submitted_by_id", "cannot_do"}
+    dataset = build_dataset(ANCHOR).without_operative_day()
+    with engine.begin() as connection:
+        for name, rows in dataset.tables():
+            if not rows or name == "job_checklist_items":
+                continue
+            payload = [
+                {
+                    k: v
+                    for k, v in dataclasses.asdict(r).items()
+                    if not (k in legacy and (k != "state" or name == "job_reports"))
+                }  # type: ignore[call-overload]
+                for r in rows
+            ]
+            connection.execute(insert(Base.metadata.tables[name]), payload)
+
+
+def _wipe(engine: Engine, config: Any) -> None:
+    with engine.begin() as connection:
+        connection.execute(text("DROP SCHEMA public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+    engine.dispose()
+    command.upgrade(config, "head")
+
+
+def test_0010_backfills_job_items_with_the_same_ids_and_downgrades_cleanly() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0009")
+    engine = create_engine(url)
+    try:
+        _legacy_seed(engine)
+        with engine.connect() as connection:
+            before = connection.execute(
+                text("SELECT count(*) FROM report_checklist_items")
+            ).scalar_one()
+        command.upgrade(config, "0010")
+        with engine.connect() as connection:
+            assert (
+                connection.execute(text("SELECT count(*) FROM job_checklist_items")).scalar_one()
+                == before
+            )
+            unmatched = connection.execute(
+                text(
+                    "SELECT count(*) FROM report_checklist_items i "
+                    "LEFT JOIN job_checklist_items j ON j.id = i.id "
+                    "LEFT JOIN job_reports r ON r.id = i.report_id "
+                    "WHERE j.id IS NULL OR j.job_id <> r.job_id OR j.label <> i.label "
+                    "OR j.position <> i.position"
+                )
+            ).scalar_one()
+            assert unmatched == 0
+            states = connection.execute(
+                text(
+                    "SELECT count(*) FROM job_reports WHERE state = 'submitted' "
+                    "AND submitted_by_id = painter_id AND submitted_at IS NOT NULL "
+                    "AND review_status IS NOT NULL"
+                )
+            ).scalar_one()
+            assert states == 60
+            assert not connection.execute(
+                text("SELECT count(*) FROM report_checklist_items WHERE cannot_do")
+            ).scalar_one()
+            columns = {c["name"]: c for c in inspect(connection).get_columns("job_reports")}
+            assert columns["submitted_at"]["nullable"] and columns["review_status"]["nullable"]
+            assert not columns["state"]["nullable"] and columns["state"]["default"] is None
+        command.downgrade(config, "0009")
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert "job_checklist_items" not in inspector.get_table_names()
+            columns = {c["name"]: c for c in inspector.get_columns("job_reports")}
+            assert "state" not in columns and "submitted_by_id" not in columns
+            assert not columns["submitted_at"]["nullable"]
+            assert not columns["review_status"]["nullable"]
+            assert not connection.execute(
+                text("SELECT 1 FROM pg_type WHERE typname = 'report_state'")
+            ).first()
+            assert connection.execute(text("SELECT count(*) FROM job_reports")).scalar_one() == 60
+        command.upgrade(config, "head")
+        command.check(config)
+    finally:
+        _wipe(engine, config)
+
+
+def _first_report(connection: Any) -> Any:
+    return connection.execute(text("SELECT id, job_id, painter_id FROM job_reports LIMIT 1")).one()
+
+
+def test_0010_downgrade_is_refused_while_a_draft_or_a_cannot_do_item_exists() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0009")
+    engine = create_engine(url)
+    try:
+        _legacy_seed(engine)
+        command.upgrade(config, "head")
+        # a "can't do" item
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE report_checklist_items SET done = false, cannot_do = true "
+                    "WHERE id = (SELECT id FROM report_checklist_items LIMIT 1)"
+                )
+            )
+        with pytest.raises(RuntimeError, match="0010"):
+            command.downgrade(config, "0009")
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE report_checklist_items SET cannot_do = false"))
+        # a draft
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE job_reports SET state = 'draft', submitted_at = NULL, "
+                    "submitted_by_id = NULL, review_status = NULL, reviewed_at = NULL, "
+                    "reviewed_by_id = NULL WHERE id = (SELECT id FROM job_reports LIMIT 1)"
+                )
+            )
+        with pytest.raises(RuntimeError, match="0010"):
+            command.downgrade(config, "0009")
+        with engine.begin() as connection:  # nothing was lost by the refusal
+            assert connection.execute(text("SELECT count(*) FROM job_reports")).scalar_one() == 60
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM job_reports WHERE state = 'draft'")
+                ).scalar_one()
+                == 1
+            )
+    finally:
+        _wipe(engine, config)
+
+
+def test_0010_constraints_reject_inconsistent_rows(db_engine: Engine) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    def rejected(statement: str) -> None:
+        with pytest.raises(IntegrityError), db_engine.begin() as connection:
+            connection.execute(text(statement))
+
+    pick = "(SELECT id FROM {t} ORDER BY id LIMIT 1)"
+    report = pick.format(t="job_reports")
+    # a draft that still has a submission time
+    rejected(f"UPDATE job_reports SET state = 'draft' WHERE id = {report}")
+    # a submitted report without a review status
+    rejected(f"UPDATE job_reports SET review_status = NULL WHERE id = {report}")
+    # a submitted report without who submitted it
+    rejected(f"UPDATE job_reports SET submitted_by_id = NULL WHERE id = {report}")
+    # a draft that carries a review (a NULL status would slip past the older check)
+    rejected(
+        "UPDATE job_reports SET state = 'draft', submitted_at = NULL, submitted_by_id = NULL, "
+        "review_status = NULL WHERE id = "
+        "(SELECT id FROM job_reports WHERE reviewed_at IS NOT NULL ORDER BY id LIMIT 1)"
+    )
+    # done and can't do together
+    rejected(
+        "UPDATE report_checklist_items SET done = true, cannot_do = true "
+        f"WHERE id = {pick.format(t='report_checklist_items')}"
+    )
+    # a report item needs its job item
+    rejected(
+        "INSERT INTO report_checklist_items (id, report_id, position, label, done) "
+        f"VALUES (gen_random_uuid(), {report}, 99, 'x', false)"
+    )
+    # job item positions are unique per job
+    rejected(
+        "INSERT INTO job_checklist_items (job_id, position, label) "
+        "SELECT job_id, position, 'dup' FROM job_checklist_items ORDER BY id LIMIT 1"
+    )

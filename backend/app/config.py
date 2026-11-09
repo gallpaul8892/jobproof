@@ -76,10 +76,10 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(default=_DEV_JWT_SECRET, min_length=32)
     jwt_ttl_seconds: int = Field(default=1800, ge=60)
     # Operative app device sessions (T-003b, design section 4).
-    device_access_ttl_seconds: int = Field(default=900, ge=60)
+    device_access_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     device_session_idle_days: int = Field(default=30, ge=1)
     device_session_max_days: int = Field(default=90, ge=1)
-    refresh_reuse_grace_seconds: int = Field(default=60, ge=0)
+    refresh_reuse_grace_seconds: int = Field(default=60, ge=0, le=300)
     # Lowest mobile app version the server supports (T-003a reports it, T-003n enforces it).
     mobile_min_version_android: str = "0.0.0"
     photo_url_secret: str = Field(default=_DEV_PHOTO_URL_SECRET, min_length=32)

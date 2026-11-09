@@ -44,6 +44,11 @@ class ReviewStatus(StrEnum):
     reviewed = "reviewed"
 
 
+class ReportState(StrEnum):
+    draft = "draft"
+    submitted = "submitted"
+
+
 class PhotoStage(StrEnum):
     before = "before"
     during = "during"

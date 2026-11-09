@@ -12,7 +12,17 @@ from app.db import make_engine, make_sessionmaker
 from app.errors import register_exception_handlers
 from app.logging import setup_logging
 from app.middleware import RequestContextMiddleware
-from app.routers import admin, app_status, auth, branding, health, manager, photos, sessions
+from app.routers import (
+    admin,
+    app_status,
+    auth,
+    branding,
+    health,
+    manager,
+    operative,
+    photos,
+    sessions,
+)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -57,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(branding.router)
     app.include_router(admin.router)
     app.include_router(manager.router)
+    app.include_router(operative.router)
     app.include_router(photos.router)
     return app
 

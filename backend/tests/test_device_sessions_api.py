@@ -10,8 +10,10 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.models.enums import UserRole
 from tests.conftest import (
     ADMIN_LOGIN,
     DEVICE_SESSIONS,
@@ -248,15 +250,19 @@ def test_a_lost_response_can_be_retried_within_the_grace_period(
     assert _refresh(client, retry.json()["refresh_token"]).status_code == 200
 
 
-def test_the_unreceived_token_dies_and_its_use_ends_the_session(
+def test_the_unreceived_token_dies_but_its_use_changes_nothing(
     client: TestClient, db_engine: Any
 ) -> None:
     login = device_sign_in(client, *PAINTER_LOGIN)
     lost = _refresh(client, login.refresh_token).json()
-    assert _refresh(client, login.refresh_token).status_code == 200  # grace retry
-    reuse = _refresh(client, lost["refresh_token"])
-    assert reuse.status_code == 401 and reuse.json()["code"] == "session_ended"
-    assert _row(db_engine, login.session_id).revoked_reason == "reuse_detected"
+    retry = _refresh(client, login.refresh_token)  # grace retry
+    assert retry.status_code == 200
+    before = _row(db_engine, login.session_id)
+    dead = _refresh(client, lost["refresh_token"])
+    assert dead.status_code == 401 and dead.json()["code"] == "session_ended"
+    after = _row(db_engine, login.session_id)
+    assert after.revoked_at is None and after.generation == before.generation
+    assert _refresh(client, retry.json()["refresh_token"]).status_code == 200
 
 
 def test_an_old_token_after_the_grace_period_revokes_the_session(
@@ -277,24 +283,47 @@ def test_an_old_token_after_the_grace_period_revokes_the_session(
     assert me.status_code == 401 and me.json()["code"] == "session_ended"
 
 
-def test_a_token_two_generations_old_revokes_the_session(
+def test_a_token_two_generations_old_is_refused_without_changing_the_session(
     client: TestClient, db_engine: Any
 ) -> None:
     login = device_sign_in(client, *PAINTER_LOGIN)
     second = _refresh(client, login.refresh_token).json()
-    _refresh(client, second["refresh_token"])
-    response = _refresh(client, login.refresh_token)  # inside 60 s but no longer the previous one
-    assert response.status_code == 401
-    assert _row(db_engine, login.session_id).revoked_reason == "reuse_detected"
+    third = _refresh(client, second["refresh_token"]).json()
+    before = _row(db_engine, login.session_id)
+    response = _refresh(client, login.refresh_token)  # neither current nor previous
+    assert response.status_code == 401 and response.json()["code"] == "session_ended"
+    after = _row(db_engine, login.session_id)
+    assert after.revoked_at is None and after.generation == before.generation
+    assert _refresh(client, third["refresh_token"]).status_code == 200
 
 
-def test_a_right_session_id_with_a_wrong_secret_revokes_the_session(
+def test_a_right_session_id_with_an_unknown_secret_changes_nothing(
     client: TestClient, db_engine: Any
 ) -> None:
     login = device_sign_in(client, *PAINTER_LOGIN)
+    before = _row(db_engine, login.session_id)
     forged = f"{login.session_id}.{'A' * 43}"
-    assert _refresh(client, forged).json()["code"] == "session_ended"
-    assert _row(db_engine, login.session_id).revoked_reason == "reuse_detected"
+    response = _refresh(client, forged)
+    assert response.status_code == 401 and response.json()["code"] == "session_ended"
+    assert_contract(response, "refreshDeviceSession")
+    after = _row(db_engine, login.session_id)
+    assert after.revoked_at is None and after.revoked_reason is None
+    assert after.refresh_hash == before.refresh_hash and after.generation == before.generation
+    # the real phone is not logged out by somebody guessing
+    assert _refresh(client, login.refresh_token).status_code == 200
+
+
+def test_an_unknown_secret_for_a_deactivated_account_does_not_reveal_it(
+    client: TestClient, db_engine: Any, temp_user: Any
+) -> None:
+    user = temp_user(role=UserRole.painter)
+    login = device_sign_in(client, user.email, "Temp123!")
+    with Session(db_engine) as s:
+        s.execute(text("UPDATE users SET is_active = false WHERE id = :i"), {"i": user.id})
+        s.commit()
+    response = _refresh(client, f"{login.session_id}.{'A' * 43}")
+    assert response.json()["code"] == "session_ended"  # not account_inactive
+    assert _refresh(client, login.refresh_token).json()["code"] == "account_inactive"
 
 
 @pytest.mark.parametrize(

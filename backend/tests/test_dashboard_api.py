@@ -21,8 +21,12 @@ def test_dashboard_figures_match_the_seed(
     assert_contract(response, "getManagerDashboard")
     body = response.json()
     expected = expected_dashboard(ds, ANCHOR)
-    assert body["reports_awaiting_review"] == expected.awaiting == 9
-    assert body["jobs_completed_this_month"] == expected.completed_this_month == 8
+    assert (
+        body["reports_awaiting_review"] == expected.awaiting == 10
+    )  # 9 originals + Priya's morning report
+    assert (
+        body["jobs_completed_this_month"] == expected.completed_this_month == 9
+    )  # 8 + Priya's job completed today
     assert body["invoiced_this_month_pence"] == expected.invoiced_this_month > 0
     assert body["outstanding_pence"] == expected.outstanding > 0
     assert body["overdue_invoice_count"] == expected.overdue == 6

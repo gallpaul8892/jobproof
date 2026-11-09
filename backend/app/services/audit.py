@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.errors import ProblemError
 from app.logging import request_id_var
 from app.models import AuditEvent, Customer, Job, JobReport, User
-from app.models.enums import AuditAction, AuditEntity
+from app.models.enums import AuditAction, AuditEntity, ReportState
 from app.schemas import audit as schemas
 from app.schemas.common import PersonRef
 
@@ -117,7 +117,7 @@ def report_history(session: Session, report_id: uuid.UUID) -> schemas.AuditHisto
     customer_id = session.scalar(
         select(Job.customer_id)
         .join(JobReport, JobReport.job_id == Job.id)
-        .where(JobReport.id == report_id)
+        .where(JobReport.id == report_id, JobReport.state == ReportState.submitted)
     )
     if customer_id is None:
         raise ProblemError(404, "not_found", "Report not found.")

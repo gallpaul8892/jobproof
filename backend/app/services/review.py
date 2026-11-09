@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import ProblemError
 from app.models import JobReport, User
-from app.models.enums import AuditAction, ReviewStatus
+from app.models.enums import AuditAction, ReportState, ReviewStatus
 from app.services.audit import FieldChange, record_event
 
 
@@ -37,7 +37,7 @@ def conflict_extensions(session: Session, report: JobReport) -> dict[str, Any]:
         "current_version": report.version,
         "last_changed_at": iso_utc(report.last_changed_at),
         "last_changed_by": _person(session, report.last_changed_by_id),
-        "review_status": report.review_status.value,
+        "review_status": report.review_status.value if report.review_status else None,
         "reviewed_at": iso_utc(report.reviewed_at),
         "reviewed_by": _person(session, report.reviewed_by_id),
     }
@@ -45,7 +45,7 @@ def conflict_extensions(session: Session, report: JobReport) -> dict[str, Any]:
 
 def lock_report(session: Session, report_id: uuid.UUID) -> JobReport:
     report = session.get(JobReport, report_id, with_for_update=True)
-    if report is None:
+    if report is None or report.state != ReportState.submitted:  # drafts are the operative's
         raise ProblemError(404, "not_found", "Report not found.")
     return report
 

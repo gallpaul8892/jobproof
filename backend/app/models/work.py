@@ -26,6 +26,7 @@ from app.models.enums import (
     JobType,
     PhotoStage,
     QuoteStatus,
+    ReportState,
     ReviewStatus,
 )
 from app.models.people import Customer, User
@@ -69,8 +70,28 @@ class Job(TimestampMixin, Base):
     customer: Mapped[Customer] = relationship()
     painter: Mapped[User | None] = relationship()
     report: Mapped["JobReport | None"] = relationship(back_populates="job")
+    checklist_items: Mapped[list["JobChecklistItem"]] = relationship(
+        back_populates="job", order_by="JobChecklistItem.position"
+    )
     quotes: Mapped[list["Quote"]] = relationship(back_populates="job")
     invoices: Mapped[list["Invoice"]] = relationship(back_populates="job")
+
+
+class JobChecklistItem(TimestampMixin, Base):
+    """A planned checklist item of a job (T-003c); the report item with the same id extends it."""
+
+    __tablename__ = "job_checklist_items"
+    __table_args__ = (UniqueConstraint("job_id", "position"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("jobs.id", ondelete="RESTRICT"), index=True
+    )
+    position: Mapped[int] = mapped_column(SmallInteger)
+    label: Mapped[str] = mapped_column(Text)
+    removed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    job: Mapped[Job] = relationship(back_populates="checklist_items")
 
 
 class Quote(TimestampMixin, Base):
@@ -118,6 +139,15 @@ class JobReport(TimestampMixin, Base):
             "(last_changed_at IS NULL) = (last_changed_by_id IS NULL)",
             name="last_changed_fields_together",
         ),
+        CheckConstraint(
+            "(state = 'submitted') = (submitted_at IS NOT NULL AND submitted_by_id IS NOT NULL"
+            " AND review_status IS NOT NULL)",
+            name="submitted_fields_match_state",
+        ),
+        CheckConstraint(
+            "state = 'submitted' OR (reviewed_at IS NULL AND reviewed_by_id IS NULL)",
+            name="draft_not_reviewed",
+        ),
         Index("ix_job_reports_submitted_at", text("submitted_at DESC")),
     )
 
@@ -128,7 +158,13 @@ class JobReport(TimestampMixin, Base):
     painter_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
-    submitted_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    state: Mapped[ReportState] = mapped_column(pg_enum(ReportState, "report_state"), index=True)
+    # Null while the report is a draft (T-003c). Manager code only ever sees submitted reports:
+    # query through `submitted_reports()` in services/reports.py.
+    submitted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
     painter_notes: Mapped[str | None] = mapped_column(Text)
     manager_notes: Mapped[str | None] = mapped_column(Text)
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
@@ -136,7 +172,7 @@ class JobReport(TimestampMixin, Base):
     last_changed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT")
     )
-    review_status: Mapped[ReviewStatus] = mapped_column(
+    review_status: Mapped[ReviewStatus | None] = mapped_column(
         pg_enum(ReviewStatus, "review_status"), index=True
     )
     reviewed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
@@ -146,6 +182,7 @@ class JobReport(TimestampMixin, Base):
 
     job: Mapped[Job] = relationship(back_populates="report")
     painter: Mapped[User] = relationship(foreign_keys=[painter_id])
+    submitted_by: Mapped[User | None] = relationship(foreign_keys=[submitted_by_id])
     reviewed_by: Mapped[User | None] = relationship(foreign_keys=[reviewed_by_id])
     last_changed_by: Mapped[User | None] = relationship(foreign_keys=[last_changed_by_id])
     checklist_items: Mapped[list["ReportChecklistItem"]] = relationship(
@@ -158,16 +195,24 @@ class JobReport(TimestampMixin, Base):
 
 class ReportChecklistItem(TimestampMixin, Base):
     __tablename__ = "report_checklist_items"
-    __table_args__ = (UniqueConstraint("report_id", "position"),)
+    __table_args__ = (
+        UniqueConstraint("report_id", "position"),
+        CheckConstraint("NOT (done AND cannot_do)", name="done_and_cannot_do_exclusive"),
+    )
 
-    id: Mapped[uuid.UUID] = uuid_pk()
+    # The id is the job checklist item's id: one row extends the other (1:1).
+    id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("job_checklist_items.id", ondelete="RESTRICT"), primary_key=True
+    )
     report_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("job_reports.id", ondelete="CASCADE"))
     position: Mapped[int] = mapped_column(SmallInteger)
     label: Mapped[str] = mapped_column(Text)
     done: Mapped[bool] = mapped_column(Boolean)
+    cannot_do: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     note: Mapped[str | None] = mapped_column(Text)
 
     report: Mapped[JobReport] = relationship(back_populates="checklist_items")
+    job_item: Mapped[JobChecklistItem] = relationship()
 
 
 class ReportPhoto(TimestampMixin, Base):

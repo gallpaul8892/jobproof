@@ -33,6 +33,7 @@ from app.models.enums import (
     PhotoStage,
     QuoteStatus,
     ReportSort,
+    ReportState,
     ReviewStatus,
 )
 from app.photos.store import PhotoStore
@@ -77,10 +78,24 @@ class ReportFilters:
     sort: ReportSort = ReportSort.default
 
 
-def _summary_from(stmt: Select[Any]) -> Select[Any]:
+def submitted_reports(*columns: Any) -> Select[Any]:
+    """The only way manager code starts a query over reports (T-003c).
+
+    Drafts belong to the operative: they have no submission time and must never reach a manager
+    list, count, detail, history or link. Selects `columns` (default: the JobReport entity) from
+    `job_reports` restricted to `state = 'submitted'`; callers add joins and filters.
+    """
     return (
-        stmt.select_from(JobReport)
-        .join(Job, Job.id == JobReport.job_id)
+        select(*(columns or (JobReport,)))
+        .select_from(JobReport)
+        .where(JobReport.state == ReportState.submitted)
+    )
+
+
+def _summary_from(stmt: Select[Any]) -> Select[Any]:
+    """Joins for the summary queries; `stmt` must come from `submitted_reports()`."""
+    return (
+        stmt.join(Job, Job.id == JobReport.job_id)
         .join(Customer, Customer.id == Job.customer_id)
         .join(Painter, Painter.id == JobReport.painter_id)
         .outerjoin(LiveInvoice, live_invoice_join_condition(Job.id, LiveInvoice))
@@ -215,12 +230,15 @@ def list_reports(
     today: dt.date,
 ) -> schemas.ReportPage:
     where = _filter_clauses(filters, today)
-    total = session.scalar(_summary_from(select(func.count(JobReport.id))).where(*where)) or 0
+    total = (
+        session.scalar(_summary_from(submitted_reports(func.count(JobReport.id))).where(*where))
+        or 0
+    )
     offset = (page - 1) * page_size
     items: list[schemas.ReportSummary] = []
     if offset < total:
         stmt = (
-            _summary_from(select(*_summary_columns()))
+            _summary_from(submitted_reports(*_summary_columns()))
             .where(*where)
             .order_by(*_list_order(filters.sort))
             .limit(page_size)
@@ -232,7 +250,7 @@ def list_reports(
 
 def recent_reports(session: Session, *, today: dt.date, limit: int) -> list[schemas.ReportSummary]:
     stmt = (
-        _summary_from(select(*_summary_columns()))
+        _summary_from(submitted_reports(*_summary_columns()))
         .order_by(JobReport.submitted_at.desc(), Job.reference.desc())
         .limit(limit)
     )
@@ -244,7 +262,7 @@ def review_queue(
 ) -> list[schemas.ReportSummary]:
     """Reports awaiting review that have waited longest (T-002k)."""
     stmt = (
-        _summary_from(select(*_summary_columns()))
+        _summary_from(submitted_reports(*_summary_columns()))
         .where(JobReport.review_status == ReviewStatus.awaiting_review)
         .order_by(*_list_order(ReportSort.submitted_asc))
         .limit(limit)
@@ -308,7 +326,7 @@ def get_report_detail(
     InvoiceAlias = aliased(Invoice)  # noqa: N806
     QuoteAlias = aliased(Quote)  # noqa: N806
     stmt = (
-        select(
+        submitted_reports(
             JobReport,
             Job,
             Customer,
@@ -319,7 +337,6 @@ def get_report_detail(
             QuoteAlias,
             job_count,
         )
-        .select_from(JobReport)
         .join(Job, Job.id == JobReport.job_id)
         .join(Customer, Customer.id == Job.customer_id)
         .join(Painter, Painter.id == JobReport.painter_id)
@@ -333,6 +350,8 @@ def get_report_detail(
     if row is None:
         raise ProblemError(404, "not_found", "Report not found.")
     report, job, customer, painter, reviewer, changed_by, invoice, quote, customers_jobs = row
+    # submitted_reports() guarantees these (check constraint submitted_fields_match_state)
+    assert report.submitted_at is not None and report.review_status is not None  # noqa: S101
 
     checklist = session.scalars(
         select(ReportChecklistItem)

@@ -58,7 +58,7 @@ def test_manager_marks_a_report_reviewed(
     reseed: None,
 ) -> None:
     target = awaiting_reports(ds)[0]
-    assert dashboard(client, manager2_headers)["reports_awaiting_review"] == 9
+    assert dashboard(client, manager2_headers)["reports_awaiting_review"] == 10
     response = review(client, manager2_headers, target.id, 1)
     assert response.status_code == 200
     assert_contract(response, "reviewManagerReport")
@@ -71,7 +71,7 @@ def test_manager_marks_a_report_reviewed(
     assert body["last_changed_at"] == body["reviewed_at"]
     assert detail(client, manager2_headers, target.id) == body
     dash = dashboard(client, manager2_headers)
-    assert dash["reports_awaiting_review"] == 8
+    assert dash["reports_awaiting_review"] == 9
     assert target.id.hex not in {r["id"].replace("-", "") for r in dash["review_queue"]}
 
 

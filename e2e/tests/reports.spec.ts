@@ -17,14 +17,14 @@ test.describe("5. List job reports", () => {
   test("20 rows, newest first, with paging kept in the URL", async ({ page, request }) => {
     const api = await ManagerApi.create(request);
     const first = await api.get<Page_<ReportItem>>("reports");
-    expect(first.total).toBe(60);
+    expect(first.total).toBe(61); // 60 original reports + Priya's morning report (T-003c)
     await signInViaApi(page);
     await page.goto("/reports");
 
     const rows = page.getByTestId("reports-table").locator("tbody tr");
     await expect(rows).toHaveCount(20);
-    await expect(page.getByTestId("result-count")).toHaveText("Showing 1-20 of 60 reports");
-    await expect(page.getByTestId("page-label")).toHaveText("Page 1 of 3");
+    await expect(page.getByTestId("result-count")).toHaveText("Showing 1-20 of 61 reports");
+    await expect(page.getByTestId("page-label")).toHaveText("Page 1 of 4");
 
     const headers = page.getByTestId("reports-table").getByRole("columnheader");
     await expect(headers).toHaveText([
@@ -51,24 +51,24 @@ test.describe("5. List job reports", () => {
     expect([...dates].sort().reverse()).toEqual(dates);
 
     await page.getByRole("button", { name: "Next" }).click();
-    await expect(page.getByTestId("result-count")).toHaveText("Showing 21-40 of 60 reports");
+    await expect(page.getByTestId("result-count")).toHaveText("Showing 21-40 of 61 reports");
     await expect(page).toHaveURL(/\/reports\?page=2$/);
     const second = await api.get<Page_<ReportItem>>("reports", { page: 2 });
     await expect(rows.first().getByRole("link")).toHaveText(second.items[0].job_reference);
 
     await page.reload();
-    await expect(page.getByTestId("result-count")).toHaveText("Showing 21-40 of 60 reports");
+    await expect(page.getByTestId("result-count")).toHaveText("Showing 21-40 of 61 reports");
 
     await page.getByRole("button", { name: "Previous" }).click();
-    await expect(page.getByTestId("result-count")).toHaveText("Showing 1-20 of 60 reports");
+    await expect(page.getByTestId("result-count")).toHaveText("Showing 1-20 of 61 reports");
     await page.goBack();
-    await expect(page.getByTestId("result-count")).toHaveText("Showing 21-40 of 60 reports");
+    await expect(page.getByTestId("result-count")).toHaveText("Showing 21-40 of 61 reports");
   });
 
   test("the last page shows the remainder and disables Next", async ({ page }) => {
     await signInViaApi(page);
-    await page.goto("/reports?page=3");
-    await expect(page.getByTestId("result-count")).toHaveText("Showing 41-60 of 60 reports");
+    await page.goto("/reports?page=4");
+    await expect(page.getByTestId("result-count")).toHaveText("Showing 61-61 of 61 reports");
     await expect(page.getByRole("button", { name: "Next" })).toBeDisabled();
   });
 });
@@ -120,7 +120,7 @@ test.describe("6. Filter and search reports", () => {
     await expect(count).toHaveText(showing(1, expected.total, 20, "reports"));
 
     await page.getByRole("button", { name: "Clear filters" }).first().click();
-    await expect(count).toHaveText("Showing 1-20 of 60 reports");
+    await expect(count).toHaveText("Showing 1-20 of 61 reports");
     await expect(page).toHaveURL(/\/reports$/);
 
     await page.getByLabel("Operative").selectOption({ label: "Dan Hughes" });
@@ -150,7 +150,7 @@ test.describe("6. Filter and search reports", () => {
     await expect(page.getByTestId("result-count")).toHaveText(showing(1, expected.total, 20, "reports"));
   });
 
-  test("no matches shows the empty state, and Clear filters restores all 60", async ({ page }) => {
+  test("no matches shows the empty state, and Clear filters restores all 61", async ({ page }) => {
     await signInViaApi(page);
     await page.goto("/reports");
     await page.getByRole("searchbox", { name: "Search" }).fill("zzzz-no-such-thing");
@@ -158,7 +158,7 @@ test.describe("6. Filter and search reports", () => {
     await expect(empty).toContainText("No reports match these filters");
     await expect(page.getByTestId("reports-table")).toHaveCount(0);
     await empty.getByRole("button", { name: "Clear filters" }).click();
-    await expect(page.getByTestId("result-count")).toHaveText("Showing 1-20 of 60 reports");
+    await expect(page.getByTestId("result-count")).toHaveText("Showing 1-20 of 61 reports");
     await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("");
     await expect(page).toHaveURL(/\/reports$/);
   });

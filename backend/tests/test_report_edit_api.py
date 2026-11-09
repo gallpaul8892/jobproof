@@ -175,7 +175,7 @@ def test_editing_a_reviewed_report_reopens_it(
 ) -> None:
     target = reviewed_reports(ds)[0]
     reviewed_at = target.reviewed_at
-    assert dashboard(client, manager2_headers)["reports_awaiting_review"] == 9
+    assert dashboard(client, manager2_headers)["reports_awaiting_review"] == 10
     response = patch(
         client, manager2_headers, target.id, {"version": 1, "painter_notes": "Corrected typo."}
     )
@@ -185,7 +185,7 @@ def test_editing_a_reviewed_report_reopens_it(
     assert body["review_status"] == "awaiting_review"
     assert body["reviewed_by"] is None and body["reviewed_at"] is None
     assert body["version"] == 2  # one bump for the edit and the reopen together
-    assert dashboard(client, manager2_headers)["reports_awaiting_review"] == 10
+    assert dashboard(client, manager2_headers)["reports_awaiting_review"] == 11
     events = history(client, manager2_headers, target.id)["items"]
     assert [e["action"] for e in events] == ["report.reopened", "report.edited"]
     reopened = events[0]

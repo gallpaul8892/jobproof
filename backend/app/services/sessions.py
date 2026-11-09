@@ -185,30 +185,41 @@ def refresh(
     row = session.scalar(select(AuthSession).where(AuthSession.id == session_id).with_for_update())
     if row is None:
         raise session_ended()
-    # A deactivated account is reported as such even though deactivation also revoked the session.
+    # 1. Prove possession of a token for this session before anything else is revealed or done.
+    #    An unknown secret (a guessed or mangled token) changes nothing: it must not be a way
+    #    to log somebody else's phone out.
+    presented = hash_secret(secret)
+    is_current = _same(row.refresh_hash, presented)
+    is_previous = not is_current and _same(row.previous_refresh_hash, presented)
+    if not is_current and not is_previous:
+        session.rollback()
+        raise session_ended()
+    in_grace = (
+        is_previous
+        and row.rotated_at is not None
+        and now - row.rotated_at <= dt.timedelta(seconds=settings.refresh_reuse_grace_seconds)
+    )
+    if is_previous and not in_grace:
+        # A token that was already replaced, presented after the grace window: it was copied
+        # or replayed. End the session.
+        revoke(session, row, "reuse_detected", now)
+        raise _fail(session, row, session_ended(), "reuse_detected")
+    # 2. A deactivated account is reported as such even though deactivation also revoked the
+    #    session (only someone holding a valid token learns this).
     user = session.get(User, row.user_id)
     if user is None or not user.is_active:
         revoke(session, row, "deactivated", now)
         raise _fail(session, row, account_inactive(), "account_inactive")
+    # 3. Revoked or expired.
     if row.revoked_at is not None or now >= row.idle_expires_at or now >= row.absolute_expires_at:
         session.rollback()
         raise session_ended()
-    presented = hash_secret(secret)
     absolute = row.absolute_expires_at
-    if _same(row.refresh_hash, presented):
+    if is_current:
         row.previous_refresh_hash = row.refresh_hash
         row.rotated_at = now
-    elif (
-        _same(row.previous_refresh_hash, presented)
-        and row.rotated_at is not None
-        and now - row.rotated_at <= dt.timedelta(seconds=settings.refresh_reuse_grace_seconds)
-    ):
-        # The client lost the last response: issue another pair. The token it never received
-        # stops working; the grace window is still measured from the original rotation.
-        pass
-    else:
-        revoke(session, row, "reuse_detected", now)
-        raise _fail(session, row, session_ended(), "reuse_detected")
+    # else: the client lost the last response; issue another pair. The token it never received
+    # stops working; the grace window is still measured from the original rotation.
     new_token, new_hash = _new_token(row.id)
     row.refresh_hash = new_hash
     row.generation += 1

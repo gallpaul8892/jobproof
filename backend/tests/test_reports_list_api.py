@@ -12,6 +12,8 @@ from tests.conftest import ANCHOR
 from tests.contract import assert_contract
 from tests.expected import ExpectedReport, expected_reports, parse_ts, search_matches
 
+TOTAL = 61  # the original 60 reports plus Priya's submitted this morning (T-003c)
+
 URL = "/api/v1/manager/reports"
 
 
@@ -43,7 +45,7 @@ def test_default_page_is_twenty_newest_first(
     response = get(client, manager_headers)
     assert response.status_code == 200
     body = response.json()
-    assert (body["total"], body["page"], body["page_size"]) == (60, 1, 20)
+    assert (body["total"], body["page"], body["page_size"]) == (TOTAL, 1, 20)
     assert len(body["items"]) == 20
     assert ids(response) == expected_ids(expected[:20])
 
@@ -73,7 +75,7 @@ def test_sort_is_completed_on_then_submitted_at_then_reference_desc(
     items = get(client, manager_headers, page_size=100).json()["items"]
     keys = [(i["completed_on"], i["submitted_at"], i["job_reference"]) for i in items]
     assert keys == sorted(keys, reverse=True)
-    assert len({i["id"] for i in items}) == 60
+    assert len({i["id"] for i in items}) == TOTAL
 
 
 def test_pages_partition_the_list(
@@ -86,9 +88,10 @@ def test_pages_partition_the_list(
     assert page3.json()["page"] == 3 and len(page3.json()["items"]) == 20
     page4 = get(client, manager_headers, page=4)
     assert page4.status_code == 200
-    assert page4.json()["items"] == []
-    assert page4.json()["total"] == 60
+    assert ids(page4) == expected_ids(expected[60:])  # the 61st report alone
+    assert page4.json()["total"] == TOTAL
     assert page4.json()["page"] == 4
+    assert get(client, manager_headers, page=5).json()["items"] == []
 
 
 def test_page_size_bounds(
@@ -99,7 +102,7 @@ def test_page_size_bounds(
     assert ids(full) == expected_ids(expected)
     assert full.json()["page_size"] == 100
     assert len(get(client, manager_headers, page_size=1).json()["items"]) == 1
-    assert ids(get(client, manager_headers, page_size=7, page=9)) == expected_ids(expected[56:60])
+    assert ids(get(client, manager_headers, page_size=7, page=9)) == expected_ids(expected[56:])
     assert get(client, manager_headers, page_size=7, page=10).json()["items"] == []
 
 
@@ -133,7 +136,7 @@ def test_a_page_far_beyond_the_end_is_empty_not_an_error(
     response = get(client, manager_headers, page=10**30)
     assert response.status_code == 200
     assert response.json()["items"] == []
-    assert response.json()["total"] == 60
+    assert response.json()["total"] == TOTAL
 
 
 def test_unknown_query_parameters_are_ignored(
@@ -141,7 +144,7 @@ def test_unknown_query_parameters_are_ignored(
 ) -> None:
     response = get(client, manager_headers, colour="red", shape="wide")
     assert response.status_code == 200
-    assert response.json()["total"] == 60
+    assert response.json()["total"] == TOTAL
 
 
 # ---- scenario 6: filters -----------------------------------------------------------------------
@@ -181,8 +184,8 @@ def test_billing_status_totals_cover_every_report(
         s.value: get(client, manager_headers, billing_status=s.value).json()["total"]
         for s in BillingStatus
     }
-    assert sum(totals.values()) == 60
-    assert totals["void"] == 1 and totals["not_invoiced"] == 8
+    assert sum(totals.values()) == TOTAL
+    assert totals["void"] == 1 and totals["not_invoiced"] == 9  # 8 + Priya's morning report
 
 
 def test_filter_by_each_painter(
@@ -199,7 +202,7 @@ def test_filter_by_each_painter(
         assert response.json()["total"] == len(want)
         assert ids(response) == expected_ids(want)
         seen += len(want)
-    assert seen == 60
+    assert seen == TOTAL
 
 
 def test_unknown_painter_matches_nothing(
@@ -382,7 +385,7 @@ def test_search_job_reference(
     want = check_search(client, manager_headers, expected, "jp-1042")
     assert [r.job.reference for r in want] == ["JP-1042"]
     assert len(check_search(client, manager_headers, expected, "JP-104")) == 10
-    assert len(check_search(client, manager_headers, expected, "jp-")) == 60
+    assert len(check_search(client, manager_headers, expected, "jp-")) == TOTAL
 
 
 @pytest.mark.parametrize(
@@ -413,7 +416,7 @@ def test_search_with_no_matches_is_an_empty_page(
 
 
 def test_blank_search_is_ignored(client: TestClient, manager_headers: dict[str, str]) -> None:
-    assert get(client, manager_headers, q="   ").json()["total"] == 60
+    assert get(client, manager_headers, q="   ").json()["total"] == TOTAL
 
 
 def test_search_combines_with_other_filters(
