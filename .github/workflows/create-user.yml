@@ -1,0 +1,108 @@
+# Create one Admin or Manager account by running the one-off `create-user` ECS task (spec 5.6).
+#
+# The password is never an input and never printed. The task reads it from the Secrets Manager
+# secret jobproof/<env>/admin-initial-password, which Paul creates by hand in the AWS console
+# first (runbook infra/README.md, section 1F). The task logs only the new user's id.
+# After a successful run the workflow tries to delete that secret; if the deploy role is not
+# allowed to, it says so and Paul deletes the secret in the console.
+name: create-user
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to create the user in
+        required: true
+        type: choice
+        options: [prod, dev]
+      role:
+        description: Role of the new user
+        required: true
+        type: choice
+        options: [admin, manager]
+      email:
+        description: Email address (the sign-in name)
+        required: true
+        type: string
+      full_name:
+        description: Full name
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: create-user-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+
+jobs:
+  create-user:
+    name: create-user (${{ inputs.environment }})
+    if: ${{ (inputs.environment == 'prod' && vars.AWS_PROD_ACCOUNT_ID != '') || (inputs.environment == 'dev' && vars.AWS_DEV_ACCOUNT_ID != '') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # only to assume the deploy role of the chosen environment
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      ACCOUNT_ID: ${{ inputs.environment == 'prod' && vars.AWS_PROD_ACCOUNT_ID || vars.AWS_DEV_ACCOUNT_ID }}
+      USER_ROLE: ${{ inputs.role }}
+      USER_EMAIL: ${{ inputs.email }}
+      USER_FULL_NAME: ${{ inputs.full_name }}
+      REF: ${{ github.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the inputs
+        run: |
+          set -euo pipefail
+          [ "$REF" = "refs/heads/main" ] || { echo "::error::Run this workflow from the main branch."; exit 1; }
+          case "$ENVIRONMENT" in dev|prod) ;; *) echo "::error::environment must be dev or prod"; exit 1 ;; esac
+          case "$USER_ROLE" in admin|manager) ;; *) echo "::error::role must be admin or manager"; exit 1 ;; esac
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::the AWS account id variable must be 12 digits"; exit 1; }
+          if [ "${#USER_EMAIL}" -gt 254 ] || ! [[ "$USER_EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$ ]]; then
+            echo "::error::the email address is not valid"; exit 1
+          fi
+          if [ -z "$USER_FULL_NAME" ] || [ "${#USER_FULL_NAME}" -gt 100 ] \
+            || printf '%s' "$USER_FULL_NAME" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+            echo "::error::the full name must be 1 to 100 characters with no control characters"; exit 1
+          fi
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ inputs.environment == 'prod' && vars.AWS_PROD_ACCOUNT_ID || vars.AWS_DEV_ACCOUNT_ID }}:role/jobproof-github-deploy
+          role-session-name: create-user
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Load the environment's configuration
+        run: infra/scripts/load-config.sh
+      - name: Run the create-user task (the password comes from the Secrets Manager secret, never from here)
+        run: |
+          set -euo pipefail
+          # jq builds the command as JSON data from the environment: no shell parsing of the values.
+          COMMAND_JSON="$(jq -cn --arg role "$USER_ROLE" --arg email "$USER_EMAIL" --arg name "$USER_FULL_NAME" \
+            '["python","-m","app.cli","create-user","--role",$role,"--email",$email,"--full-name",$name]')"
+          export COMMAND_JSON
+          infra/scripts/run-task.sh create-user
+      - name: Delete the one-time password secret
+        env:
+          SECRET_ID: jobproof/${{ inputs.environment }}/admin-initial-password
+        run: |
+          if aws secretsmanager delete-secret --secret-id "$SECRET_ID" --force-delete-without-recovery >/dev/null 2>"$RUNNER_TEMP/delete-secret.err"; then
+            echo "Deleted the secret $SECRET_ID."
+            echo "The one-time password secret was deleted." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Could not delete $SECRET_ID (the deploy role may not be allowed to). Delete it in the AWS console, Secrets Manager, with no recovery window."
+            echo "**Delete the secret \`$SECRET_ID\` in the AWS console now** (Secrets Manager, delete, no recovery window)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Summary
+        run: |
+          {
+            echo "### Created a $USER_ROLE in $ENVIRONMENT"
+            echo
+            echo "Sign in with the email you entered and the password you stored in the secret."
+          } >> "$GITHUB_STEP_SUMMARY"

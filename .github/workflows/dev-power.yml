@@ -1,0 +1,93 @@
+# Sleep or wake the dev environment to save money (spec 4.1, section 6). sleep: service to 0 tasks,
+# then stop the database. wake: start the database, wait for it, service back to 1 task, smoke
+# test. The pipeline needs dev awake, so run wake before pushing. RDS starts a stopped database
+# again by itself after 7 days; run sleep again if that happens.
+# Skipped while AWS_DEV_ACCOUNT_ID is empty.
+name: dev-power
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: sleep stops dev (about 12 pounds a month saved), wake starts it again
+        required: true
+        type: choice
+        options: [sleep, wake]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+
+jobs:
+  power:
+    name: dev ${{ inputs.action }}
+    if: vars.AWS_DEV_ACCOUNT_ID != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write # only to assume the dev deploy role
+    env:
+      ENVIRONMENT: dev
+      ACCOUNT_ID: ${{ vars.AWS_DEV_ACCOUNT_ID }}
+      POWER_ACTION: ${{ inputs.action }}
+      REF: ${{ github.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the inputs
+        run: |
+          [ "$REF" = "refs/heads/main" ] || { echo "::error::Run this workflow from the main branch."; exit 1; }
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::AWS_DEV_ACCOUNT_ID must be 12 digits"; exit 1; }
+          case "$POWER_ACTION" in sleep|wake) ;; *) echo "::error::action must be sleep or wake"; exit 1 ;; esac
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_DEV_ACCOUNT_ID }}:role/jobproof-github-deploy
+          role-session-name: dev-power
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Load the dev configuration
+        run: |
+          infra/scripts/load-config.sh
+          [ -n "${DB_INSTANCE_ID:-}" ] || { echo "::error::the stored configuration has no db_instance_identifier"; exit 1; }
+      - name: Sleep. Service to 0 tasks, then stop the database
+        if: env.POWER_ACTION == 'sleep'
+        run: |
+          set -euo pipefail
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count 0 >/dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          status="$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
+            --query 'DBInstances[0].DBInstanceStatus' --output text)"
+          case "$status" in
+            available) aws rds stop-db-instance --db-instance-identifier "$DB_INSTANCE_ID" >/dev/null ;;
+            stopped|stopping) echo "The database is already $status." ;;
+            *) echo "::error::the database is '$status'; try again when it is available"; exit 1 ;;
+          esac
+          echo "### Dev is going to sleep" >> "$GITHUB_STEP_SUMMARY"
+      - name: Wake. Start the database, wait, service back to 1 task
+        if: env.POWER_ACTION == 'wake'
+        run: |
+          set -euo pipefail
+          status="$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
+            --query 'DBInstances[0].DBInstanceStatus' --output text)"
+          case "$status" in
+            stopped) aws rds start-db-instance --db-instance-identifier "$DB_INSTANCE_ID" >/dev/null ;;
+            available|starting) echo "The database is already $status." ;;
+            *) echo "::error::the database is '$status'; try again in a few minutes"; exit 1 ;;
+          esac
+          aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_ID"
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count 1 >/dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+      - name: Smoke test after waking
+        if: env.POWER_ACTION == 'wake'
+        env:
+          SMOKE_WAIT_SECONDS: "300"
+        run: |
+          infra/scripts/smoke-test.sh "$SITE_URL"
+          echo "### Dev is awake: $SITE_URL" >> "$GITHUB_STEP_SUMMARY"

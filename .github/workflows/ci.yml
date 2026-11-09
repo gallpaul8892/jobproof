@@ -173,3 +173,63 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/cfn-lint-venv"
           "$RUNNER_TEMP/cfn-lint-venv/bin/pip" install --quiet "cfn-lint==${CFN_LINT_VERSION}"
           "$RUNNER_TEMP/cfn-lint-venv/bin/cfn-lint" infra/bootstrap/bootstrap.cfn.yaml
+
+  terraform:
+    name: terraform (fmt, validate, tflint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TFLINT_VERSION: "v0.66.0" # latest release tag when pinned (2026-11-09); bump deliberately
+      TF_IN_AUTOMATION: "1"
+      TF_INPUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-terraform
+      - name: terraform fmt -check (the whole tree)
+        run: terraform fmt -check -recursive -diff infra/terraform
+      - name: dev and prod differ only in tfvars, backend and guard.tf
+        run: bash infra/terraform/check-env-parity.sh
+      - name: terraform init -backend=false and validate (dev, prod). Needs the registry, no AWS credentials
+        id: validate
+        run: |
+          set -euo pipefail
+          for env in dev prod; do
+            echo "::group::terraform validate ($env)"
+            cd "$GITHUB_WORKSPACE/infra/terraform/envs/$env"
+            if [ -f .terraform.lock.hcl ]; then
+              echo "lock_$env=committed" >> "$GITHUB_OUTPUT"
+              terraform init -backend=false -lockfile=readonly
+            else
+              echo "lock_$env=missing" >> "$GITHUB_OUTPUT"
+              terraform init -backend=false
+            fi
+            terraform validate -no-color
+            echo "::endgroup::"
+          done
+      - name: tflint (modules and both environments; version-pinned, built from source like actionlint)
+        run: |
+          go install "github.com/terraform-linters/tflint@${TFLINT_VERSION}"
+          tflint="$(go env GOPATH)/bin/tflint"
+          "$tflint" --version
+          "$tflint" --recursive --chdir infra/terraform --config "$GITHUB_WORKSPACE/infra/terraform/.tflint.hcl" --format compact
+      - name: Provider lock files for all platforms (only while they are not committed)
+        if: steps.validate.outputs.lock_dev == 'missing' || steps.validate.outputs.lock_prod == 'missing'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lockfiles/dev" "$RUNNER_TEMP/lockfiles/prod"
+          for env in dev prod; do
+            cd "$GITHUB_WORKSPACE/infra/terraform/envs/$env"
+            terraform providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_arm64 -platform=darwin_amd64 -platform=windows_amd64
+            cp .terraform.lock.hcl "$RUNNER_TEMP/lockfiles/$env/.terraform.lock.hcl"
+          done
+      - name: Upload the lock files (download them and commit each into its envs/<env>/ folder)
+        if: steps.validate.outputs.lock_dev == 'missing' || steps.validate.outputs.lock_prod == 'missing'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: terraform-lockfiles
+          path: ${{ runner.temp }}/lockfiles
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: error

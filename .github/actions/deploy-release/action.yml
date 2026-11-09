@@ -1,0 +1,115 @@
+# The deploy steps shared by pipeline.yml (dev) and deploy-prod.yml (prod), INFRA spec 4.3 steps 4
+# to 10 and 4.4. Run it AFTER the job has assumed the environment's deploy role (the job needs
+# id-token: write; this action needs no permission of its own). It is a composite action, not a
+# reusable workflow, on purpose: the AWS trust policy names the calling workflow file
+# (job_workflow_ref), which a reusable workflow would change.
+#
+# Order, per 4.6: db-roles, migrate (the old version keeps serving, so every migration must work
+# with the code that is deployed now), then the service moves, then the web build, then the
+# release record, then the smoke test.
+name: Deploy a release to one environment
+description: db-roles, migrate, optional demo seed, ECS service update, web upload, release record, smoke test.
+inputs:
+  environment:
+    description: dev or prod.
+    required: true
+  version:
+    description: The commit SHA being deployed (40 hex characters).
+    required: true
+  outputs-file:
+    description: Flat Terraform outputs JSON (see infra/scripts/export-outputs.sh).
+    required: true
+  web-dist:
+    description: Directory holding the built web bundle (index.html and assets/).
+    required: true
+  seed-demo:
+    description: "true (dev only) runs seed-demo --if-empty after migrate."
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Check the inputs and load the Terraform outputs
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        VERSION: ${{ inputs.version }}
+        OUTPUTS_FILE: ${{ inputs.outputs-file }}
+        WEB_DIST: ${{ inputs.web-dist }}
+        SEED_DEMO: ${{ inputs.seed-demo }}
+      run: |
+        set -euo pipefail
+        case "$ENVIRONMENT" in dev|prod) ;; *) echo "::error::environment must be dev or prod"; exit 1 ;; esac
+        [[ "$VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::version must be a 40 character commit SHA"; exit 1; }
+        if [ "$SEED_DEMO" = "true" ] && [ "$ENVIRONMENT" != "dev" ]; then
+          echo "::error::demo data is for dev only"; exit 1
+        fi
+        [ -f "$WEB_DIST/index.html" ] || { echo "::error::$WEB_DIST/index.html not found"; exit 1; }
+        "$GITHUB_WORKSPACE/infra/scripts/export-outputs.sh" "$OUTPUTS_FILE"
+
+    - name: db-roles (idempotent, creates the migrator and app roles and sets their passwords)
+      shell: bash
+      run: '"$GITHUB_WORKSPACE/infra/scripts/run-task.sh" db-roles'
+
+    - name: migrate (alembic upgrade head, then the app-role grants; a failure stops the deploy and the old version keeps serving)
+      shell: bash
+      run: '"$GITHUB_WORKSPACE/infra/scripts/run-task.sh" migrate'
+
+    - name: seed-demo --if-empty (dev only; does nothing when users exist)
+      if: inputs.seed-demo == 'true'
+      shell: bash
+      run: '"$GITHUB_WORKSPACE/infra/scripts/run-task.sh" seed-demo'
+
+    - name: Move the service to the new revision and wait until it is stable
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        # find-task-definition.sh reads API_FAMILY (set by export-outputs.sh) and VERSION.
+        TASK_DEFINITION_ARN="$("$GITHUB_WORKSPACE/infra/scripts/find-task-definition.sh")"
+        export TASK_DEFINITION_ARN
+        "$GITHUB_WORKSPACE/infra/scripts/deploy-service.sh"
+
+    - name: Upload the web build (assets, then config.js, then index.html) and invalidate
+      shell: bash
+      env:
+        WEB_DIST: ${{ inputs.web-dist }}
+      run: '"$GITHUB_WORKSPACE/infra/scripts/upload-web.sh"'
+
+    - name: Keep this web build for rollback, record the outputs and the release
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        WEB_DIST: ${{ inputs.web-dist }}
+        OUTPUTS_FILE: ${{ inputs.outputs-file }}
+      run: |
+        set -euo pipefail
+        tarball="$RUNNER_TEMP/web-$VERSION.tar.gz"
+        tar -C "$WEB_DIST" -czf "$tarball" .
+        aws s3 cp "$tarball" "s3://$RELEASES_BUCKET/web/$VERSION.tar.gz" --only-show-errors
+        # The workflows that run without Terraform (rollback, create-user, dev-demo-data,
+        # dev-power) read this copy. It holds names and ids only, no secret.
+        aws s3 cp "$OUTPUTS_FILE" "s3://$RELEASES_BUCKET/config/outputs.json" --only-show-errors \
+          --content-type application/json
+        aws ssm put-parameter --name "$RELEASE_PARAMETER" --value "$VERSION" --type String --overwrite >/dev/null
+
+    - name: Smoke test through the public address
+      shell: bash
+      env:
+        SMOKE_WAIT_SECONDS: "300"
+      run: '"$GITHUB_WORKSPACE/infra/scripts/smoke-test.sh" "$SITE_URL"'
+
+    - name: Summary
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        {
+          echo "### Deployed to $ENVIRONMENT"
+          echo
+          echo "Running on $ENVIRONMENT: \`$VERSION\`"
+          echo
+          echo "Site: $SITE_URL"
+        } >> "$GITHUB_STEP_SUMMARY"

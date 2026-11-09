@@ -1,0 +1,35 @@
+# Installs the pinned Terraform CLI straight from releases.hashicorp.com and verifies the download
+# against HashiCorp's published SHA256SUMS before it is unpacked. No third-party action is used.
+# Keep the default equal to the Terraform version in specs/INFRA-aws-pipeline.md ("Versions") and
+# to required_version in infra/terraform/envs/*/versions.tf.
+name: Set up Terraform
+description: Download, checksum-verify and install the pinned Terraform CLI (linux amd64).
+inputs:
+  version:
+    description: Terraform version, exact (for example 1.17.1).
+    required: false
+    default: "1.17.1"
+runs:
+  using: composite
+  steps:
+    - name: Download, verify and install Terraform
+      shell: bash
+      env:
+        TERRAFORM_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        if ! [[ "$TERRAFORM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::the Terraform version must look like 1.17.1"
+          exit 1
+        fi
+        dir="$RUNNER_TEMP/terraform-$TERRAFORM_VERSION"
+        mkdir -p "$dir"
+        base="https://releases.hashicorp.com/terraform/$TERRAFORM_VERSION"
+        zip="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+        curl -fsSL --retry 3 --max-time 120 -o "$dir/$zip" "$base/$zip"
+        curl -fsSL --retry 3 --max-time 60 -o "$dir/SHA256SUMS" "$base/terraform_${TERRAFORM_VERSION}_SHA256SUMS"
+        # Exactly one line for our zip must verify; anything else fails the step.
+        (cd "$dir" && grep -F -- " $zip" SHA256SUMS | sha256sum --check --strict -)
+        unzip -q -o "$dir/$zip" terraform -d "$dir"
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/terraform" version

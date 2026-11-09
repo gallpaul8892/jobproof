@@ -1,8 +1,9 @@
 # INFRA: AWS environments and delivery pipeline (plan for approval)
 
 Status: **INFRA-1, INFRA-2 and INFRA-3 built** (commits 5fe6834, d676c4c, 322808d); round 1
-code review REQUEST CHANGES, fixes in progress (see "Review status" below). INFRA-4 to INFRA-8
-**planned**: no Terraform beyond `csp.txt`, no deploy workflow and no AWS resource exists yet.
+code review REQUEST CHANGES, fixes in progress (see "Review status" below). INFRA-4 (Terraform) and
+INFRA-5 (workflows, section 4.7) are **written but have never run** (no GitHub run, no AWS
+account); INFRA-6 to INFRA-8 **planned**.
 Owner: architect. Created 2026-11-08, updated 2026-11-09.
 
 ## Review status (round 1, 2026-11-09, `reports/progress/review-infra-123.json`)
@@ -27,8 +28,8 @@ Open findings and owners:
 | MAJOR | Plan role's `ReadOnlyAccess` includes `rds:Download*` (RDS logs readable by any pull request) | infra | Extra denies in 5.1 |
 | MAJOR | RDS CA bundle is a placeholder | backend / Paul | INFRA-6 entry gate (above) |
 | MINOR | Trust names the repo only by owner/repo | infra | Add `repository_owner_id` and `repository_id` to the subject template and trust conditions |
-| MINOR | `ci.yml` has no `infra` job (4.2) | infra | Add it with pinned cfn-lint (Terraform steps join in INFRA-4) |
-| MINOR | `ci.yml` concurrency group identical for every `main` push via `pipeline.yml` | infra | Key on `run_id` for non-`pull_request` events |
+| MINOR | `ci.yml` has no `infra` job (4.2) | infra | **Done**: `ci.yml` has an `infra` job (cfn-lint 1.60.0) and, from INFRA-5, a `terraform` job (fmt, validate, tflint) |
+| MINOR | `ci.yml` concurrency group identical for every `main` push via `pipeline.yml` | infra | **Done**: keyed on `run_id` for non-`pull_request` events |
 | MINOR | `smoke-test.sh` builds login JSON with `printf`; bearer token on the command line | infra | `jq`/`json.dumps` and a header file; test a password with quote and backslash |
 | MINOR | `DATABASE_URL` bypasses verify-full in staging/production | backend | Require `sslmode=verify-full` and `sslrootcert` in it there, or refuse it |
 | MINOR | `/health/live` lacks `x-ticket: INFRA-3`; response `status` is `str`, contract enum `[ok]` | backend | Add `x-ticket` and `Literal["ok"]` |
@@ -302,7 +303,7 @@ All third-party actions are **pinned to a full commit SHA**, with the version in
 Dependabot updates them. `setup-uv` publishes no major tags (`@v10` does not exist), so only the
 full version or SHA works. Built in INFRA-2: `ci.yml`, `dependency-check.yml` (weekly, Monday
 05:17 UTC: pip-audit, npm audit, RDS CA bundle comparison; one findings issue) and
-`dependabot.yml`; the other workflows are INFRA-5 **(planned)**. Each
+`dependabot.yml`; the other workflows were written in INFRA-5 (section 4.7, never run). Each
 workflow sets `permissions:` to the minimum (`contents: read`, plus `id-token: write` only on
 jobs that talk to AWS). AWS jobs are skipped while `vars.AWS_DEV_ACCOUNT_ID` is empty, so CI is
 useful before the bootstrap.
@@ -314,7 +315,7 @@ useful before the bootstrap.
 | `backend` | `actions/checkout`, `astral-sh/setup-uv`, `uv sync --frozen`; **Postgres as a GitHub service container**: `postgres:16-alpine` (pinned digest), `POSTGRES_USER=jobproof`, `POSTGRES_PASSWORD=jobproof`, `POSTGRES_DB=jobproof_test`, port `5544:5432`, health option `pg_isready`. The Makefile's default `TEST_DATABASE_URL` (`127.0.0.1:5544/jobproof_test`) then works unchanged. Run ruff, format check, mypy and `uv run pytest`. The blackhole connect-timeout test that skips in the workspace runs here (B5) |
 | `web` | `actions/setup-node` (Node 22), `npm ci`, `npm run lint`, `redocly lint`, `npm run gen:check`, `npm test`, `npm run build -w @jobproof/web` (includes the bundle origin check), busybox regression test for `web/nginx/*.sh` |
 | `e2e` | `cp .env.example .env`; `make up` (the first real `docker compose` run: closes B4, verifies the nginx tag B6, pins image digests B3); `npx playwright install --with-deps chromium`; `make e2e`; upload the Playwright report on failure. GitHub's hosted runners have Docker. Claude's workspace does not, which is why this has never run |
-| `infra` | `terraform fmt -check -recursive`, `terraform validate` for both envs, `tflint`, `cfn-lint` on the bootstrap file, `actionlint` on workflows. **As built:** `actionlint` (v1.7.12) runs in a job named `workflows`; the CSP parity test runs in the `web` job (`web/nginx/csp-parity.test.ts`); the `infra` job with pinned cfn-lint is a review minor (infra engineer); Terraform steps join in INFRA-4 |
+| `infra` | `terraform fmt -check -recursive`, `terraform validate` for both envs, `tflint`, `cfn-lint` on the bootstrap file, `actionlint` on workflows. **As built:** `actionlint` (v1.7.12) runs in a job named `workflows`; the CSP parity test runs in the `web` job (`web/nginx/csp-parity.test.ts`); the `infra` job runs cfn-lint 1.60.0 on the bootstrap file; the `terraform` job (INFRA-5) runs `terraform fmt -check -recursive`, the dev/prod parity script, `init -backend=false` and `validate` for `envs/dev` and `envs/prod`, and tflint v0.66.0 (no AWS credentials; it needs the Terraform registry, so **this is where the unvalidated Terraform is first checked**). While no `.terraform.lock.hcl` is committed it also uploads generated lock files as the artifact `terraform-lockfiles` to commit |
 | `plan` (pull requests only, after bootstrap) | Assume `jobproof-github-plan` in each account and run `terraform plan -lock=false` (read-only role). Post the plan summary to the job summary |
 
 Rough runner time: about 20 minutes per push. The free plan's 2,000 private-repo minutes a month
@@ -401,6 +402,60 @@ columns and tables first, remove them only in a later release. The code reviewer
 every migration. Downgrades are **never** run in prod (0005's downgrade drops audit history).
 Fixes go forward as new migrations. The first deploy runs 0001 to the head on an empty
 database, so this rule matters only from the second deploy on.
+
+### 4.7 INFRA-5 as built (2026-11-09; written and linted, never run)
+
+Files: `.github/workflows/{pipeline,deploy-prod,rollback,create-user,dev-demo-data,dev-power}.yml`,
+the `terraform` job in `ci.yml`, composite actions `.github/actions/setup-terraform` and
+`.github/actions/deploy-release`, and `infra/scripts/{export-outputs,load-config,run-task,
+find-task-definition,deploy-service,push-image,promote-image}.sh`. `actionlint` 1.7.12 with
+shellcheck is clean. The scripts were exercised against a stub `aws` only; no workflow has run.
+
+Deviations from 4.3 and 4.4, and why:
+
+- **Shared deploy steps are a composite action, not a reusable workflow.** The AWS trust policy
+  names the calling workflow file (`job_workflow_ref`), and a reusable workflow would change it.
+  Every AWS job therefore lives in the workflow file the trust names, and none uses `environment:`.
+- **Jobs:** `ci`, `build`, `terraform-dev` (terraform role), `deploy-dev` (deploy role),
+  `prod-preview` (plan role). `deploy-prod.yml`: `verify` (no AWS), `terraform-prod`, `deploy-prod`.
+  `AWS_*_ACCOUNT_ID` empty skips the AWS jobs; downstream jobs skip with them.
+- **Image push order.** Terraform creates the deploy role, so on the very first dev run the
+  `terraform-dev` job creates ECR (`-target=module.ecr`) and pushes the image with the terraform
+  role. Every later run pushes in `deploy-dev` with the deploy role. Prod has no equivalent: its
+  terraform role may not pull from dev, so on the first prod apply the service starts before its
+  image is copied, its tasks fail to pull, and the next step (copy, migrate, service update) fixes
+  it. That is expected once.
+- **No buildx cache and no `docker/build-push-action`:** a plain `docker build` (no layer
+  cache between runs). The image is saved as the artifact `backend-image`, the bundle as `web-dist`
+  (90 days).
+- **Stored configuration.** The plan role is trusted only by `ci.yml` and `pipeline.yml`, and the
+  deploy role cannot read Terraform state, so `rollback`, `create-user`, `dev-demo-data` and
+  `dev-power` cannot run `terraform output`. After every deploy the workflow stores the flat
+  outputs (names and ids, no secret) at `s3://jobproof-<env>-releases-<account>/config/outputs.json`
+  (outside the `web/` lifecycle prefix) and those workflows read it (`load-config.sh`). They fail
+  with a clear message before the first deploy.
+- **Promotion checks** (`verify`): run from `main`; the SHA is a full 40-character commit on `main`;
+  a successful `pipeline.yml` push run exists for it whose `deploy-dev` job succeeded (this proves
+  it reached dev; "dev or an earlier version" is not compared beyond that); its `web-dist` artifact
+  is downloaded and handed to the AWS job. Terraform for prod runs from the current `main`
+  checkout with `image_tag` set to the promoted SHA.
+- **Rollback** finds the task-definition revision whose image tag is the SHA
+  (`find-task-definition.sh`), moves the service, restores `web/<sha>.tar.gz`, rewrites the release
+  marker, and smoke-tests. After any service move, `deploy-service.sh` checks the service is really
+  on the requested revision, because `ecs wait services-stable` also succeeds after the circuit
+  breaker has rolled back.
+- **create-user** takes no password. The task reads `jobproof/<env>/admin-initial-password`. The
+  workflow then tries to delete that secret, but the deploy role has no Secrets Manager permission
+  (`ci_roles`), so today it warns and Paul deletes the secret in the console. Granting
+  `secretsmanager:DeleteSecret` on that one secret name to the deploy role would close it
+  (INFRA-4 follow-up).
+- **Not built:** the pull-request `plan` job in `ci.yml` (4.2), the Playwright login-page check in
+  the dev smoke test (the shell smoke test covers the CSP header), removal of old web assets after
+  30 days, and the optional `dev-power` schedule.
+- **Concurrency:** `pipeline.yml` and `dev-demo-data`/`dev-power` use `deploy-dev`, `deploy-prod.yml`
+  uses `deploy-prod`, `rollback.yml` uses `deploy-<env>`, `create-user.yml` uses
+  `create-user-<env>`; none cancels a running job. GitHub keeps only one queued run per group, so
+  a newer queued run replaces an older queued one.
 
 ## 5. Security
 
@@ -616,7 +671,7 @@ chain the first deploy applies.
 | **INFRA-2** CI on GitHub (**built**, d676c4c; first GitHub run pending) | `ci.yml` (4.2), `dependency-check.yml`, `dependabot.yml`, actions SHA-pinned. Closed B7, B8. B3 to B6 close after the first green GitHub run (digests are reported by the `e2e` job, then pinned) | writes it; **the first run happens on GitHub** (no AWS) | none beyond the push |
 | **INFRA-3** App readiness for AWS (**built**, 322808d; BLOCKER fix in progress, 5.4) | As built: contract v0.5.0 (21 operations), `backend/app/dbroles.py`, `backend/app/seed/demo.py`, CLI `create-user`/`db-roles`/`migrate`, `DB_*` settings with verify-full, CA bundle placeholder (INFRA-6 entry gate), `csp.txt`, `infra/scripts/` (`upload-web.sh`, `smoke-test.sh`, `local-edge.mjs` test double). Original scope: Backend: `DB_*` settings as an alternative to `DATABASE_URL` (ECS can inject secret fields but cannot assemble a URL), `DB_SSLMODE`/`DB_SSLROOTCERT` with the committed RDS bundle, `GET /health/live` (contract change: unversioned, 200 `{status:"ok"}`, no DB check, so a database failover does not make the ALB kill every task), `app.cli db-roles`, `app.cli migrate` with grants and the B11 tests, `app.seed.demo` with its guards and tests, `create-user --role` (P9). Web/infra: `csp.txt` and the parity test, `infra/scripts/upload-web.sh` (upload order, `config.js`), smoke-test script. All tested locally with `scripts/dev.sh` | yes, fully | none |
 | **INFRA-4** Terraform modules and envs | The modules in section 3, `envs/dev` and `envs/prod`, `fmt`/`validate`/`tflint` clean; verify the write-only argument and ephemeral random-password support in the chosen provider versions first; **hard requirement and review check: no secret value in state or plan output** (section 3 `secrets` row); pricing calculator link | writes and validates (provider download only); **cannot plan or apply** | none |
-| **INFRA-5** Workflows | `pipeline.yml`, `deploy-prod.yml`, `rollback.yml`, `create-user.yml`, `dev-demo-data.yml`, `dev-power.yml`; `actionlint` clean; AWS jobs skip until bootstrap | writes; **cannot run AWS jobs** | none |
+| **INFRA-5** Workflows (**written 2026-11-09, never run**, section 4.7) | `pipeline.yml`, `deploy-prod.yml`, `rollback.yml`, `create-user.yml`, `dev-demo-data.yml`, `dev-power.yml`, the `terraform` job in `ci.yml`, composite actions and `infra/scripts/` helpers; `actionlint` clean; AWS jobs skip until bootstrap | writes; **cannot run AWS jobs** | none |
 | **INFRA-6** First dev deploy | **Entry gate:** the real RDS CA bundle is committed (`test_rds_bundle.py` passes, no XFAIL). You do sections 1A to 1E (and P2). Then a push to `main` deploys dev. Claude reads the GitHub run logs and fixes forward. Restore test in dev; runbook finished | partly: Claude sees GitHub logs, not the AWS console | **yes**: 1A to 1E; you open the dev URL and sign in with the demo password |
 | **INFRA-7** First prod deploy | Click **Deploy to prod**; 1F for the Admin (and a Manager if P9); check alarm emails arrive (confirm the SNS subscription email) | no | **yes** |
 | **INFRA-8** (later) Custom domain | `dns` module: certificates, alternate domain, ALB HTTPS, TLS policy, `CORS`/`PUBLIC_API_BASE_URL`/`config.js` switch to the domain | yes, except DNS changes at the registrar | buy the domain; registrar or Route 53 steps |
@@ -688,11 +743,11 @@ chain the first deploy applies.
 | `astral-sh/setup-uv` | v10.3.3 (SHA `68559e99cc807c1eb7e9238fd43a15bba460eec2`; no major tags) | as above |
 | `actions/upload-artifact` | v7.0.2 (SHA `cf430e030ddbb5b0abf93d22962f4752f3646cd9`) | as above; `download-artifact` (INFRA-5) pinned to the matching major then |
 | actionlint / cfn-lint / pip-audit | 1.7.12 / 1.60.0 / 2.10.1 | `ci.yml`, review, `dependency-check.yml` |
-| `aws-actions/configure-aws-credentials` | v6 (6.3.0, 2026-09) | GitHub releases |
-| `hashicorp/setup-terraform` | v4 (4.0.1) | GitHub releases |
-| `docker/build-push-action` | v7 | mirror; exact latest patch **unverified** |
-| `aws-actions/amazon-ecr-login` | v2 (2.0.2 seen) | **unverified** as latest |
+| `aws-actions/configure-aws-credentials` | v6.3.0 (SHA `e1253824e5c10ff9df46874f81ed3ec929e19cfd`) | used by INFRA-5; SHA verified with `git ls-remote` 2026-11-09 |
+| `actions/download-artifact` | v8.0.2 (SHA `9000827ccba6bdab643e8b6fd33ac0654aef8333`) | used by INFRA-5; SHA verified with `git ls-remote` 2026-11-09 (upload-artifact stays on v7.0.2; both use the same artifact backend) |
+| tflint | v0.66.0 | latest tag by `git ls-remote` 2026-11-09; installed with `go install` in the `terraform` CI job |
+| `hashicorp/setup-terraform` | not used | replaced by `.github/actions/setup-terraform` (download from releases.hashicorp.com, `sha256sum --check` against the release's SHA256SUMS). v4.0.1 exists if preferred (SHA `dfe3c3f87815947d99a8997f908cb6525fc44e9e`) |
+| `docker/build-push-action`, `aws-actions/amazon-ecr-login` | not used | plain `docker` and `aws ecr get-login-password` steps instead, so no unverified third-party action runs with AWS credentials |
 | `random` provider (ephemeral `random_password`) | **not verified** | INFRA-4 checks |
 
-INFRA-5 pins each remaining action to the SHA of its latest release when it writes the deploy
-workflows, which settles the unverified rows.
+INFRA-5 pinned the actions it uses (rows above) and avoided the ones it could not verify.

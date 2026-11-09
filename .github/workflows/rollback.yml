@@ -1,0 +1,97 @@
+# Manual rollback: point the service back at an earlier version and restore that version's web
+# build. Spec: specs/INFRA-aws-pipeline.md section 7. It does NOT run Terraform or migrations and
+# never touches the database: every migration is backward compatible (4.6), so older code runs
+# against the newer schema.
+#
+# Actions, "rollback", Run workflow: environment, and the last good commit SHA (from the pipeline
+# history). The AWS job is skipped while the account variable for that environment is empty.
+name: rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to roll back
+        required: true
+        type: choice
+        options: [dev, prod]
+      version:
+        description: Commit SHA (40 characters) of the version to go back to
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+
+jobs:
+  rollback:
+    name: rollback ${{ inputs.environment }}
+    if: ${{ (inputs.environment == 'prod' && vars.AWS_PROD_ACCOUNT_ID != '') || (inputs.environment == 'dev' && vars.AWS_DEV_ACCOUNT_ID != '') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # only to assume the deploy role of the chosen environment
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      ACCOUNT_ID: ${{ inputs.environment == 'prod' && vars.AWS_PROD_ACCOUNT_ID || vars.AWS_DEV_ACCOUNT_ID }}
+      VERSION: ${{ inputs.version }}
+      REF: ${{ github.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the inputs
+        run: |
+          [ "$REF" = "refs/heads/main" ] || { echo "::error::Run this workflow from the main branch."; exit 1; }
+          case "$ENVIRONMENT" in dev|prod) ;; *) echo "::error::environment must be dev or prod"; exit 1 ;; esac
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::the AWS account id variable must be 12 digits"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::version must be the full 40 character commit SHA (lower case)"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ inputs.environment == 'prod' && vars.AWS_PROD_ACCOUNT_ID || vars.AWS_DEV_ACCOUNT_ID }}:role/jobproof-github-deploy
+          role-session-name: rollback
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Load the environment's configuration
+        run: infra/scripts/load-config.sh
+      - name: Check that the web build of that version was kept
+        run: |
+          aws s3api head-object --bucket "$RELEASES_BUCKET" --key "web/$VERSION.tar.gz" >/dev/null \
+            || { echo "::error::No web build for $VERSION in the releases bucket (kept 180 days)."; exit 1; }
+      - name: Move the service back to that version
+        run: |
+          set -euo pipefail
+          TASK_DEFINITION_ARN="$(infra/scripts/find-task-definition.sh)"
+          export TASK_DEFINITION_ARN
+          infra/scripts/deploy-service.sh
+      - name: Restore that version's web build (assets, config.js, index.html) and invalidate
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/rollback-web.XXXXXX")"
+          aws s3 cp "s3://$RELEASES_BUCKET/web/$VERSION.tar.gz" "$work/web.tar.gz" --only-show-errors
+          if tar -tzf "$work/web.tar.gz" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+            echo "::error::the archive contains unsafe paths"; exit 1
+          fi
+          mkdir "$work/dist"
+          tar -xzf "$work/web.tar.gz" --no-same-owner -C "$work/dist"
+          WEB_DIST="$work/dist" infra/scripts/upload-web.sh
+      - name: Record the release
+        run: aws ssm put-parameter --name "$RELEASE_PARAMETER" --value "$VERSION" --type String --overwrite >/dev/null
+      - name: Smoke test
+        env:
+          SMOKE_WAIT_SECONDS: "300"
+        run: infra/scripts/smoke-test.sh "$SITE_URL"
+      - name: Summary
+        run: |
+          {
+            echo "### Rolled back $ENVIRONMENT"
+            echo
+            echo "Running on $ENVIRONMENT: \`$VERSION\`. The database was not touched."
+          } >> "$GITHUB_STEP_SUMMARY"

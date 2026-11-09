@@ -1,0 +1,85 @@
+# Demo data in dev only (spec 4.5). `load-if-empty` loads the demo dataset only when the users
+# table is empty. `reset` truncates everything and reloads it (dates move to today), so it needs
+# the word dev typed in the confirmation box. The task is the dev-only seed-demo ECS task, which
+# the backend itself refuses to run outside APP_ENV=staging with DEMO_SEED_ALLOWED=true.
+# Skipped while AWS_DEV_ACCOUNT_ID is empty.
+name: dev-demo-data
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: load-if-empty keeps existing data. reset DELETES ALL dev data and reloads the demo data.
+        required: true
+        type: choice
+        options: [load-if-empty, reset]
+      confirm:
+        description: For reset only, type dev to confirm
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# Never overlaps a deploy to dev.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+
+jobs:
+  demo-data:
+    name: demo data (dev)
+    if: vars.AWS_DEV_ACCOUNT_ID != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # only to assume the dev deploy role
+    env:
+      ENVIRONMENT: dev
+      ACCOUNT_ID: ${{ vars.AWS_DEV_ACCOUNT_ID }}
+      MODE: ${{ inputs.mode }}
+      CONFIRM: ${{ inputs.confirm }}
+      REF: ${{ github.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the inputs
+        run: |
+          [ "$REF" = "refs/heads/main" ] || { echo "::error::Run this workflow from the main branch."; exit 1; }
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::AWS_DEV_ACCOUNT_ID must be 12 digits"; exit 1; }
+          case "$MODE" in
+            load-if-empty) ;;
+            reset)
+              if [ "$CONFIRM" != "dev" ]; then
+                echo "::error::reset deletes all dev data. Type dev in the confirm box to proceed."; exit 1
+              fi
+              ;;
+            *) echo "::error::mode must be load-if-empty or reset"; exit 1 ;;
+          esac
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_DEV_ACCOUNT_ID }}:role/jobproof-github-deploy
+          role-session-name: dev-demo-data
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Load the dev configuration
+        run: infra/scripts/load-config.sh
+      - name: Run seed-demo
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = "reset" ]; then flag="--reset"; else flag="--if-empty"; fi
+          COMMAND_JSON="$(jq -cn --arg flag "$flag" '["python","-m","app.seed.demo",$flag]')"
+          export COMMAND_JSON
+          infra/scripts/run-task.sh seed-demo
+      - name: Summary
+        run: |
+          {
+            echo "### Demo data in dev: $MODE"
+            echo
+            echo "The demo password is in Secrets Manager, jobproof/dev/demo-password (dev account). Read it there; do not copy it anywhere else."
+          } >> "$GITHUB_STEP_SUMMARY"

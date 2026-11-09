@@ -1,0 +1,208 @@
+# The manual approval: promote one exact version (a commit SHA that already passed ci, was built
+# once and is running on dev) to prod. Spec: specs/INFRA-aws-pipeline.md section 4.4.
+#
+# Actions, "deploy-prod", Run workflow, paste the SHA that the pipeline summary shows as
+# "running on dev". Nothing is rebuilt: the image is copied by digest from dev's ECR and the web
+# bundle is the artifact of that pipeline run.
+#
+# AWS jobs are skipped while AWS_PROD_ACCOUNT_ID or AWS_DEV_ACCOUNT_ID is empty. The AWS jobs stay
+# in this file (not a reusable workflow) because the trust policy names this workflow file.
+# No `environment:` on a job (it would change the OIDC subject). If the repository is public,
+# add `environment: prod` with a required reviewer AND update the trust (spec 4.4, P1/P2).
+name: deploy-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Commit SHA to promote (40 characters), as shown under 'running on dev' in the pipeline summary"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+
+jobs:
+  verify:
+    name: verify the version (no AWS)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read # find the pipeline run and download its web-dist artifact
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      run_id: ${{ steps.check.outputs.run_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REF: ${{ github.ref }}
+      INPUT_VERSION: ${{ inputs.version }}
+      AWS_DEV_ACCOUNT_ID: ${{ vars.AWS_DEV_ACCOUNT_ID }}
+      AWS_PROD_ACCOUNT_ID: ${{ vars.AWS_PROD_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the version
+        id: check
+        run: |
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Run this workflow from the main branch (it ran from $REF)."; exit 1
+          fi
+          if ! [[ "$INPUT_VERSION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::version must be the full 40 character commit SHA (lower case)."; exit 1
+          fi
+          version="$INPUT_VERSION"
+          git cat-file -e "$version^{commit}" || { echo "::error::$version is not a commit of this repository."; exit 1; }
+          git merge-base --is-ancestor "$version" HEAD || { echo "::error::$version is not on main."; exit 1; }
+          run_id="$(gh run list --workflow pipeline.yml --commit "$version" --status success --event push \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -z "$run_id" ]; then
+            echo "::error::No successful pipeline run found for $version. Only a version that passed ci and deployed to dev can go to prod."; exit 1
+          fi
+          dev_job="$(gh run view "$run_id" --json jobs --jq '[.jobs[] | select(.name == "deploy-dev") | .conclusion][0] // ""')"
+          if [ "$dev_job" != "success" ]; then
+            echo "::error::Pipeline run $run_id did not deploy $version to dev (deploy-dev: '${dev_job:-not run}')."; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          if [ -z "$AWS_DEV_ACCOUNT_ID" ] || [ -z "$AWS_PROD_ACCOUNT_ID" ]; then
+            echo "::notice::AWS_DEV_ACCOUNT_ID or AWS_PROD_ACCOUNT_ID is not set, so the AWS jobs are skipped and nothing was deployed."
+          fi
+      - name: Fetch the web bundle that pipeline run built
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-dist
+          path: ${{ runner.temp }}/web-dist
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.check.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Hand the bundle to the AWS job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-dist
+          path: ${{ runner.temp }}/web-dist
+          retention-days: 7
+          if-no-files-found: error
+
+  terraform-prod:
+    name: terraform apply (prod)
+    needs: verify
+    if: vars.AWS_PROD_ACCOUNT_ID != '' && vars.AWS_DEV_ACCOUNT_ID != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # only to assume the prod Terraform role
+    outputs:
+      tf: ${{ steps.outputs.outputs.json }}
+    env:
+      ACCOUNT_ID: ${{ vars.AWS_PROD_ACCOUNT_ID }}
+      PEER_ACCOUNT_ID: ${{ vars.AWS_DEV_ACCOUNT_ID }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      TF_IN_AUTOMATION: "1"
+      TF_INPUT: "0"
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/prod
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the account ids and the version
+        run: |
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::AWS_PROD_ACCOUNT_ID must be 12 digits"; exit 1; }
+          [[ "$PEER_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::AWS_DEV_ACCOUNT_ID must be 12 digits"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::bad version"; exit 1; }
+      - uses: ./.github/actions/setup-terraform
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_PROD_ACCOUNT_ID }}:role/jobproof-github-terraform
+          role-session-name: deploy-prod-terraform
+          aws-region: ${{ env.AWS_REGION }}
+      - name: terraform init (state bucket of the prod account)
+        run: |
+          lock=()
+          if [ -f .terraform.lock.hcl ]; then lock=(-lockfile=readonly); fi
+          terraform init "${lock[@]}" -backend-config="bucket=jobproof-tfstate-$ACCOUNT_ID"
+      - name: terraform plan
+        run: |
+          terraform plan -out=tfplan -no-color \
+            -var "image_tag=$VERSION" -var "allowed_account_ids=[\"$ACCOUNT_ID\"]" \
+            -var "promotion_peer_account_id=$PEER_ACCOUNT_ID"
+      - name: terraform apply (new task-definition revisions; the service does not move yet)
+        run: terraform apply -no-color tfplan
+      - name: Record the outputs for the deploy job
+        id: outputs
+        run: |
+          set -euo pipefail
+          terraform output -json | jq -c 'map_values(.value)' > "$RUNNER_TEMP/tf-outputs.json"
+          echo "json=$(cat "$RUNNER_TEMP/tf-outputs.json")" >> "$GITHUB_OUTPUT"
+
+  deploy-prod:
+    name: deploy-prod
+    needs: [verify, terraform-prod]
+    if: vars.AWS_PROD_ACCOUNT_ID != '' && vars.AWS_DEV_ACCOUNT_ID != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # only to assume the prod deploy role
+    env:
+      ACCOUNT_ID: ${{ vars.AWS_PROD_ACCOUNT_ID }}
+      DEV_ACCOUNT_ID: ${{ vars.AWS_DEV_ACCOUNT_ID }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      TF_OUTPUTS: ${{ needs.terraform-prod.outputs.tf }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the account ids and the version, keep the Terraform outputs
+        run: |
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::AWS_PROD_ACCOUNT_ID must be 12 digits"; exit 1; }
+          [[ "$DEV_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "::error::AWS_DEV_ACCOUNT_ID must be 12 digits"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::bad version"; exit 1; }
+          printf '%s' "$TF_OUTPUTS" > "$RUNNER_TEMP/tf-outputs.json"
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_PROD_ACCOUNT_ID }}:role/jobproof-github-deploy
+          role-session-name: deploy-prod-deploy
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-dist
+          path: ${{ runner.temp }}/web-dist
+      - name: Copy the image by digest from dev ECR to prod ECR (nothing is rebuilt)
+        id: promote
+        env:
+          TAG: ${{ needs.verify.outputs.version }}
+        run: |
+          SOURCE_REPOSITORY_URL="$DEV_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/jobproof-backend" \
+          TARGET_REPOSITORY_URL="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/jobproof-backend" \
+            infra/scripts/promote-image.sh
+      - name: Deploy (db-roles, migrate, service, web, release, smoke test; no demo data)
+        uses: ./.github/actions/deploy-release
+        with:
+          environment: prod
+          version: ${{ needs.verify.outputs.version }}
+          outputs-file: ${{ runner.temp }}/tf-outputs.json
+          web-dist: ${{ runner.temp }}/web-dist
+          seed-demo: "false"
+      - name: Summary
+        env:
+          IMAGE_DIGEST: ${{ steps.promote.outputs.digest }}
+        run: |
+          {
+            echo
+            echo "Image digest (identical in dev and prod): \`$IMAGE_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"

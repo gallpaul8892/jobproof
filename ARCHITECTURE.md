@@ -58,9 +58,9 @@ Still web only and mock data. One deployment per company (D1).
 | `backend/app/seed/demo.py` | Dev-AWS-only demo seed `python -m app.seed.demo [--reset]` with its guards (section 9) |
 | `backend/certs/` | `rds-global-bundle.pem`: **placeholder** until the INFRA-6 entry gate (section 12); `README.md` |
 | `infra/bootstrap/` | `bootstrap.cfn.yaml` (CloudFormation, one stack per account: OIDC provider, state bucket, plan and terraform roles; parameter `SubjectMode`) and its README; runbook `infra/README.md` |
-| `infra/scripts/` | `upload-web.sh` (asset-first upload order, `config.js`), `smoke-test.sh`, `local-edge.mjs` (local CloudFront test double for the smoke test; never deployed) |
+| `infra/scripts/` | `upload-web.sh` (asset-first upload order, `config.js`), `smoke-test.sh`, `local-edge.mjs` (local CloudFront test double for the smoke test; never deployed). INFRA-5 helpers: `export-outputs.sh`, `load-config.sh`, `run-task.sh`, `find-task-definition.sh`, `deploy-service.sh`, `push-image.sh`, `promote-image.sh` |
 | `infra/terraform/modules/web_static/csp.txt` | The CloudFront CSP text; parity test `web/nginx/csp-parity.test.ts`. The rest of `infra/terraform/` is INFRA-4 **(planned)** |
-| `.github/` | `workflows/ci.yml` (jobs `backend`, `web`, `e2e`, `workflows` = actionlint), `workflows/dependency-check.yml` (weekly Monday), `dependabot.yml` (actions, npm, uv, docker, docker-compose). Owner: infra engineer |
+| `.github/` | `workflows/ci.yml` (jobs `backend`, `web`, `e2e`, `workflows` = actionlint, `infra` = cfn-lint, `terraform` = fmt, validate, tflint), `workflows/dependency-check.yml` (weekly Monday), `dependabot.yml` (actions, npm, uv, docker, docker-compose). INFRA-5 (written, never run): `workflows/pipeline.yml`, `deploy-prod.yml`, `rollback.yml`, `create-user.yml`, `dev-demo-data.yml`, `dev-power.yml`; `actions/setup-terraform` and `actions/deploy-release` (composite). Owner: infra engineer |
 | `backend/app/branding/` | `defaults.py` (the only backend copy of the default name and theme), `contrast.py` (WCAG ratio) |
 | `backend/app/routers/branding.py`, `admin.py`; `services/settings.py`; `models/settings.py`; `cli.py` | Branding (public), Admin router, the one settings accessor, settings model, `create-admin` command. `services/audit.py`, `review.py`, `report_edit.py`; `models/audit.py`: audit store, review and edit writes |
 | `backend/app/schemas/text.py`, `schemas/customer_write.py`; `services/customers.py` | Free-text rule shared by company name and customer fields; customer validators and `CustomerUpdate`; customer read (with impact), diff, `validate_contact_fields` (phone/postcode by the UK-only setting) and `update_customer` (T-002n, T-002p) |
@@ -108,7 +108,7 @@ security overrides (js-yaml, minimatch): section 13.1.
 | IaC | Terraform / AWS provider | 1.17.1 / 6.72.0 (`~> 6.72`) | verified 2026-11-08; not written yet (planned, INFRA-4) |
 | IaC | CloudFormation bootstrap; cfn-lint | 1.60.0 | clean in review 2026-11-09 |
 | CI (in use) | `actions/checkout` v7.0.1, `actions/setup-node` v7.1.0, `astral-sh/setup-uv` v10.3.3 (no major tags), `actions/upload-artifact` v7.0.2; actionlint v1.7.12 | | each pinned by full commit SHA with the tag in a comment (SHAs matched their tags in review 2026-11-09); Dependabot bumps them. Source of truth: `.github/workflows/*.yml` |
-| CI (INFRA-5, planned) | configure-aws-credentials v6, setup-terraform v4; others: spec INFRA "Versions" | | verified 2026-11-08; pinned by SHA when the workflows are written |
+| CI (INFRA-5, written 2026-11-09, never run) | `aws-actions/configure-aws-credentials` v6.3.0, `actions/download-artifact` v8.0.2 (SHAs checked with `git ls-remote` 2026-11-09); Terraform 1.17.1 downloaded and checksum-verified by `.github/actions/setup-terraform`; tflint v0.66.0 via `go install` | | no `setup-terraform`, `build-push-action` or `amazon-ecr-login` action is used (plain CLI steps). See spec INFRA "Versions" and section 4.7 |
 
 ## 4. Data model summary
 
