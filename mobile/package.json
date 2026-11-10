@@ -38,7 +38,7 @@
     "@react-native/jest-preset": "~0.88.1",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.0.0",
     "expo-doctor": "1.21.6",
     "jest": "^30.0.0",
