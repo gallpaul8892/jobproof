@@ -13,6 +13,8 @@ import {
   type OperativeChecklistItem,
   type OperativeJob,
 } from "@jobproof/shared";
+import { useHasLocalDraft } from "../../db/localStore";
+import { PhotoSection } from "../capture/PhotoSection";
 import { useAppBranding } from "../../theme/BrandingProvider";
 import { DIVIDER, ERROR_COLOUR, MUTED_TEXT, SKELETON } from "../../ui/colours";
 import { Button } from "../../ui/Button";
@@ -254,6 +256,8 @@ function Unavailable() {
 export function JobDetailScreen({ jobId }: { jobId: string }) {
   const { theme } = useAppBranding();
   const query = useOperativeJob(jobId);
+  // Work started on this phone makes the job "In progress" at once; the server learns at the first sync.
+  const startedHere = useHasLocalDraft(jobId);
   const [refreshing, setRefreshing] = useState(false);
   const call = useOpen(MSG.cantCall);
   const map = useOpen(MSG.cantMap);
@@ -293,6 +297,7 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
   }
 
   const offline = query.isError && error instanceof ApiError && error.status === 0;
+  const submitted = job.report?.state === "submitted";
   const phone = job.contact?.phone ?? null;
   const tel = phone ? telUrl(phone) : null;
   const address = formatAddress(job.site_address);
@@ -303,7 +308,7 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
       <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]} testID="job-title">
         {job.title}
       </Text>
-      <StatusBadge job={job} testID="job-status" />
+      <StatusBadge job={startedHere && job.status === "to_do" ? { ...job, status: "in_progress" } : job} testID="job-status" />
       <SubmittedLine job={job} />
       <Fact label="Reference" value={job.reference} testID="job-reference" />
       <Fact label="Job type" value={jobTypeLabel(job.job_type)} testID="job-type" />
@@ -335,6 +340,8 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
 
       <Heading>Checklist</Heading>
       <Checklist job={job} />
+
+      <PhotoSection jobId={jobId} submitted={submitted} />
     </Frame>
   );
 }

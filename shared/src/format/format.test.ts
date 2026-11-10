@@ -55,3 +55,18 @@ describe("labels", () => {
     expect(billingStatusLabel("something_new" as never)).toBe("Something new");
   });
 });
+
+import { formatWeekdayDate, londonDateOf } from "./dates";
+
+describe("London calendar date helpers", () => {
+  it("formats a calendar date with its weekday", () => {
+    expect(formatWeekdayDate("2026-11-09")).toBe("Mon 9 Nov");
+    expect(formatWeekdayDate("2026-12-31")).toBe("Thu 31 Dec");
+    expect(formatWeekdayDate("nonsense")).toBe("nonsense");
+  });
+  it("reads the London date, not the UTC date, around midnight", () => {
+    expect(londonDateOf(new Date("2026-07-01T23:30:00Z"))).toBe("2026-07-02"); // BST
+    expect(londonDateOf(new Date("2026-11-09T23:30:00Z"))).toBe("2026-11-09"); // GMT
+    expect(londonDateOf("bad")).toBe("");
+  });
+});

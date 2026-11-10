@@ -5,6 +5,8 @@ import { Link, useRouter } from "expo-router";
 import {
   ApiError,
   formatTime,
+  formatWeekdayDate,
+  londonDateOf,
   orderJobsForDisplay,
   useOperativeJobs,
   type OperativeJob,
@@ -14,6 +16,7 @@ import { useAppBranding } from "../../theme/BrandingProvider";
 import { DIVIDER, SKELETON } from "../../ui/colours";
 import { Button } from "../../ui/Button";
 import { Notice } from "../../ui/Notice";
+import { clock } from "./clock";
 import { JobRow } from "./JobRow";
 
 export const MSG = {
@@ -22,6 +25,8 @@ export const MSG = {
   loadFailed: "Couldn't load jobs. Check your signal.",
   offline: (time: string) => `Offline. Showing jobs from ${time}.`,
   updated: (time: string) => `Updated ${time}`,
+  /** A saved list from an earlier day: the date is spelled out so yesterday's jobs are never taken for today's. */
+  noneOn: (day: string) => `No jobs for ${day}.`,
 } as const;
 
 function isJobList(v: unknown): v is OperativeJobList {
@@ -90,7 +95,11 @@ export function JobsScreen() {
   const open = useCallback((id: string) => router.push(`/jobs/${id}`), [router]);
 
   const offline = query.isError && isNetworkFailure(query.error);
-  const asOf = data ? formatTime(data.as_of) : undefined;
+  // The saved list can be days old: when its date is not today in London, say which day it is for.
+  const stale = data !== undefined && data.today !== londonDateOf(clock.now());
+  const dayLabel = data ? formatWeekdayDate(data.today) : "";
+  const asOf = data ? (stale ? `${dayLabel}, ${formatTime(data.as_of)}` : formatTime(data.as_of)) : undefined;
+  const todayTitle = stale ? `Jobs for ${dayLabel}` : "Today";
   const today = data ? orderJobsForDisplay(data.jobs_today) : [];
   const earlier = data ? orderJobsForDisplay(data.earlier_unfinished) : [];
 
@@ -118,14 +127,14 @@ export function JobsScreen() {
         ) : (
           <>
             {today.length > 0 ? (
-              <Section title="Today" jobs={today} testID="jobs-today" onOpen={open} />
+              <Section title={todayTitle} jobs={today} testID="jobs-today" onOpen={open} />
             ) : (
               <View style={styles.group}>
                 <Text accessibilityRole="header" style={[styles.heading, { color: theme.text }]}>
-                  Today
+                  {todayTitle}
                 </Text>
                 <Text style={[styles.empty, { color: theme.text }]} testID="jobs-none-today">
-                  {MSG.noneToday}
+                  {stale ? MSG.noneOn(dayLabel) : MSG.noneToday}
                 </Text>
               </View>
             )}

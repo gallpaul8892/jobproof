@@ -59,6 +59,10 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
+          paths: [
+            // T-003e scenario 13 / P6: photos live in app-private storage only, never in the phone's gallery.
+            { name: "expo-media-library", message: "Photos must never be written to the phone's gallery (P6). Use app-private files." },
+          ],
           patterns: [
             { group: ["@jobproof/shared/*", "**/shared/src/**", "**/generated/**"], message: "Import from @jobproof/shared only." },
           ],

@@ -74,3 +74,22 @@ export function formatTime(iso: string): string {
   for (const part of londonParts.formatToParts(d)) p[part.type] = part.value;
   return `${p.hour}:${p.minute}`;
 }
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** The Europe/London calendar date of an instant, "2026-11-09". Pass the clock in tests. */
+export function londonDateOf(instant: Date | string): string {
+  const d = typeof instant === "string" ? new Date(instant) : instant;
+  if (Number.isNaN(d.getTime())) return "";
+  const p: Record<string, string> = {};
+  for (const part of londonDay.formatToParts(d)) p[part.type] = part.value;
+  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+}
+
+/** "2026-11-09" to "Mon 9 Nov". A calendar date has no time zone, so the weekday is computed from the date alone. */
+export function formatWeekdayDate(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!m) return date;
+  const weekday = WEEKDAYS[new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay()];
+  return `${weekday} ${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}`;
+}

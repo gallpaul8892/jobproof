@@ -64,6 +64,18 @@ export function buildConfig(env: Record<string, string | undefined>): ExpoConfig
       // Plain placeholder splash (T-003a): white with the app icon centred. The company name is
       // runtime branding and unknown at build time; a branded splash is a later ticket.
       ["expo-splash-screen", { backgroundColor: "#FFFFFF", image: "./assets/icon.png", imageWidth: 200 }],
+      // Camera only: no microphone, no barcode scanner (T-003e Infra, design section 12).
+      [
+        "expo-camera",
+        {
+          cameraPermission: "JobProof uses the camera to photograph the work you have done.",
+          recordAudioAndroid: false,
+          barcodeScannerEnabled: false,
+        },
+      ],
+      // The system photo picker needs no storage permission. microphonePermission false stops the plugin adding RECORD_AUDIO.
+      // (cameraPermission must NOT be false here: that would block the CAMERA permission the camera needs.)
+      ["expo-image-picker", { microphonePermission: false }],
       [
         "expo-build-properties",
         {

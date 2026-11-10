@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { isFinishedJob, jobTypeLabel, operativeJobStatusLabel, type OperativeJob } from "@jobproof/shared";
+import { useHasLocalDraft } from "../../db/localStore";
 import { useAppBranding } from "../../theme/BrandingProvider";
 import { DIVIDER, MUTED_TEXT } from "../../ui/colours";
 import { StatusBadge } from "../../ui/StatusBadge";
@@ -13,8 +14,11 @@ export function townAndPostcode(job: Pick<OperativeJob, "site_address">): string
  * One job in the list. The whole row is one 48 dp+ target and reads as one TalkBack stop:
  * title, place, type, then status. Finished jobs are greyed, still above 4.5:1.
  */
-export function JobRow({ job, onPress }: { job: OperativeJob; onPress: () => void }) {
+export function JobRow({ job: serverJob, onPress }: { job: OperativeJob; onPress: () => void }) {
   const { theme } = useAppBranding();
+  // Photos taken on this phone already make a "To do" job "In progress".
+  const startedHere = useHasLocalDraft(serverJob.id);
+  const job = startedHere && serverJob.status === "to_do" ? { ...serverJob, status: "in_progress" as const } : serverJob;
   const finished = isFinishedJob(job);
   const secondary = finished ? MUTED_TEXT : theme.text;
   return (

@@ -1,13 +1,13 @@
 import Storage from "expo-sqlite/kv-store";
 import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client";
 import type { Query } from "@tanstack/react-query";
+import { PERSIST_MAX_AGE_MS } from "./persistConfig";
 
 /** One entry per signed-in user: a second operative on the phone never reads the first one's list. */
 export const PERSIST_KEY_PREFIX = "jobproof.query.v1.";
 export const persistKeyFor = (userId: string): string => `${PERSIST_KEY_PREFIX}${userId}`;
 
-/** Seven days (design 3.3). Older caches are discarded on restore. */
-export const PERSIST_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+export { PERSIST_MAX_AGE_MS };
 /** Bump to discard every stored cache after a shape change. */
 export const PERSIST_BUSTER = "1";
 

@@ -86,4 +86,5 @@ export type {
 export * from "./format/address";
 export * from "./operative/semver";
 export * from "./operative/status";
+export * from "./operative/validation";
 export { useOperativeJobs, useOperativeJob } from "./hooks/useOperative";

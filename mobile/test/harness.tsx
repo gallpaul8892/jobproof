@@ -7,7 +7,9 @@ import { sessionApiOptions } from "../src/api/sessionClient";
 import { SessionManager } from "../src/api/sessionManager";
 import { kvUserCache } from "../src/api/userCache";
 import { AppRoot } from "../src/features/session/AppRoot";
-import { NO_UNSENT_ITEMS, UnsentItemsContext, type UnsentItemsSource } from "../src/features/session/unsent";
+import type { UnsentItemsSource } from "../src/features/session/unsent";
+import type { LocalStore } from "../src/db/localStore";
+import { makeTestStore } from "./support/store";
 import { deviceSessionApi } from "@jobproof/shared";
 import type { fakeServer } from "./fakeServer";
 
@@ -17,11 +19,14 @@ const AppGroupLayout = require("../app/(app)/_layout").default;
 const MyJobsRoute = require("../app/(app)/index").default;
 const JobRoute = require("../app/(app)/jobs/[jobId]/index").default;
 const SettingsRoute = require("../app/(app)/settings").default;
+const CameraRoute = require("../app/(app)/jobs/[jobId]/camera").default;
+const PhotoRoute = require("../app/(app)/jobs/[jobId]/photos/[photoId]").default;
 
 export interface Launched {
   manager: SessionManager;
   client: QueryClient;
   server: ReturnType<typeof fakeServer>;
+  store: LocalStore;
 }
 
 const open: SessionManager[] = [];
@@ -32,7 +37,7 @@ export function cleanupLaunched() {
 }
 
 /** The real route files and the real root wiring, with an in-memory server and the mocked secure store. */
-export async function launch(server: ReturnType<typeof fakeServer>, unsent: UnsentItemsSource = NO_UNSENT_ITEMS): Promise<Launched> {
+export async function launch(server: ReturnType<typeof fakeServer>, unsent?: UnsentItemsSource, store: LocalStore = makeTestStore().store): Promise<Launched> {
   const manager = new SessionManager({
     secrets: new SecureTokenStore(),
     api: deviceSessionApi,
@@ -44,11 +49,7 @@ export async function launch(server: ReturnType<typeof fakeServer>, unsent: Unse
   open.push(manager);
   clients.push(client);
   configureApiClient({ baseUrl: "http://api.test", fetch: server.fetch, ...sessionApiOptions(manager) });
-  const Root = () => (
-    <UnsentItemsContext.Provider value={unsent}>
-      <AppRoot manager={manager} client={client} />
-    </UnsentItemsContext.Provider>
-  );
+  const Root = () => <AppRoot manager={manager} client={client} store={store} unsent={unsent} />;
   await renderRouter(
     {
       _layout: Root,
@@ -57,8 +58,10 @@ export async function launch(server: ReturnType<typeof fakeServer>, unsent: Unse
       "(app)/index": MyJobsRoute,
       "(app)/settings": SettingsRoute,
       "(app)/jobs/[jobId]/index": JobRoute,
+      "(app)/jobs/[jobId]/camera": CameraRoute,
+      "(app)/jobs/[jobId]/photos/[photoId]": PhotoRoute,
     },
     { initialUrl: "/" },
   );
-  return { manager, client, server };
+  return { manager, client, server, store };
 }

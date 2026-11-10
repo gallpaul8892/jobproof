@@ -6,9 +6,17 @@ import { DAN, PRIYA } from "../../../test/helpers";
 import { EXTERIOR, LOUNGE, WALL, checklist, list, makeJob } from "../../../test/jobFixtures";
 import { kv, launchSignedIn, persistedKey } from "../../../test/signedIn";
 import { MUTED_TEXT } from "../../ui/colours";
+import { clock } from "./clock";
 import { MSG } from "./JobsScreen";
 
-afterEach(cleanupLaunched);
+/** The fixture list is for 2026-11-09, so unless a test says otherwise the phone's clock is that morning. */
+const SAME_DAY = new Date("2026-11-09T09:00:00Z");
+const NEXT_DAY = new Date("2026-11-10T07:30:00Z");
+beforeEach(() => void jest.spyOn(clock, "now").mockReturnValue(SAME_DAY));
+afterEach(() => {
+  jest.restoreAllMocks();
+  cleanupLaunched();
+});
 
 const rowIds = () => screen.getAllByTestId(/^job-row-/).map((r) => r.props.testID as string);
 /** The app process ends: the screen unmounts first (so the store is saved), then the in-memory client goes. */
@@ -254,20 +262,37 @@ describe("T-003c scenario 8: slow and failed load", () => {
 });
 
 describe("T-003c scenario 9: offline list", () => {
-  it("opens with the saved list and 'Offline. Showing jobs from 07:42.'", async () => {
+  it("opens with the saved list and 'Offline. Showing jobs from 07:42.' when it is still the same day", async () => {
     const server = fakeServer();
     server.setJobs(list());
     await launchSignedIn(server);
     await screen.findByTestId("jobs-today");
     await waitFor(() => expect(kv().has(persistedKey(DAN))).toBe(true), { timeout: 4000 });
 
-    // Next morning at the depot: no signal, new launch, new in-memory cache.
     await closeApp();
     server.offline = true;
     await launch(server);
     expect(await screen.findByText(MSG.offline("07:42"))).toBeTruthy();
     expect(rowIds()).toEqual(["job-row-job-lounge", "job-row-job-wall", "job-row-job-exterior"]);
+    expect(within(screen.getByTestId("jobs-today")).getByText("Today")).toBeTruthy();
     expect(screen.queryByText(MSG.loadFailed)).toBeNull();
+  });
+
+  it("the next morning offline: yesterday's list is dated, never shown under 'Today'", async () => {
+    const server = fakeServer();
+    server.setJobs(list());
+    await launchSignedIn(server);
+    await screen.findByTestId("jobs-today");
+    await waitFor(() => expect(kv().has(persistedKey(DAN))).toBe(true), { timeout: 4000 });
+
+    await closeApp();
+    jest.spyOn(clock, "now").mockReturnValue(NEXT_DAY); // a day on, at the depot with no signal
+    server.offline = true;
+    await launch(server);
+    expect(await screen.findByText("Offline. Showing jobs from Mon 9 Nov, 07:42.")).toBeTruthy();
+    expect(within(screen.getByTestId("jobs-today")).getByText("Jobs for Mon 9 Nov")).toBeTruthy();
+    expect(screen.queryByText("Today")).toBeNull();
+    expect(rowIds()).toHaveLength(3);
   });
 
   it("stores only the operative's own job data, under that user's key", async () => {
@@ -308,12 +333,19 @@ describe("T-003c scenario 9: offline list", () => {
     expect(kv().has(persistedKey(DAN))).toBe(false);
   });
 
-  it("a corrupt stored list is ignored and removed", async () => {
+  it("a corrupt stored list is ignored and removed (offline launch: no list, load-failed notice, no crash)", async () => {
     const server = fakeServer();
     server.setJobs(list());
+    server.offline = true;
     kv().set(persistedKey(DAN), "{not json");
     await launchSignedIn(server);
-    expect(await screen.findByTestId("jobs-today")).toBeTruthy();
+    expect(await screen.findByText(MSG.loadFailed)).toBeTruthy();
+    expect(screen.queryByTestId("jobs-today")).toBeNull();
+    expect(screen.queryAllByTestId(/^job-row-/)).toHaveLength(0);
+    // The bad entry is gone or replaced by a valid (job-free) snapshot; never kept as it was.
+    const after = kv().get(persistedKey(DAN));
+    expect(after).not.toBe("{not json");
+    if (after !== undefined) expect(() => JSON.parse(after)).not.toThrow();
   });
 });
 
