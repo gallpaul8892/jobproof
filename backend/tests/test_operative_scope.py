@@ -166,15 +166,20 @@ def test_managers_and_admins_are_refused_on_every_operative_operation(
         for (method, path), operation_id in contract_operations().items()
         if path.startswith("/api/v1/operative")
     ]
-    assert {o[2] for o in operations} >= {"listOperativeJobs", "getOperativeJob"}
+    # contract_operations() already hides operations whose x-ticket is in PENDING_TICKETS, so
+    # operations not built yet are never probed here.
+    assert {o[2] for o in operations} >= {
+        "listOperativeJobs",
+        "getOperativeJob",
+        "saveOperativeDraft",
+    }
     for method, path, operation_id in operations:
         url = path.replace("{job_id}", str(job.id)).replace("{photo_id}", str(job.id))
         for headers in (manager_headers, admin_headers):
             response = client.request(method, url, headers=headers)
-            assert response.status_code in (403, 422), (operation_id, response.status_code)
-            if response.status_code == 403:
-                assert response.json()["code"] == "forbidden"
-                assert_contract(response, operation_id)
+            assert response.status_code == 403, (operation_id, response.status_code)
+            assert response.json()["code"] == "forbidden"
+            assert_contract(response, operation_id)
 
 
 @pytest.mark.parametrize("path", ["/api/v1/manager/dashboard", "/api/v1/admin/settings"])

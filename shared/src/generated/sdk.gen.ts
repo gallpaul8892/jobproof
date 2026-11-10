@@ -371,8 +371,10 @@ export const listManagerInvoices = <ThrowOnError extends boolean = false>(option
  * caller with `scheduled_start` today, whatever its state, ordered open jobs first
  * (`in_progress`, `to_do`), then `submitted`, `completed_by_office`, `cancelled`, then by
  * `reference`. `earlier_unfinished`: jobs assigned to the caller with `scheduled_start`
- * before today, not completed or cancelled, and with no submitted report, ordered by
- * `scheduled_start` then `reference`. Each item is a full `OperativeJob` so the app can
+ * before today and not more than 30 days back, not completed or cancelled, and with no
+ * submitted report, ordered by `scheduled_start` then `reference`, at most 50 (the oldest
+ * 50 if there are more). A job whose draft was started by another operative (the job was
+ * reassigned) is left out of both lists. Each item is a full `OperativeJob` so the app can
  * store every listed job for offline use with one request. A job reassigned to someone
  * else simply stops appearing.
  *
@@ -401,7 +403,8 @@ export const getOperativeJob = <ThrowOnError extends boolean = false>(options: O
  * `note` sent change. Last write wins per field (the operative is the only writer of a
  * draft). `not_done` without a note is allowed in a draft and refused at submit. Notes
  * follow the multi-line text rule (NUL and lone surrogates refused). Order of checks: body
- * (422), job is the caller's (404), job not cancelled (409 `job_cancelled`) or closed by
+ * (422), job is the caller's (404), draft not started by another operative (409
+ * `draft_owned_by_other`), job not cancelled (409 `job_cancelled`) or closed by
  * the office (409 `job_closed`), report not submitted (409 `report_submitted`), item ids
  * belong to the job (422).
  *

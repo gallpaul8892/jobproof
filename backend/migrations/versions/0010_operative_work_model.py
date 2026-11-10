@@ -24,6 +24,11 @@ report_state = postgresql.ENUM("draft", "submitted", name="report_state", create
 
 
 def upgrade() -> None:
+    # Convention for migrations that take ACCESS EXCLUSIVE locks on busy tables: fail fast
+    # (5 s) instead of queueing behind a long query and blocking every request behind us.
+    # SET LOCAL ends with this migration's transaction. Expected run time: well under a second
+    # on pilot-sized data (a backfill of one row per report item plus a few ALTERs).
+    op.execute("SET LOCAL lock_timeout = '5s'")
     # 1. the job's planned checklist
     op.create_table(
         "job_checklist_items",
@@ -125,10 +130,20 @@ def downgrade() -> None:
     cannot_do = connection.execute(
         sa.text("SELECT count(*) FROM report_checklist_items WHERE cannot_do")
     ).scalar_one()
-    if drafts or cannot_do:
+    # The older schema has no job-level checklist: job items with no matching report item, or
+    # removed by the office, would be lost silently.
+    unmatched = connection.execute(
+        sa.text(
+            "SELECT count(*) FROM job_checklist_items j "
+            "WHERE j.removed_at IS NOT NULL "
+            "OR NOT EXISTS (SELECT 1 FROM report_checklist_items r WHERE r.id = j.id)"
+        )
+    ).scalar_one()
+    if drafts or cannot_do or unmatched:
         raise RuntimeError(
-            f"Cannot downgrade 0010: {drafts} draft report(s) and {cannot_do} 'can't do' "
-            "item(s) exist and the older schema cannot hold them."
+            f"Cannot downgrade 0010: {drafts} draft report(s), {cannot_do} 'can't do' item(s) "
+            f"and {unmatched} job checklist item(s) with no report item or removed by the "
+            "office exist and the older schema cannot hold them."
         )
 
     op.drop_constraint(op.f("ck_job_reports_draft_not_reviewed"), "job_reports", type_="check")

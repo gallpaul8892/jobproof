@@ -10,7 +10,7 @@ import datetime as dt
 import uuid
 from typing import Any
 
-from sqlalchemy import Select, and_, or_, select
+from sqlalchemy import Select, and_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.errors import ProblemError
@@ -29,6 +29,10 @@ _LOAD_OPTIONS: tuple[Any, ...] = (
     ),
 )
 
+# The earlier-unfinished list is bounded (T-003 review): 30 days back, 50 rows.
+EARLIER_DAYS = 30
+EARLIER_LIMIT = 50
+
 # Sort order of today's list: open work first, then what is finished or cancelled.
 _STATUS_RANK = {
     schemas.OperativeJobStatus.in_progress: 0,
@@ -37,6 +41,12 @@ _STATUS_RANK = {
     schemas.OperativeJobStatus.completed_by_office: 2,
     schemas.OperativeJobStatus.cancelled: 3,
 }
+
+
+def _draft_of_another(user: User) -> Any:
+    return Job.report.has(
+        and_(JobReport.state == ReportState.draft, JobReport.painter_id != user.id)
+    )
 
 
 def _own_jobs(user: User) -> Select[Any]:
@@ -50,6 +60,13 @@ def get_own_job(session: Session, user: User, job_id: uuid.UUID) -> Job:
     )
     if job is None:
         raise ProblemError(404, "not_found", "Job not found.")
+    # A draft belongs to the operative who started it. After a reassignment the new assignee
+    # neither sees nor writes it until the office resolves it (backlog B15).
+    report = job.report
+    if report is not None and report.state == ReportState.draft and report.painter_id != user.id:
+        raise ProblemError(
+            409, "draft_owned_by_other", "Another operative started this job's report."
+        )
     return job
 
 
@@ -172,35 +189,38 @@ def get_job(session: Session, user: User, job_id: uuid.UUID) -> schemas.Operativ
 def list_jobs(
     session: Session, user: User, *, now: dt.datetime, today: dt.date
 ) -> schemas.OperativeJobList:
-    """Today's jobs (any state) plus earlier jobs that are still open and unsubmitted."""
-    jobs: list[Job] = list(
+    """Today's jobs (any state) plus earlier jobs that are still open and unsubmitted.
+
+    The earlier list is bounded: at most EARLIER_DAYS back and EARLIER_LIMIT rows (oldest first).
+    """
+    todays_jobs: list[Job] = list(
         session.scalars(
-            _own_jobs(user).where(
-                or_(
-                    Job.scheduled_start == today,
-                    and_(
-                        Job.scheduled_start < today,
-                        Job.status.notin_([JobStatus.completed, JobStatus.cancelled]),
-                    ),
-                )
-            )
+            _own_jobs(user).where(Job.scheduled_start == today, ~_draft_of_another(user))
         )
         .unique()
         .all()
     )
-    built = [(job, build_job(job)) for job in jobs]
+    earlier_jobs: list[Job] = list(
+        session.scalars(
+            _own_jobs(user)
+            .where(
+                Job.scheduled_start < today,
+                Job.scheduled_start >= today - dt.timedelta(days=EARLIER_DAYS),
+                Job.status.notin_([JobStatus.completed, JobStatus.cancelled]),
+                ~Job.report.has(JobReport.state == ReportState.submitted),
+                ~_draft_of_another(user),
+            )
+            .order_by(Job.scheduled_start, Job.reference)
+            .limit(EARLIER_LIMIT)
+        )
+        .unique()
+        .all()
+    )
     todays = sorted(
-        (b for job, b in built if job.scheduled_start == today),
+        (build_job(job) for job in todays_jobs),
         key=lambda b: (_STATUS_RANK[b.status], b.reference),
     )
-    earlier = sorted(
-        (
-            b
-            for job, b in built
-            if job.scheduled_start < today and b.status != schemas.OperativeJobStatus.submitted
-        ),
-        key=lambda b: (b.scheduled_start, b.reference),
-    )
+    earlier = [build_job(job) for job in earlier_jobs]
     return schemas.OperativeJobList(
         as_of=now, today=today, jobs_today=todays, earlier_unfinished=earlier
     )

@@ -8,7 +8,7 @@ from app.clock import now, today_london
 from app.deps import CurrentUser, SessionDep, require_roles
 from app.models.enums import UserRole
 from app.schemas import operative as schemas
-from app.services import operative_jobs
+from app.services import drafts, operative_jobs
 
 router = APIRouter(
     prefix="/api/v1/operative", dependencies=[Depends(require_roles(UserRole.painter))]
@@ -24,4 +24,17 @@ def list_operative_jobs(session: SessionDep, user: CurrentUser) -> schemas.Opera
 def get_operative_job(
     job_id: uuid.UUID, session: SessionDep, user: CurrentUser
 ) -> schemas.OperativeJob:
+    return operative_jobs.get_job(session, user, job_id)
+
+
+@router.patch("/jobs/{job_id}/report", response_model=schemas.OperativeJob)
+def save_operative_draft(
+    job_id: uuid.UUID, body: schemas.DraftUpdate, session: SessionDep, user: CurrentUser
+) -> schemas.OperativeJob:
+    drafts.lock_own_job(session, user, job_id)
+    job = operative_jobs.get_own_job(session, user, job_id)
+    report = drafts.ensure_draft(session, job, user, now())
+    drafts.apply_draft_update(session, job, report, body)
+    session.commit()
+    session.expunge_all()
     return operative_jobs.get_job(session, user, job_id)

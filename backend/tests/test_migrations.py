@@ -862,6 +862,46 @@ def test_0010_downgrade_is_refused_while_a_draft_or_a_cannot_do_item_exists() ->
         _wipe(engine, config)
 
 
+def test_0010_downgrade_is_refused_for_job_items_the_old_schema_cannot_keep() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0009")
+    engine = create_engine(url)
+    try:
+        _legacy_seed(engine)
+        command.upgrade(config, "head")
+        # a planned item with no report item (a job nobody started)
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO job_checklist_items (job_id, position, label) "
+                    "SELECT job_id, 99, 'Extra' FROM job_reports LIMIT 1"
+                )
+            )
+        with pytest.raises(RuntimeError, match="0010.*job checklist item"):
+            command.downgrade(config, "0009")
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM job_checklist_items WHERE label = 'Extra'"))
+            # an item removed by the office
+            connection.execute(
+                text(
+                    "UPDATE job_checklist_items SET removed_at = now() "
+                    "WHERE id = (SELECT id FROM job_checklist_items LIMIT 1)"
+                )
+            )
+        with pytest.raises(RuntimeError, match="0010.*job checklist item"):
+            command.downgrade(config, "0009")
+        with engine.begin() as connection:
+            assert (
+                connection.execute(text("SELECT count(*) FROM job_checklist_items")).scalar_one()
+                > 0
+            )  # nothing was lost by the refusal
+    finally:
+        _wipe(engine, config)
+
+
 def test_0010_constraints_reject_inconsistent_rows(db_engine: Engine) -> None:
     from sqlalchemy.exc import IntegrityError
 

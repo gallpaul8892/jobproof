@@ -131,6 +131,33 @@ def test_checklist_note_only_and_done_only(
     assert two["version"] == 3
 
 
+def test_manager_done_true_clears_the_operatives_cannot_do(
+    client: TestClient, manager_headers: dict[str, str], ds: Any, db_engine: Engine
+) -> None:
+    target = _target(ds)
+    items = detail(client, manager_headers, target.id)["checklist"]
+    item = next(i for i in items if not i["done"]) if any(not i["done"] for i in items) else None
+    with db_engine.begin() as connection:  # as if the operative had set "can't do" (T-003f)
+        chosen = item["id"] if item else items[0]["id"]
+        connection.execute(
+            text("UPDATE report_checklist_items SET done = false, cannot_do = true WHERE id = :i"),
+            {"i": chosen},
+        )
+    response = patch(
+        client,
+        manager_headers,
+        target.id,
+        {"version": 1, "checklist": [{"id": chosen, "done": True}]},
+    )
+    assert response.status_code == 200, response.text
+    assert next(i for i in response.json()["checklist"] if i["id"] == chosen)["done"] is True
+    with db_engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT done, cannot_do FROM report_checklist_items WHERE id = :i"), {"i": chosen}
+        ).one()
+    assert tuple(row) == (True, False)
+
+
 def test_several_checklist_items_and_notes_in_one_request_is_one_version(
     client: TestClient, manager_headers: dict[str, str], ds: Any
 ) -> None:

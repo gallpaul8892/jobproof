@@ -16,7 +16,7 @@ export type Problem = {
     status: number;
     detail?: string;
     instance?: string;
-    code: 'unauthenticated' | 'invalid_credentials' | 'forbidden' | 'not_found' | 'validation_error' | 'invalid_signature' | 'internal_error' | 'contrast_too_low' | 'version_conflict' | 'already_reviewed' | 'operatives_only' | 'session_ended' | 'account_inactive' | 'app_update_required' | 'job_cancelled' | 'job_closed' | 'report_submitted' | 'already_submitted' | 'photos_not_registered' | 'submission_incomplete' | 'photo_limit_reached' | 'photo_content_mismatch' | 'duplicate_photo' | 'photo_too_large' | 'unsupported_photo_type' | 'checksum_mismatch' | 'busy';
+    code: 'unauthenticated' | 'invalid_credentials' | 'forbidden' | 'not_found' | 'validation_error' | 'invalid_signature' | 'internal_error' | 'contrast_too_low' | 'version_conflict' | 'already_reviewed' | 'operatives_only' | 'session_ended' | 'account_inactive' | 'app_update_required' | 'job_cancelled' | 'job_closed' | 'report_submitted' | 'already_submitted' | 'photos_not_registered' | 'submission_incomplete' | 'photo_limit_reached' | 'photo_content_mismatch' | 'duplicate_photo' | 'photo_too_large' | 'unsupported_photo_type' | 'checksum_mismatch' | 'busy' | 'draft_owned_by_other';
     request_id: string;
     /**
      * Present for `validation_error` and `contrast_too_low`.
@@ -1870,6 +1870,10 @@ export type GetOperativeJobErrors = {
      */
     404: Problem;
     /**
+     * `draft_owned_by_other`: the job was reassigned after another operative started its draft report; the office must resolve it
+     */
+    409: Problem;
+    /**
      * Invalid parameters or body (code `validation_error`)
      */
     422: Problem;
@@ -1913,7 +1917,7 @@ export type SaveOperativeDraftErrors = {
      */
     404: Problem;
     /**
-     * `report_submitted`, `job_cancelled` or `job_closed`; nothing saved
+     * `report_submitted`, `job_cancelled`, `job_closed` or `draft_owned_by_other` (the draft was started by another operative before a reassignment); nothing saved
      */
     409: Problem;
     /**

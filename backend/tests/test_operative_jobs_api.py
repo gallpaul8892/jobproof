@@ -186,17 +186,18 @@ def test_the_list_uses_a_bounded_number_of_queries(
     from tests.test_performance_logging import count_queries
 
     dan = user_id(db_engine, DAN_EMAIL)
-    with count_queries(client) as few:
-        client.get(LIST, headers=painter_headers)
-    with (
-        temp_job(db_engine, dan, labels=["a", "b", "c"], report=ReportState.draft) as _a,
-        temp_job(db_engine, dan, labels=["a", "b", "c"], report=ReportState.draft) as _b,
-        temp_job(db_engine, dan, labels=["a", "b", "c"], report=ReportState.draft) as _c,
-    ):
-        with count_queries(client) as many:
-            response = client.get(LIST, headers=painter_headers)
-        assert response.status_code == 200
-    assert len(many) == len(few) <= 8
+    with temp_job(db_engine, dan, labels=["a", "b", "c"], report=ReportState.draft):
+        with count_queries(client) as few:
+            client.get(LIST, headers=painter_headers)
+        with (
+            temp_job(db_engine, dan, labels=["a", "b", "c"], report=ReportState.draft),
+            temp_job(db_engine, dan, labels=["a", "b", "c"], report=ReportState.draft),
+            temp_job(db_engine, dan, labels=["a", "b", "c"], report=ReportState.draft),
+        ):
+            with count_queries(client) as many:
+                response = client.get(LIST, headers=painter_headers)
+            assert response.status_code == 200
+    assert len(many) == len(few) <= 9
 
 
 # ---- detail (T-003d) --------------------------------------------------------------------------
@@ -369,3 +370,69 @@ def test_a_device_session_token_works_like_a_web_token(
 ) -> None:
     body = _list(client, operative_device_session.headers)
     assert len(body["jobs_today"]) == 3
+
+
+# ---- bounds and ownership (review of Package B) ------------------------------------------------
+def test_earlier_unfinished_reaches_30_days_back_and_no_further(
+    client: TestClient, painter_headers: dict[str, str], db_engine: Any
+) -> None:
+    dan = user_id(db_engine, DAN_EMAIL)
+    with (
+        temp_job(db_engine, dan, scheduled=ANCHOR - dt.timedelta(days=30), title="edge") as edge,
+        temp_job(db_engine, dan, scheduled=ANCHOR - dt.timedelta(days=31), title="old") as old,
+    ):
+        ids = {j["id"] for j in _list(client, painter_headers)["earlier_unfinished"]}
+        assert str(edge) in ids and str(old) not in ids
+
+
+def test_earlier_unfinished_is_capped_at_50_oldest_first(
+    client: TestClient, painter_headers: dict[str, str], db_engine: Any
+) -> None:
+    from contextlib import ExitStack
+
+    dan = user_id(db_engine, DAN_EMAIL)
+    with ExitStack() as stack:
+        made = [
+            stack.enter_context(
+                temp_job(db_engine, dan, scheduled=ANCHOR - dt.timedelta(days=2 + i % 20))
+            )
+            for i in range(52)
+        ]
+        earlier = _list(client, painter_headers)["earlier_unfinished"]
+        assert len(earlier) == 50
+        keys = [(j["scheduled_start"], j["reference"]) for j in earlier]
+        assert keys == sorted(keys)
+        assert all(j["scheduled_start"] <= YESTERDAY.isoformat() for j in earlier)
+        assert len(made) == 52
+        # Today's list is not capped by this.
+        assert len(_list(client, painter_headers)["jobs_today"]) == 3
+
+
+def test_a_draft_started_by_another_operative_is_409_and_hidden_from_the_list(
+    client: TestClient, painter_headers: dict[str, str], db_engine: Any
+) -> None:
+    dan, priya = user_id(db_engine, DAN_EMAIL), user_id(db_engine, PRIYA_EMAIL)
+    with temp_job(db_engine, dan, report=ReportState.draft) as job_id:
+        with db_engine.begin() as connection:  # Priya started it, then the job went to Dan
+            connection.execute(
+                text("UPDATE job_reports SET painter_id = :p WHERE job_id = :j"),
+                {"p": priya, "j": job_id},
+            )
+        detail = client.get(f"{LIST}/{job_id}", headers=painter_headers)
+        assert detail.status_code == 409 and detail.json()["code"] == "draft_owned_by_other"
+        assert_contract(detail, "getOperativeJob")
+        body = _list(client, painter_headers)
+        assert str(job_id) not in {j["id"] for j in body["jobs_today"]}
+        write = client.patch(
+            f"{LIST}/{job_id}/report", headers=painter_headers, json={"notes": "mine"}
+        )
+        assert write.status_code == 409 and write.json()["code"] == "draft_owned_by_other"
+        assert_contract(write, "saveOperativeDraft")
+        with db_engine.connect() as connection:
+            notes = connection.execute(
+                text("SELECT painter_notes FROM job_reports WHERE job_id = :j"), {"j": job_id}
+            ).scalar_one()
+        assert notes == "Temp notes"
+        # Priya, the original author, is not the assignee any more: 404 as for any other job.
+        priya_headers = _priya_headers(db_engine)
+        assert client.get(f"{LIST}/{job_id}", headers=priya_headers).status_code == 404
