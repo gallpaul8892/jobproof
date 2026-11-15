@@ -25,6 +25,7 @@ def _excluded(path: Path) -> bool:
         path in DEFAULTS_MODULES
         or parts[:3] == ("backend", "app", "seed")
         or parts[:3] == ("shared", "src", "generated")
+        or parts[:3] == ("web", "src", "mock")  # generated snapshot of the seed (demo only)
         or "__pycache__" in parts
         or ".test." in name
         or name.startswith("test_")
