@@ -46,6 +46,7 @@ export type {
   Dashboard,
   DemoAccount,
   InvoicePage,
+  LoginResponse,
   InvoiceRow,
   InvoiceStatus,
   InvoiceSummary,

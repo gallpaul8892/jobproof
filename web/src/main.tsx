@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { configureApiClient } from "@jobproof/shared";
 import { App } from "./app/App";
@@ -27,14 +27,26 @@ function handleUnauthorized() {
 applyTheme(readSnapshot()?.theme ?? DEFAULT_THEME);
 
 try {
+  // GitHub Pages demo (`vite build --mode pages`): answer the API in the browser. The check is
+  // on the build mode, which Vite replaces with a constant, so a normal build drops the branch
+  // and the dynamic import with it: none of the mock code or data reaches a production bundle.
+  let mockFetch: typeof fetch | undefined;
+  let banner: ReactNode = null;
+  if (import.meta.env.MODE === "pages") {
+    const mock = await import("./mock");
+    mockFetch = mock.installMockApi().fetch;
+    banner = <mock.DemoBanner />;
+  }
   configureApiClient({
     baseUrl: readRuntimeConfig().apiBaseUrl,
     tokenStore,
     onUnauthorized: handleUnauthorized,
+    fetch: mockFetch,
   });
   root.render(
     <StrictMode>
       <App />
+      {banner}
     </StrictMode>,
   );
 } catch (error) {

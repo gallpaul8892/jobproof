@@ -11,27 +11,33 @@ import { ReportDetailPage } from "../pages/ReportDetail";
 import { ReportsPage } from "../pages/Reports";
 import { SettingsPage } from "../pages/Settings";
 
-export const router = createBrowserRouter([
-  {
-    errorElement: <CrashFallback />,
-    children: [
-      { path: "/login", element: <LoginPage /> },
-      { path: "/not-authorised", element: <NotAuthorisedPage /> },
-      {
-        element: <RequireRole role="manager" />,
-        children: [
-          { path: "/", element: <DashboardPage /> },
-          { path: "/reports", element: <ReportsPage /> },
-          { path: "/reports/:reportId", element: <ReportDetailPage /> },
-          { path: "/customers/:customerId", element: <CustomerPage /> },
-          { path: "/billing", element: <BillingPage /> },
-        ],
-      },
-      {
-        element: <RequireRole role="admin" />,
-        children: [{ path: "/settings", element: <SettingsPage /> }],
-      },
-      { path: "*", element: <NotFoundPage /> },
-    ],
-  },
-]);
+// Served from the site root everywhere except the GitHub Pages demo (VITE_BASE=/jobproof/).
+const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+
+export const router = createBrowserRouter(
+  [
+    {
+      errorElement: <CrashFallback />,
+      children: [
+        { path: "/login", element: <LoginPage /> },
+        { path: "/not-authorised", element: <NotAuthorisedPage /> },
+        {
+          element: <RequireRole role="manager" />,
+          children: [
+            { path: "/", element: <DashboardPage /> },
+            { path: "/reports", element: <ReportsPage /> },
+            { path: "/reports/:reportId", element: <ReportDetailPage /> },
+            { path: "/customers/:customerId", element: <CustomerPage /> },
+            { path: "/billing", element: <BillingPage /> },
+          ],
+        },
+        {
+          element: <RequireRole role="admin" />,
+          children: [{ path: "/settings", element: <SettingsPage /> }],
+        },
+        { path: "*", element: <NotFoundPage /> },
+      ],
+    },
+  ],
+  base === "" ? undefined : { basename: base },
+);

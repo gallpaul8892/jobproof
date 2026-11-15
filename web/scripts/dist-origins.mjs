@@ -40,3 +40,19 @@ export function findExternalOrigins(dir) {
   }
   return found;
 }
+
+// The GitHub Pages demo's mock API (src/mock). A normal build must contain none of it; the demo
+// build must contain it. `__JOBPROOF_MOCK_API__` is a constant in the mock's entry module and
+// "Manager123!" is a published demo password that only the mock data carries.
+export const MOCK_MARKERS = ["__JOBPROOF_MOCK_API__", "Manager123!"];
+
+/** Returns [{file, marker}] for every file under dir that contains mock code or data. */
+export function findMockCode(dir) {
+  const found = [];
+  for (const file of walk(dir)) {
+    if (!TEXT_EXT.test(file)) continue;
+    const text = readFileSync(file, "utf8");
+    for (const marker of MOCK_MARKERS) if (text.includes(marker)) found.push({ file, marker });
+  }
+  return found;
+}

@@ -47,6 +47,27 @@ scripts/dev.sh down
 
 Browser tests use Chrome. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if it is not on your PATH.
 
+## GitHub Pages demo (mocked, no backend)
+
+A static demo of the web app (Manager and Admin screens) that runs entirely in the browser. A mock API
+(`web/src/mock`) answers every call from `web/src/mock/mockData.json`, which is generated from the real
+seed dataset. Writes (mark reviewed, edit notes, customer details, settings) work in memory, keep the
+version checks and the 409 "Apply my changes on top" flow, and reset on page reload. A banner says
+"Demo with sample data. Nothing is saved." Sign in with the demo accounts shown on the login page.
+
+- Build and preview locally: `npm run build:pages -w @jobproof/web`, then
+  `VITE_BASE=/jobproof/ npm run build:pages -w @jobproof/web && npm run preview:pages -w @jobproof/web`
+  and open http://localhost:8080/jobproof/ (leave `VITE_BASE` unset to serve from `/`).
+- Refresh the data (the demo treats the export date as "today"): `cd backend && uv run python ../scripts/export-mock-data.py`
+  (`--today` to use the current date, `--check` to see whether the committed file is current).
+- Normal builds contain none of the mock code; `npm run build` fails if they do (`web/scripts/check-dist.mjs`).
+- Deploy: `.github/workflows/pages.yml` publishes on pushes to `main` that touch `web/`, `shared/` or `api/`,
+  and on manual run. The repository owner must set **Settings > Pages > Source = GitHub Actions** once.
+- Visibility: Pages on a private repository needs a paid GitHub plan (otherwise the repository or the site
+  must become public). On Enterprise Cloud the site can be restricted to members only if access control is
+  enabled; otherwise it is reachable by anyone with the URL even when the repository is private. Everything in
+  the demo is fake, and it must stay that way: do not put real customer data or real credentials in `mockData.json`.
+
 ## Create the first administrator
 
 The Admin account is not part of the seed in staging or production. Create it once, with the

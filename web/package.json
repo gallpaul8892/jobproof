@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --port 8080 --strictPort",
     "build": "tsc --noEmit && vite build && node scripts/check-dist.mjs",
+    "build:pages": "tsc --noEmit && vite build --mode pages --outDir dist-pages --emptyOutDir && node scripts/pages-postbuild.mjs && node scripts/check-dist.mjs --pages --dir=dist-pages",
     "preview": "vite preview --port 8080 --strictPort",
+    "preview:pages": "vite preview --mode pages --outDir dist-pages --base /jobproof/ --port 8080 --strictPort",
     "lint": "eslint . && tsc --noEmit",
     "test": "vitest run"
   },

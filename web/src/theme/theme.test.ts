@@ -19,7 +19,10 @@ function walk(dir: string): string[] {
 }
 
 describe("hex colours live only where they are allowed", () => {
-  const allowed = new Set(["shared/src/branding/defaults.ts", "shared/src/branding/presets.ts", "web/src/styles/app.css"]);
+  const allowed = new Set(["shared/src/branding/defaults.ts", "shared/src/branding/presets.ts", "web/src/styles/app.css",
+    // The demo's placeholder photos: the fixed palette of the backend's generated SVGs, not theme colours.
+    "web/src/mock/photoSvg.ts",
+  ]);
   const files = [...walk(join(root, "web", "src")), ...walk(join(root, "shared", "src"))].filter(
     (f) => /\.(ts|tsx|css)$/.test(f) && !/\.test\.tsx?$/.test(f),
   );
