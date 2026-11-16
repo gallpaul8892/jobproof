@@ -4,13 +4,13 @@ module.exports = {
     {
       displayName: "logic",
       testEnvironment: "node",
-      testMatch: ["<rootDir>/{config,test,src}/**/*.test.ts"],
+      testMatch: ["<rootDir>/{config,test,src,demo}/**/*.test.ts"],
       transform: { "\\.[jt]sx?$": ["babel-jest", { presets: ["babel-preset-expo"] }] },
     },
     {
       displayName: "ui",
       preset: "jest-expo",
-      testMatch: ["<rootDir>/{app,src}/**/*.test.tsx"],
+      testMatch: ["<rootDir>/{app,src,demo}/**/*.test.tsx"],
       setupFilesAfterEnv: ["<rootDir>/test/setup.ui.ts"],
     },
   ],

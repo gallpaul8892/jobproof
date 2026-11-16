@@ -18,7 +18,9 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm test -w @jobproof/shared -w @jobproof/web -w @jobproof/mobile",
     "build": "npm run build -w @jobproof/web",
-    "e2e": "npm run test -w @jobproof/e2e"
+    "e2e": "npm run test -w @jobproof/e2e",
+    "build:pages": "node scripts/build-pages.mjs",
+    "preview:pages": "node scripts/serve-pages.mjs"
   },
   "devDependencies": {
     "@redocly/cli": "^2.76.0"

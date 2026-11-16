@@ -12,6 +12,15 @@ describe("DemoBanner", () => {
     unmount();
     expect(document.body.classList.contains("has-demo-banner")).toBe(false);
   });
+
+  it("links back to the landing page when it is told where that is, and not otherwise", () => {
+    const { unmount } = render(<DemoBanner home="/jobproof/" />);
+    expect(screen.getByTestId("demo-home-link").getAttribute("href")).toBe("/jobproof/");
+    expect(screen.getByTestId("demo-banner").textContent).toBe(`${DEMO_BANNER_TEXT} All demos`);
+    unmount();
+    render(<DemoBanner home={undefined} />);
+    expect(screen.queryByTestId("demo-home-link")).toBeNull();
+  });
 });
 
 describe("placeholder photos", () => {

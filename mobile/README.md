@@ -45,3 +45,13 @@ repo pins `react`/`react-dom` 19.3.0 with a root `overrides`; see T-003a, React 
 
 Not covered here and needing a phone or emulator: install and launch time (T-003a scenario 1),
 real Android rendering, the icon (a plain placeholder in `assets/`).
+
+## Browser demo (GitHub Pages)
+
+`mobile/demo` holds the in-browser stand-ins that let the app run on the Pages site
+(`/jobproof/mobile/`): an in-memory API, database, files, camera and photo picker. They are used only by
+`JOBPROOF_DEMO=1 expo export --platform web` (see `metro.config.js`; `scripts/build-pages.mjs` runs it) and never
+by the Android build. `demo/checkDemoBundle.mjs --normal mobile/dist` proves the Android bundle holds none of
+it; `test` includes the demo's own tests. App code in `app/` and `src/` must not import from `demo/`
+(`demo/isolation.test.ts`). Data: `scripts/export-operative-mock-data.py` writes `demo/mock/operativeData.json`.
+See the root README, "GitHub Pages demos".

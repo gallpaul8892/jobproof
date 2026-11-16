@@ -1,0 +1,48 @@
+/* The landing page of the GitHub Pages demos. Brand colours come only from the five --jp-* custom
+   properties (the same names the web app uses), which scripts/build-pages.mjs fills in from the
+   demo data; this file holds no brand colour. The neutrals below match web/src/styles/app.css. */
+:root {
+  /* tokens:neutral */
+  --muted: #5a635d;
+  --line: #dde3dc;
+  --control-border: #7d877f;
+  /* tokens:end */
+  --radius: 6px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; min-height: 100vh; font-family: var(--font); font-size: 1rem; line-height: 1.5; color: var(--jp-text); background: var(--jp-bg); }
+a { color: var(--jp-accent); text-underline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--jp-accent); outline-offset: 2px; border-radius: 2px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; overflow-wrap: anywhere; }
+
+.skip { position: absolute; left: -999px; top: 0; padding: 0.5rem 0.75rem; background: var(--jp-bg); color: var(--jp-text); border-radius: var(--radius); }
+.skip:focus { left: 0.5rem; top: 0.5rem; z-index: 10; }
+
+.top { background: var(--jp-primary); color: white; }
+.demo-banner { margin: 0; padding: 0.5rem 1rem; text-align: center; font-size: 0.9rem; line-height: 1.3; }
+
+.page { max-width: 56rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
+h1 { margin: 0 0 0.5rem; font-size: 1.75rem; line-height: 1.2; }
+.lead { margin: 0 0 1.5rem; color: var(--muted); }
+
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.card { position: relative; padding: 1.25rem; background: var(--jp-surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.card:hover { border-color: var(--control-border); }
+.card:focus-within { border-color: var(--jp-accent); }
+.card h2 { margin: 0 0 0.5rem; font-size: 1.25rem; line-height: 1.3; }
+/* The whole card is the click target; the link inside is what screen readers and the keyboard use. */
+.card h2 a { color: var(--jp-text); text-decoration: none; }
+.card h2 a::after { content: ""; position: absolute; inset: 0; }
+.card h2 a:hover { text-decoration: underline; }
+.card h2 a:focus-visible { outline: none; }
+.card:has(h2 a:focus-visible) { outline: 3px solid var(--jp-accent); outline-offset: 2px; }
+.card p { margin: 0 0 0.5rem; }
+.card .hint { color: var(--muted); font-size: 0.9rem; margin-bottom: 0; }
+
+@media (max-width: 40rem) {
+  .cards { grid-template-columns: minmax(0, 1fr); }
+  .page { padding-top: 1.5rem; }
+  h1 { font-size: 1.5rem; }
+}

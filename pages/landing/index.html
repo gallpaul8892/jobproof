@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>JobProof demos</title>
+    <link rel="icon" href="data:," />
+    <!-- The style below is filled in at build time by scripts/build-pages.mjs with the five theme properties, taken from the demo settings data. -->
+    <style id="theme">{{THEME}}</style>
+    <link rel="stylesheet" href="landing.css" />
+  </head>
+  <body>
+    <a class="skip" href="#demos">Skip to the demos</a>
+    <header class="top">
+      <p class="demo-banner" role="note" data-testid="landing-banner">Demos with sample data. Nothing is saved.</p>
+    </header>
+    <main class="page">
+      <h1>JobProof demos</h1>
+      <p class="lead">Two small demos that run entirely in your browser. Nothing is sent anywhere.</p>
+      <section id="demos" aria-label="Demos" class="cards">
+        <article class="card" data-testid="card-web">
+          <h2><a href="web/" data-testid="link-web">Manager web app</a></h2>
+          <p>Review submitted reports, correct customer details and change company settings.</p>
+          <p class="hint">Sign-in details are shown on the sign-in page.</p>
+        </article>
+        <article class="card" data-testid="card-mobile">
+          <h2><a href="mobile/" data-testid="link-mobile">Operative mobile app</a></h2>
+          <p>See today&rsquo;s jobs on a phone-sized screen, open a job and add photos.</p>
+          <p class="hint" data-testid="mobile-signin">Sign in with <code>{{OPERATIVE_EMAIL}}</code> and <code>{{OPERATIVE_PASSWORD}}</code>.</p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

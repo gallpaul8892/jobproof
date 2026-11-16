@@ -8,6 +8,7 @@ export default tseslint.config(
     ignores: [
       "**/dist/**",
       "**/dist-pages/**",
+      "**/pages-dist/**",
       "**/node_modules/**",
       "**/generated/**",
       "**/playwright-report/**",
@@ -72,7 +73,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/scripts/*.mjs", "*.js", "mobile/*.js", "mobile/*.ts", "mobile/config/**/*.ts", "mobile/test/**/*.ts", "e2e/**/*.ts", "web/vite.config.ts", "shared/*.config.ts"],
+    files: ["**/scripts/*.mjs", "mobile/demo/*.mjs", "*.js", "mobile/*.js", "mobile/*.ts", "mobile/config/**/*.ts", "mobile/test/**/*.ts", "e2e/**/*.ts", "web/vite.config.ts", "shared/*.config.ts"],
     languageOptions: { globals: { ...globals.node } },
   },
 );

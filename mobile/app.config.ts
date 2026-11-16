@@ -92,5 +92,20 @@ export function buildConfig(env: Record<string, string | undefined>): ExpoConfig
   };
 }
 
+/**
+ * The GitHub Pages browser demo (JOBPROOF_DEMO=1, see demo/ and the README): a single-page web
+ * export served below DEMO_BASE_URL. The server address is a placeholder that is never contacted
+ * (the demo answers every API call in the browser). Nothing here applies to any other build.
+ */
+export function buildDemoConfig(env: Record<string, string | undefined>): ExpoConfig {
+  const config = buildConfig({ API_BASE_URL: "https://demo.invalid", ...env });
+  const baseUrl = env.DEMO_BASE_URL?.trim().replace(/\/+$/, "");
+  return {
+    ...config,
+    web: { bundler: "metro", output: "single" },
+    experiments: { ...config.experiments, ...(baseUrl ? { baseUrl } : {}) },
+  };
+}
+
 // Expo evaluates this file with the build environment (EAS environment variables or .env.local).
-export default () => buildConfig(process.env);
+export default () => (process.env.JOBPROOF_DEMO === "1" ? buildDemoConfig(process.env) : buildConfig(process.env));

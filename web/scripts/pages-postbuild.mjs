@@ -1,6 +1,7 @@
 // After `vite build --mode pages`: make the output ready for GitHub Pages.
-//  - 404.html: a copy of index.html. Pages serves it for unknown paths, so a refresh on a deep link
-//    such as /jobproof/reports/<id> still loads the app, and the router takes over.
+//  - 404.html: a copy of index.html. It makes this folder work on its own (a static host with a
+//    404 fallback, `npm run preview:pages -w @jobproof/web`). On GitHub Pages the whole site is built
+//    by scripts/build-pages.mjs, whose root 404.html loads this app's index.html for /jobproof/web/...
 //  - .nojekyll: Pages must not run Jekyll over the files.
 import { copyFileSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

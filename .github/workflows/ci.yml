@@ -125,6 +125,8 @@ jobs:
         run: npm run doctor -w @jobproof/mobile || echo "::warning title=expo-doctor::expo-doctor failed or the Expo API was unreachable; check the log"
       - name: Android bundle (Metro resolves everything, one React copy)
         run: npm run export -w @jobproof/mobile
+      - name: The Android bundle contains none of the browser demo (mobile/demo)
+        run: node mobile/demo/checkDemoBundle.mjs --normal mobile/dist
 
   e2e:
     name: e2e (Playwright against the compose stack)

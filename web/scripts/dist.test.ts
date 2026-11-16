@@ -73,12 +73,12 @@ describe("production bundle", () => {
       const webRoot = fileURLToPath(new URL("..", import.meta.url));
       execFileSync("npx", ["vite", "build", "--mode", "pages", "--outDir", outDir, "--emptyOutDir", "--logLevel", "silent"], {
         cwd: webRoot,
-        env: { ...process.env, NODE_ENV: "production", VITE_BASE: "/jobproof/" },
+        env: { ...process.env, NODE_ENV: "production", VITE_BASE: "/jobproof/web/" },
       });
       expect(findExternalOrigins(outDir)).toEqual([]);
       expect(findMockCode(outDir).length).toBeGreaterThan(0);
       const html = readFileSync(join(outDir, "index.html"), "utf8");
-      expect(html).toContain('src="/jobproof/assets/');
+      expect(html).toContain('src="/jobproof/web/assets/');
       expect(html).not.toContain("config.js");
       expect(existsSync(join(outDir, "config.js"))).toBe(false);
     } finally {

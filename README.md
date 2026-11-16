@@ -47,26 +47,62 @@ scripts/dev.sh down
 
 Browser tests use Chrome. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` if it is not on your PATH.
 
-## GitHub Pages demo (mocked, no backend)
+## GitHub Pages demos (mocked, no backend)
 
-A static demo of the web app (Manager and Admin screens) that runs entirely in the browser. A mock API
-(`web/src/mock`) answers every call from `web/src/mock/mockData.json`, which is generated from the real
-seed dataset. Writes (mark reviewed, edit notes, customer details, settings) work in memory, keep the
-version checks and the 409 "Apply my changes on top" flow, and reset on page reload. A banner says
-"Demo with sample data. Nothing is saved." Sign in with the demo accounts shown on the login page.
+One static site with three parts, all running entirely in the browser from committed fake data:
 
-- Build and preview locally: `npm run build:pages -w @jobproof/web`, then
-  `VITE_BASE=/jobproof/ npm run build:pages -w @jobproof/web && npm run preview:pages -w @jobproof/web`
-  and open http://localhost:8080/jobproof/ (leave `VITE_BASE` unset to serve from `/`).
-- Refresh the data (the demo treats the export date as "today"): `cd backend && uv run python ../scripts/export-mock-data.py`
-  (`--today` to use the current date, `--check` to see whether the committed file is current).
-- Normal builds contain none of the mock code; `npm run build` fails if they do (`web/scripts/check-dist.mjs`).
-- Deploy: `.github/workflows/pages.yml` publishes on pushes to `main` that touch `web/`, `shared/` or `api/`,
-  and on manual run. The repository owner must set **Settings > Pages > Source = GitHub Actions** once.
+| Path | What |
+| --- | --- |
+| `/jobproof/` | Landing page: choose between the two demos (`pages/landing`) |
+| `/jobproof/web/` | Manager and Admin web app. A mock API (`web/src/mock`) answers every call from `web/src/mock/mockData.json` |
+| `/jobproof/mobile/` | The Operative mobile app (Expo, `expo export --platform web` with react-native-web) in a phone-sized frame |
+
+Every part says "Demo with sample data. Nothing is saved." and links back to the landing page. Nothing is sent
+anywhere and nothing is stored: state resets on page reload.
+
+**Web demo.** Writes (mark reviewed, edit notes, customer details, settings) work in memory, keep the version
+checks and the 409 "Apply my changes on top" flow. Sign in with the demo accounts shown on the login page.
+
+**Mobile demo.** Sign in as the demo operative (`painter@jobproof.test` / `Painter123!`; only this account works).
+The app's own screens run unchanged: today's jobs, job detail, camera and gallery import, settings and sign-out.
+The browser stand-ins live in `mobile/demo` and are swapped in by `mobile/metro.config.js` only when
+`JOBPROOF_DEMO=1` and the platform is web, so the Android build is untouched:
+
+- API: `demo/mock` answers the operative endpoints the app calls today (device sessions create, refresh and end,
+  app status, branding, job list and detail, draft report save). Dates shift so the data's "today" is the visitor's
+  today. Photo upload and report submit do not exist on the server yet (T-003g, T-003h), so the demo does not pretend:
+  photos are saved on the "phone" and the app shows its own "not sent" states (for example when signing out).
+- Local database: `demo/memoryDb.ts` implements the app's `LocalDb` in memory (parity-tested against SQLite);
+  `demo/shims/openStore.ts` replaces `src/db/openStore.ts` with it, in-memory files and a canvas image resizer.
+- `expo-sqlite/kv-store` and `expo-secure-store`: in-memory stand-ins. `expo-camera`: a fake camera whose shutter
+  "takes" a generated placeholder JPEG; no real camera or microphone is ever requested. The photo picker is a short
+  list of generated sample pictures.
+- Not possible in a browser, so shown plainly instead: the phone's maps and dialler links, the system photo picker,
+  and real photos.
+
+Build and preview locally (needs `npm ci`; the first mobile export takes about a minute):
+
+```
+npm run build:pages            # builds pages-dist/ for the base path /jobproof/ (PAGES_BASE=/ to serve from the root)
+npm run preview:pages          # serves it like GitHub Pages: http://127.0.0.1:8090/jobproof/
+```
+
+- Web demo alone: `VITE_BASE=/jobproof/web/ npm run build:pages -w @jobproof/web && npm run preview:pages -w @jobproof/web`.
+- Refresh the data (the demos treat the export date as "today"): `cd backend && uv run python ../scripts/export-mock-data.py`
+  for the web demo and `uv run python ../scripts/export-operative-mock-data.py` for the mobile demo
+  (`--check` says whether the committed file is current).
+- Normal builds contain none of the demo code: `npm run build -w @jobproof/web` fails if the web bundle has mock code
+  (`web/scripts/check-dist.mjs`); CI runs `node mobile/demo/checkDemoBundle.mjs --normal mobile/dist` on the Android
+  bundle, and `build:pages` runs `--demo` on the browser bundle (also: no external origins).
+- Deploy: `.github/workflows/pages.yml` publishes on pushes to `main` that touch `web/`, `mobile/`, `shared/`, `api/`,
+  `pages/` or the build script, and on manual run. The repository owner must set **Settings > Pages > Source = GitHub Actions** once.
+- Deep links: Pages serves `404.html` for unknown paths; it loads the right app in place, so refreshing
+  `/jobproof/web/reports/...` or `/jobproof/mobile/jobs/...` works.
 - Visibility: Pages on a private repository needs a paid GitHub plan (otherwise the repository or the site
   must become public). On Enterprise Cloud the site can be restricted to members only if access control is
   enabled; otherwise it is reachable by anyone with the URL even when the repository is private. Everything in
-  the demo is fake, and it must stay that way: do not put real customer data or real credentials in `mockData.json`.
+  the demos is fake, and it must stay that way: do not put real customer data or real credentials in `mockData.json`
+  or `operativeData.json`.
 
 ## Create the first administrator
 

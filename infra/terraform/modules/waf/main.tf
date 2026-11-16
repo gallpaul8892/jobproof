@@ -116,71 +116,71 @@ resource "aws_wafv2_web_acl" "this" {
           not_statement {
             statement {
               and_statement {
-            statement {
-              byte_match_statement {
-                search_string         = "PUT"
-                positional_constraint = "EXACTLY"
-                field_to_match {
-                  method {}
+                statement {
+                  byte_match_statement {
+                    search_string         = "PUT"
+                    positional_constraint = "EXACTLY"
+                    field_to_match {
+                      method {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
                 }
-                text_transformation {
-                  priority = 0
-                  type     = "NONE"
+                statement {
+                  byte_match_statement {
+                    search_string         = "/api/v1/operative/jobs/"
+                    positional_constraint = "STARTS_WITH"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "URL_DECODE"
+                    }
+                    text_transformation {
+                      priority = 1
+                      type     = "LOWERCASE"
+                    }
+                  }
+                }
+                statement {
+                  byte_match_statement {
+                    search_string         = "/photos/"
+                    positional_constraint = "CONTAINS"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "URL_DECODE"
+                    }
+                    text_transformation {
+                      priority = 1
+                      type     = "LOWERCASE"
+                    }
+                  }
+                }
+                statement {
+                  byte_match_statement {
+                    search_string         = "/content"
+                    positional_constraint = "ENDS_WITH"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "URL_DECODE"
+                    }
+                    text_transformation {
+                      priority = 1
+                      type     = "LOWERCASE"
+                    }
+                  }
                 }
               }
-            }
-            statement {
-              byte_match_statement {
-                search_string         = "/api/v1/operative/jobs/"
-                positional_constraint = "STARTS_WITH"
-                field_to_match {
-                  uri_path {}
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "URL_DECODE"
-                }
-                text_transformation {
-                  priority = 1
-                  type     = "LOWERCASE"
-                }
-              }
-            }
-            statement {
-              byte_match_statement {
-                search_string         = "/photos/"
-                positional_constraint = "CONTAINS"
-                field_to_match {
-                  uri_path {}
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "URL_DECODE"
-                }
-                text_transformation {
-                  priority = 1
-                  type     = "LOWERCASE"
-                }
-              }
-            }
-            statement {
-              byte_match_statement {
-                search_string         = "/content"
-                positional_constraint = "ENDS_WITH"
-                field_to_match {
-                  uri_path {}
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "URL_DECODE"
-                }
-                text_transformation {
-                  priority = 1
-                  type     = "LOWERCASE"
-                }
-              }
-            }
-          }
             }
           }
         }

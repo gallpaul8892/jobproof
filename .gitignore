@@ -30,3 +30,6 @@ mobile/.env.local
 *.p12
 *.mobileprovision
 .env.local
+
+# Pages demo build output (scripts/build-pages.mjs)
+pages-dist/

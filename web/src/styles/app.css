@@ -358,7 +358,8 @@ input[aria-invalid="true"] { border-color: var(--status-red-ink); }
   .col-wide { display: none; }
   .stack-only { display: block; font-size: var(--t-xs); color: var(--muted); font-weight: 400; }
   .table th, .table td { padding: var(--s2); }
-  .table .truncate { max-width: 11rem; }
+  /* Narrow enough that the reports table still fits a 768px tablet in a wide fallback font (DejaVu Sans on CI runners). */
+  .table .truncate { max-width: 9.5rem; }
 }
 @media (max-width: 860px) {
   .detail-grid, .billing-grid { grid-template-columns: minmax(0, 1fr); }

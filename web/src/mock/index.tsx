@@ -22,7 +22,13 @@ export function installMockApi(): { fetch: typeof fetch; apiBaseUrl: string } {
   return { fetch: createMockFetch(backend), apiBaseUrl };
 }
 
-export function DemoBanner() {
+/** Where "All demos" leads: the Pages landing page, set at build time (VITE_DEMO_HOME). No link when unset. */
+export function demoHomeUrl(): string | undefined {
+  const home = (import.meta.env.VITE_DEMO_HOME as string | undefined)?.trim();
+  return home ? home : undefined;
+}
+
+export function DemoBanner({ home = demoHomeUrl() }: { home?: string }) {
   useEffect(() => {
     document.body.classList.add("has-demo-banner");
     return () => document.body.classList.remove("has-demo-banner");
@@ -30,6 +36,14 @@ export function DemoBanner() {
   return (
     <div className="demo-banner" role="status" data-testid="demo-banner" data-mock={MOCK_MARKER}>
       <strong>Demo</strong> with sample data. Nothing is saved.
+      {home ? (
+        <>
+          {" "}
+          <a href={home} data-testid="demo-home-link">
+            All demos
+          </a>
+        </>
+      ) : null}
     </div>
   );
 }
