@@ -3,7 +3,7 @@
 # ---- builder: resolve and install locked, production-only dependencies ----
 # TODO(pin): floating tags (python:3.13-slim here and below, uv image). The exact tag/digest
 # must be pinned on a machine with registry access; not verifiable offline.
-FROM python:3.13-slim AS builder
+FROM python:3.15-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.11.32 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never \
     UV_LINK_MODE=copy \
@@ -15,7 +15,7 @@ RUN uv sync --frozen --no-dev
 
 # ---- runtime ----
 # TODO(pin): floating tag; pin the exact tag/digest on a machine with registry access.
-FROM python:3.13-slim AS runtime
+FROM python:3.15-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
