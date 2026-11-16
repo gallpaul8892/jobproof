@@ -25,6 +25,8 @@ function load(env: string | undefined): { resolve: Resolver; upstream: jest.Mock
   }
 }
 
+const signInRoute = path.join(MOBILE, "app", "sign-in.tsx");
+const signInImport = "../src/features/session/SignInScreen";
 const ctx = (origin = path.join(MOBILE, "app", "_layout.tsx")) => ({ originModulePath: origin, resolveRequest: jest.fn() });
 
 describe("metro.config.js", () => {
@@ -35,6 +37,8 @@ describe("metro.config.js", () => {
       expect(resolve(ctx(), "../src/db/openStore", platform).filePath).toBe("upstream");
     }
     expect(upstream).toHaveBeenCalledTimes(4);
+    for (const platform of ["web", "android"]) expect(resolve(ctx(signInRoute), signInImport, platform).filePath).toBe("upstream");
+    expect(upstream).toHaveBeenCalledTimes(6);
   });
 
   it("with the switch, the Android build still resolves the real modules", () => {
@@ -42,6 +46,7 @@ describe("metro.config.js", () => {
     for (const name of ["expo-camera", "expo-secure-store", "expo-sqlite/kv-store", "../src/db/openStore"]) {
       expect(resolve(ctx(), name, "android").filePath).toBe("upstream");
     }
+    expect(resolve(ctx(signInRoute), signInImport, "android").filePath).toBe("upstream");
   });
 
   it("with the switch, the web build swaps in the stand-ins", () => {
@@ -52,6 +57,10 @@ describe("metro.config.js", () => {
     expect(resolve(ctx(), "../src/db/openStore", "web").filePath).toBe(demo("shims/openStore.ts"));
     expect(resolve(ctx(path.join("x", "react-native-web", "dist", "exports", "Modal", "index.js")), "./ModalPortal", "web").filePath).toBe(demo("shims/ModalPortal.tsx"));
     expect(resolve(ctx(path.join("x", "react-native-web", "dist", "index.js")), "./exports/Linking", "web").filePath).toBe(demo("shims/Linking.ts"));
+    expect(resolve(ctx(signInRoute), signInImport, "web").filePath).toBe(demo("shims/SignInWithDemoAccounts.tsx"));
+    // the shim's own import of the real screen (and anyone else's) is not redirected
+    expect(resolve(ctx(demo("shims/SignInWithDemoAccounts.tsx")), "../../src/features/session/SignInScreen", "web").filePath).toBe("upstream");
+    expect(resolve(ctx(path.join(MOBILE, "app", "_layout.tsx")), signInImport, "web").filePath).toBe("upstream");
     // babel-preset-expo turns `import { Linking } from "react-native"` into this deep import; the shim's own import of it must not loop.
     expect(resolve(ctx(), "react-native-web/dist/exports/Linking", "web").filePath).toBe(demo("shims/Linking.ts"));
     expect(resolve(ctx(demo("shims/Linking.ts")), "react-native-web/dist/exports/Linking", "web").filePath).toBe("upstream");

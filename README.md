@@ -72,9 +72,11 @@ ones (another operative's job is a 404, as on the real server):
 | Priya Shah | `priya.shah@jobproof.test` | `Painter123!` |
 | Tom Bennett | `tom.bennett@jobproof.test` | `Painter123!` |
 
-A "Demo logins" panel beside the phone (collapsed above it on narrow screens) lists them, and its "Use this login"
-button fills the app's sign-in fields (the frame sets the inputs and fires input events; app code is untouched).
-The landing page card lists the same logins. Dan's password is the one the real seed already publishes. Priya and
+The demo's own sign-in screen shows a "Demo accounts" section below the form, laid out like the manager web app's
+login page: a card per operative (role, name, email, password) with a "Use" button that fills the sign-in fields (the
+frame sets the inputs and fires input events). It is added only in the demo build, by a Metro redirect of the
+sign-in route's import to `mobile/demo/shims/SignInWithDemoAccounts.tsx`, which passes it to the real screen's
+`footer` prop; the Android app is unchanged. The landing page card lists the same accounts (collapsed by default). Dan's password is the one the real seed already publishes. Priya and
 Tom have no password in the real seed (they cannot log in to a real deployment); `Painter123!` for them exists
 only in the demo data export (`DEMO_PASSWORD` in `scripts/export-operative-mock-data.py`). Any other email or a
 wrong password gets the same 401.

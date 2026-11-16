@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "../../ui/Button";
 import { TextField, type TextFieldInstance } from "../../ui/TextField";
@@ -8,8 +8,11 @@ import { MSG } from "./messages";
 import { mapSignInError } from "./signInErrors";
 import { useSession } from "./SessionProvider";
 
-/** Operative sign-in (T-003b). Validation happens on the phone first; no request goes out for an empty field. */
-export function SignInScreen() {
+/**
+ * Operative sign-in (T-003b). Validation happens on the phone first; no request goes out for an empty field.
+ * `footer` is drawn after the form inside the same scroll area; the browser demo uses it for its demo accounts.
+ */
+export function SignInScreen({ footer }: { footer?: ReactNode } = {}) {
   const { theme } = useAppBranding();
   const { manager, state } = useSession();
   const [email, setEmail] = useState("");
@@ -128,6 +131,7 @@ export function SignInScreen() {
           </Text>
         ) : null}
         <Button label={busy ? "Signing in" : "Sign in"} onPress={() => void submit()} disabled={busy} testID="sign-in-submit" />
+        {footer}
       </ScrollView>
     </KeyboardAvoidingView>
   );

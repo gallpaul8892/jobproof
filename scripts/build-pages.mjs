@@ -56,7 +56,7 @@ const landing = readFileSync(join(root, "pages/landing/index.html"), "utf8")
     operatives
       .map(
         (a, i) =>
-          `<li data-testid="mobile-login-${i}"><strong>${escapeHtml(a.user.full_name)}</strong> <code>${escapeHtml(a.email)}</code> <code>${escapeHtml(a.password)}</code></li>`,
+          `<li data-testid="mobile-login-${i}"><span class="demo-role">Operative</span><span class="demo-name">${escapeHtml(a.user.full_name)}</span><code>${escapeHtml(a.email)}</code><code>${escapeHtml(a.password)}</code></li>`,
       )
       .join("\n            "),
   );

@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 // Strings that only the demo contains (demo/install.ts, demo/frame.ts, the placeholder server address in app.config.ts).
-export const DEMO_MARKERS = ["__JOBPROOF_MOBILE_DEMO__", "demo.invalid", "Demo with sample data. Nothing is saved.", "Demo image drawn in your browser"];
+export const DEMO_MARKERS = ["__JOBPROOF_MOBILE_DEMO__", "demo.invalid", "Demo with sample data. Nothing is saved.", "Demo image drawn in your browser", "Local demo data only. Pick one to fill in the form."];
 
 // Exact strings only: namespaces and text of library error messages. None is ever fetched.
 export const ALLOWED_ORIGINS = new Set([

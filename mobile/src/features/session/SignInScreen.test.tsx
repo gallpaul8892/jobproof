@@ -198,3 +198,23 @@ describe("notices from the session", () => {
     expect(screen.getByTestId("session-notice")).toBeTruthy();
   });
 });
+
+describe("footer", () => {
+  it("draws the footer after the form, and nothing when there is none", async () => {
+    const { manager } = setup(jest.fn());
+    const { Text } = jest.requireActual("react-native");
+    const { rerender } = await render(
+      <SessionProvider manager={manager}>
+        <SignInScreen footer={<Text testID="the-footer">extra</Text>} />
+      </SessionProvider>,
+    );
+    expect(screen.getByTestId("the-footer")).toBeTruthy();
+    await rerender(
+      <SessionProvider manager={manager}>
+        <SignInScreen />
+      </SessionProvider>,
+    );
+    expect(screen.queryByTestId("the-footer")).toBeNull();
+    expect(screen.getByTestId("sign-in-submit")).toBeTruthy();
+  });
+});

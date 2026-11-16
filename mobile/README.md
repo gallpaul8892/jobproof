@@ -53,5 +53,5 @@ real Android rendering, the icon (a plain placeholder in `assets/`).
 `JOBPROOF_DEMO=1 expo export --platform web` (see `metro.config.js`; `scripts/build-pages.mjs` runs it) and never
 by the Android build. `demo/checkDemoBundle.mjs --normal mobile/dist` proves the Android bundle holds none of
 it; `test` includes the demo's own tests. App code in `app/` and `src/` must not import from `demo/`
-(`demo/isolation.test.ts`). Data: `scripts/export-operative-mock-data.py` writes `demo/mock/operativeData.json` (three demo operatives, per-account jobs; the "Demo logins" panel is in `demo/frame.ts`).
+(`demo/isolation.test.ts`). Data: `scripts/export-operative-mock-data.py` writes `demo/mock/operativeData.json` (three demo operatives, per-account jobs; the "Demo accounts" section of the sign-in screen is `demo/shims/SignInWithDemoAccounts.tsx`, added by a Metro redirect of `app/sign-in.tsx`'s import and passed to `SignInScreen`'s `footer` prop; `fillSignIn` in `demo/frame.ts` fills the fields).
 See the root README, "GitHub Pages demos".

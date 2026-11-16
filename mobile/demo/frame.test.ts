@@ -19,7 +19,7 @@ beforeEach(() => {
 
 describe("phone frame", () => {
   it("wraps the app's root, shows the permanent note and links back to the landing page", () => {
-    const { layer } = installFrame("/jobproof/", LOGINS);
+    const { layer } = installFrame("/jobproof/");
     const phone = document.querySelector('[data-testid="demo-phone"]')!;
     expect(phone.contains(document.getElementById("root"))).toBe(true);
     expect(phone.contains(layer)).toBe(true);
@@ -89,58 +89,26 @@ describe("sample photo chooser", () => {
   });
 });
 
-describe("demo logins panel", () => {
+describe("fillSignIn", () => {
   const q = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)!;
-  // What react-native-web's TextInput renders: plain inputs carrying the testID, with React-style change listening.
-  const signInScreen = () => {
+
+  it("types the login into the sign-in fields with real input events (what React listens to)", () => {
     document.getElementById("root")!.innerHTML = '<input data-testid="sign-in-email" /><input data-testid="sign-in-password" type="password" />';
     const seen: string[] = [];
     for (const id of ["sign-in-email", "sign-in-password"]) q(id).addEventListener("input", (e) => seen.push(`${id}=${(e.target as HTMLInputElement).value}`));
-    return seen;
-  };
-
-  it("lists every login with name, email and password, beside the phone, and has a button for each", () => {
-    installFrame("/", LOGINS);
-    const panel = q("demo-logins");
-    expect(panel.closest('[data-testid="demo-stage"]')!.contains(q("demo-phone"))).toBe(true);
-    expect(q("demo-login-0").textContent).toContain("Ann One");
-    expect(q("demo-login-0").textContent).toContain("ann@b.test");
-    expect(q("demo-login-0").textContent).toContain("pw1");
-    expect(q("demo-login-1").textContent).toContain("bo@b.test");
-    expect(q("demo-use-login-1").textContent).toBe("Use");
-    expect(q("demo-logins-status").getAttribute("role")).toBe("status");
-  });
-
-  it("is collapsed by default on any screen, and collapses above the frame on narrow ones in CSS", () => {
-    window.matchMedia = (() => ({ matches: false })) as unknown as typeof window.matchMedia;
-    installFrame("/", LOGINS);
-    expect((q("demo-logins") as HTMLDetailsElement).open).toBe(false);
-    expect(document.head.querySelector("style[data-demo-frame]")!.textContent).toMatch(/@media \(max-width: 900px\)[\s\S]*\.demo-logins[^}]*order: -1/);
-    delete (window as unknown as Record<string, unknown>).matchMedia;
-  });
-
-  it("'Use this login' fills the sign-in email and password with that login only", () => {
-    installFrame("/", LOGINS);
-    const seen = signInScreen();
-    q("demo-use-login-1").click();
+    expect(fillSignIn(LOGINS[1]!)).toBe(true);
     expect((q("sign-in-email") as HTMLInputElement).value).toBe("bo@b.test");
     expect((q("sign-in-password") as HTMLInputElement).value).toBe("pw2");
-    expect(seen).toEqual(["sign-in-email=bo@b.test", "sign-in-password=pw2"]); // real input events, which is what React listens to
-    expect(q("demo-logins-status").textContent).toContain("Bo Two");
-    q("demo-use-login-0").click();
-    expect((q("sign-in-email") as HTMLInputElement).value).toBe("ann@b.test");
-    expect((q("sign-in-password") as HTMLInputElement).value).toBe("pw1");
+    expect(seen).toEqual(["sign-in-email=bo@b.test", "sign-in-password=pw2"]);
   });
 
-  it("says so, and changes nothing, when the sign-in screen is not showing", () => {
-    installFrame("/", LOGINS);
-    q("demo-use-login-0").click();
-    expect(q("demo-logins-status").textContent).toMatch(/sign-in screen first/);
+  it("changes nothing, and says so, when the sign-in screen is not showing", () => {
     expect(fillSignIn(LOGINS[0]!)).toBe(false);
   });
 
-  it("has no panel when there are no logins", () => {
+  it("has no side panel any more: the logins live in the app's sign-in screen", () => {
     installFrame("/");
     expect(document.querySelector('[data-testid="demo-logins"]')).toBeNull();
+    expect(document.head.querySelector("style[data-demo-frame]")!.textContent).not.toContain("demo-logins");
   });
 });

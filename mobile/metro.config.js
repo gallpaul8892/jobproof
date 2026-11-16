@@ -18,6 +18,8 @@ if (process.env.JOBPROOF_DEMO === "1") {
     "expo-secure-store": demo("shims/secureStore.ts"),
     "expo-camera": demo("shims/camera.tsx"),
   };
+  const srcSignIn = path.join(__dirname, "src", "features", "session", "SignInScreen");
+  const appSignIn = path.join(__dirname, "app", "sign-in.tsx");
   const upstream = config.resolver.resolveRequest;
   config.resolver.resolveRequest = (context, moduleName, platform) => {
     const next = () => (upstream ?? context.resolveRequest)(context, moduleName, platform);
@@ -26,6 +28,11 @@ if (process.env.JOBPROOF_DEMO === "1") {
     const origin = context.originModulePath ?? "";
     if (moduleName.startsWith(".") && path.resolve(path.dirname(origin), moduleName) === srcOpenStore) {
       return { type: "sourceFile", filePath: demo("shims/openStore.ts") };
+    }
+    // The route's own import of the sign-in screen gets the demo accounts below its form. Matched on the
+    // importing file, so the shim's import of the real screen is not redirected (no loop).
+    if (moduleName.startsWith(".") && origin === appSignIn && path.resolve(path.dirname(origin), moduleName) === srcSignIn) {
+      return { type: "sourceFile", filePath: demo("shims/SignInWithDemoAccounts.tsx") };
     }
     // react-native-web draws a Modal into document.body; the demo draws it inside the phone frame.
     if (moduleName === "./ModalPortal" && origin.includes(`react-native-web${path.sep}dist${path.sep}exports${path.sep}Modal`)) {

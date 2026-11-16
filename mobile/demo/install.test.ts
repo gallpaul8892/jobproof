@@ -15,9 +15,7 @@ describe("installDemo", () => {
     expect(globalThis.fetch).not.toBe(before);
     expect(document.title).toMatch(/demo/i);
     expect(document.querySelector('[data-testid="demo-home-link"]')!.getAttribute("href")).toBe("/jobproof/");
-    const panel = document.querySelector('[data-testid="demo-logins"]')!.textContent!;
-    for (const who of ["Dan Hughes", "Priya Shah", "Tom Bennett", "priya.shah@jobproof.test", "Painter123!"]) expect(panel).toContain(who);
-    expect(document.querySelectorAll('[data-testid^="demo-use-login-"]')).toHaveLength(3);
+    expect(document.querySelector('[data-testid="demo-logins"]')).toBeNull(); // the logins are in the sign-in screen, not beside the phone
     expect(installDemo({ home: "/other/" })).toBeUndefined(); // a second call does nothing
     expect(document.querySelectorAll('[data-testid="demo-note"]')).toHaveLength(1);
   });

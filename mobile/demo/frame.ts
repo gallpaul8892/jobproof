@@ -14,20 +14,6 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .demo-note a { color: #0b4a8f; font-weight: 600; min-height: 24px; display: inline-flex; align-items: center; }
 .demo-phone { position: relative; flex: 0 0 auto; width: ${FRAME_WIDTH}px; max-width: 100%; height: min(${FRAME_HEIGHT}px, calc(100dvh - 90px)); border: 10px solid #1b1f23; border-radius: 36px; overflow: hidden; background: #fff; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); box-sizing: content-box; transform: translateZ(0); }
 .demo-phone #root { position: absolute; inset: 0; display: flex; }
-.demo-stage { display: flex; align-items: center; justify-content: center; gap: 24px; min-height: 0; max-width: 100%; }
-.demo-logins { flex: 0 0 300px; width: 300px; box-sizing: border-box; align-self: center; background: #fff; border: 2px solid #1b1f23; border-radius: 12px; padding: 12px 16px; color: #1b1f23; font-size: 14px; line-height: 20px; max-height: calc(100dvh - 90px); overflow: auto; }
-.demo-logins > summary { font-size: 18px; font-weight: 700; cursor: pointer; min-height: 32px; display: flex; align-items: center; }
-.demo-logins > p { margin: 8px 0; color: #4a5560; }
-.demo-logins ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.demo-logins li { background: #f4f7f2; border: 1px solid #c9d0c6; border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; }
-.demo-logins li .demo-role { grid-column: 1; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #2f5d3a; }
-.demo-logins li strong { grid-column: 1; font-size: 16px; }
-.demo-logins li > span { grid-column: 1; }
-.demo-logins li button { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
-.demo-logins code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; overflow-wrap: anywhere; }
-.demo-logins button { min-height: 44px; min-width: 64px; padding: 0 16px; font-size: 16px; font-weight: 600; border-radius: 8px; border: 1px solid #8a949e; background: #fff; color: #1b1f23; cursor: pointer; }
-.demo-logins button:focus-visible, .demo-logins summary:focus-visible { outline: 3px solid #0b4a8f; outline-offset: 2px; }
-.demo-logins-status { min-height: 20px; margin: 8px 0 0; font-weight: 600; }
 .demo-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1000; }
 .demo-layer > * { pointer-events: auto; }
 .demo-layer > [data-demo-modal] { pointer-events: none; }
@@ -42,26 +28,12 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .demo-actions { display: flex; gap: 8px; margin-top: 8px; }
 .demo-actions button { flex: 1; min-height: 52px; font-size: 18px; font-weight: 700; border-radius: 8px; border: 2px solid #1b1f23; background: #fff; color: #1b1f23; cursor: pointer; }
 .demo-actions button.primary { background: #1b1f23; color: #fff; }
-@media (max-width: 900px) {
-  .demo-stage { flex-direction: column; gap: 8px; width: 100%; }
-  .demo-logins { order: -1; flex: 0 0 auto; width: min(${FRAME_WIDTH + 20}px, 100%); max-height: 45dvh; }
-  .demo-phone { height: min(${FRAME_HEIGHT}px, calc(100dvh - 190px)); flex: 0 1 auto; }
-}
 @media (max-width: 480px) {
-  .demo-stage { flex: 1 1 auto; width: 100%; justify-content: flex-start; align-items: stretch; gap: 0; }
-  .demo-logins { width: 100%; border-width: 0 0 2px; border-radius: 0; padding: 4px 8px; }
   body { padding: 0; gap: 0; justify-content: flex-start; }
   .demo-note { padding: 6px 8px; font-size: 13px; line-height: 18px; flex: 0 0 auto; }
   .demo-phone { width: 100%; height: auto; flex: 1 1 auto; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
 }
 `;
-
-/** A login the panel offers. The jobs behind it never reach the frame. */
-export interface DemoLoginInfo {
-  name: string;
-  email: string;
-  password: string;
-}
 
 export const SIGN_IN_EMAIL_ID = "sign-in-email";
 export const SIGN_IN_PASSWORD_ID = "sign-in-password";
@@ -94,7 +66,7 @@ export interface Frame {
 let frame: Frame | undefined;
 
 /** Builds the frame once and returns it. Needs a browser document with a #root element. */
-export function installFrame(homeUrl: string, logins: readonly DemoLoginInfo[] = [], doc: Document = document): Frame {
+export function installFrame(homeUrl: string, doc: Document = document): Frame {
   if (frame && doc.body.contains(frame.layer)) return frame;
   const style = doc.createElement("style");
   style.setAttribute("data-demo-frame", "");
@@ -128,67 +100,11 @@ export function installFrame(homeUrl: string, logins: readonly DemoLoginInfo[] =
   layer.setAttribute("data-testid", "demo-layer");
 
   const root = doc.getElementById("root");
-  const stage = doc.createElement("div");
-  stage.className = "demo-stage";
-  stage.setAttribute("data-testid", "demo-stage");
-  stage.appendChild(phone);
-  if (logins.length > 0) stage.appendChild(loginsPanel(logins, doc));
-  doc.body.prepend(note, stage);
+  doc.body.prepend(note, phone);
   if (root) phone.appendChild(root);
   phone.appendChild(layer);
   frame = { layer, note };
   return frame;
-}
-
-/** "Demo logins": every operative who can sign in, each with a button that fills the sign-in fields. */
-function loginsPanel(logins: readonly DemoLoginInfo[], doc: Document): HTMLElement {
-  const panel = doc.createElement("details");
-  panel.className = "demo-logins";
-  panel.setAttribute("data-testid", "demo-logins");
-  // Collapsed by default everywhere, so it takes no room until the visitor opens it.
-  panel.open = false;
-  const summary = doc.createElement("summary");
-  summary.textContent = "Demo logins";
-  const intro = doc.createElement("p");
-  intro.textContent = "Sample operatives, each with their own jobs. These passwords only work in this demo.";
-  const status = doc.createElement("p");
-  status.className = "demo-logins-status";
-  status.setAttribute("role", "status");
-  status.setAttribute("data-testid", "demo-logins-status");
-  const list = doc.createElement("ul");
-  logins.forEach((login, i) => {
-    const item = doc.createElement("li");
-    item.setAttribute("data-testid", `demo-login-${i}`);
-    const name = doc.createElement("strong");
-    name.textContent = login.name;
-    const email = doc.createElement("code");
-    email.textContent = login.email;
-    const password = doc.createElement("code");
-    password.textContent = login.password;
-    const use = doc.createElement("button");
-    use.type = "button";
-    use.textContent = "Use";
-    use.setAttribute("aria-label", `Use this login: ${login.name}`);
-    use.setAttribute("data-testid", `demo-use-login-${i}`);
-    use.addEventListener("click", () => {
-      status.textContent = fillSignIn(login, doc)
-        ? `${login.name}'s login is filled in. Tap Sign in.`
-        : "Open the app's sign-in screen first (sign out to get back to it).";
-    });
-    const role = doc.createElement("span");
-    role.className = "demo-role";
-    role.textContent = "Operative";
-    item.append(role, name, labelled("Email", email, doc), labelled("Password", password, doc), use);
-    list.appendChild(item);
-  });
-  panel.append(summary, intro, list, status);
-  return panel;
-}
-
-function labelled(label: string, value: HTMLElement, doc: Document): HTMLElement {
-  const row = doc.createElement("span");
-  row.append(`${label}: `, value);
-  return row;
 }
 
 /** For tests. */
