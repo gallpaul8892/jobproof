@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Export the demo operative's data as JSON for the static GitHub Pages mobile demo.
+"""Export the demo operatives' data as JSON for the static GitHub Pages mobile demo.
 
 The mobile demo (mobile/demo) has no backend: it answers the operative API in the browser from
 this file. The data is the real seed (backend/app/seed `build_dataset`, which includes
 `operative_day.py`), shaped the way the operative endpoints answer today (see
 backend/app/services/operative_jobs.py `build_job`). Only the published demo operative account is
-exported: no password hashes, no other users' jobs, no manager notes, no money. Everything in it is
-fake, and the demo password is the one already published in backend/app/seed/catalogue.py.
+exported: no password hashes, no other users' jobs, no manager notes, no money. Three operatives can
+sign in (Dan Hughes, Priya Shah, Tom Bennett), each with only their own jobs. Everything in it is
+fake. Dan's password is the one already published in backend/app/seed/catalogue.py; the real seed gives
+the other painters no password (they cannot log in), so DEMO_PASSWORD below is a demo-only password
+that exists only in this export (all three share it). Nothing in the backend changes.
 
 Usage (from the repository root):
 
@@ -31,10 +34,14 @@ from app.branding.defaults import DEFAULT_COMPANY_NAME, DEFAULT_THEME  # noqa: E
 from app.models.enums import JobStatus, ReportState  # noqa: E402
 from app.seed import catalogue  # noqa: E402
 from app.seed.dataset import build_dataset  # noqa: E402
-from app.seed.operative_day import DAN  # noqa: E402
+from app.seed.operative_day import DAN, PRIYA, TOM  # noqa: E402
 
 OUTPUT = ROOT / "mobile" / "demo" / "mock" / "operativeData.json"
 DEFAULT_ANCHOR = date(2026, 11, 15)
+# Operatives who can sign in to the demo, in the order the demo lists them.
+DEMO_OPERATIVES = [DAN, PRIYA, TOM]
+# Demo-only, published, fake. Defined only here: the real seed's other painters have no password.
+DEMO_PASSWORD = "Painter123!"  # noqa: S105
 
 
 def iso(value: datetime | None) -> str | None:
@@ -45,8 +52,8 @@ def iso(value: datetime | None) -> str | None:
 
 def export(anchor: date) -> dict[str, object]:
     ds = build_dataset(anchor)
-    dan = next(u for u in ds.users if u.email == DAN)
-    account = next(a for a in catalogue.DEMO_ACCOUNTS if a["email"] == DAN)
+    dan_account = next(a for a in catalogue.DEMO_ACCOUNTS if a["email"] == DAN)
+    assert dan_account["password"] == DEMO_PASSWORD, "Dan's published password changed"
     customers = {c.id: c for c in ds.customers}
     people = {u.id: u for u in ds.users}
     reports = {r.job_id: r for r in [*ds.reports, *ds.draft_reports]}
@@ -57,10 +64,10 @@ def export(anchor: date) -> dict[str, object]:
     for item in sorted(ds.job_checklist_items, key=lambda i: i.position):
         job_items.setdefault(item.job_id, []).append(item)
 
-    jobs = []
-    for job in sorted(ds.jobs, key=lambda j: (j.scheduled_start, j.reference)):
-        if job.painter_id != dan.id:
-            continue
+    def jobs_of(painter: object) -> list[dict[str, object]]:
+        return [job_json(j) for j in sorted(ds.jobs, key=lambda j: (j.scheduled_start, j.reference)) if j.painter_id == painter.id]  # type: ignore[attr-defined]
+
+    def job_json(job: object) -> dict[str, object]:
         report = reports.get(job.id)
         recorded = report_items.get(report.id, {}) if report else {}
         live = [i for i in job_items.get(job.id, []) if i.removed_at is None]
@@ -102,7 +109,7 @@ def export(anchor: date) -> dict[str, object]:
             u = people.get(user_id) if user_id else None
             return {"id": str(u.id), "name": u.full_name} if u else None
 
-        jobs.append(
+        return (
             {
                 "id": str(job.id),
                 "reference": job.reference,
@@ -147,6 +154,18 @@ def export(anchor: date) -> dict[str, object]:
             }
         )
 
+    accounts = []
+    for email in DEMO_OPERATIVES:
+        user = next(u for u in ds.users if u.email == email)
+        accounts.append(
+            {
+                "email": user.email,
+                "password": DEMO_PASSWORD,
+                "user": {"id": str(user.id), "email": user.email, "full_name": user.full_name, "role": "painter"},
+                "jobs": jobs_of(user),
+            }
+        )
+
     return {
         "anchor": anchor.isoformat(),
         "branding": {
@@ -154,30 +173,26 @@ def export(anchor: date) -> dict[str, object]:
             "theme": dataclasses.asdict(DEFAULT_THEME),
             "uk_only_contact_details": True,
         },
-        "account": {
-            "email": account["email"],
-            "password": account["password"],
-            "user": {
-                "id": str(dan.id),
-                "email": dan.email,
-                "full_name": dan.full_name,
-                "role": "painter",
-            },
-        },
-        "jobs": jobs,
+        "accounts": accounts,
     }
 
 
 def render(data: dict[str, object]) -> str:
     """One job per line: small diffs when the dataset changes."""
-    jobs = data["jobs"]
-    head = {k: v for k, v in data.items() if k != "jobs"}
+    dump = lambda v: json.dumps(v, separators=(",", ":"))  # noqa: E731
     lines = ["{"]
-    for key, value in head.items():
-        lines.append(f'"{key}": {json.dumps(value, separators=(",", ":"))},')
-    lines.append('"jobs": [')
-    for i, job in enumerate(jobs):  # type: ignore[arg-type]
-        lines.append(json.dumps(job, separators=(",", ":")) + ("," if i < len(jobs) - 1 else ""))  # type: ignore[arg-type]
+    for key, value in data.items():
+        if key != "accounts":
+            lines.append(f'"{key}": {dump(value)},')
+    lines.append('"accounts": [')
+    accounts = data["accounts"]
+    for n, account in enumerate(accounts):  # type: ignore[arg-type]
+        head = {k: v for k, v in account.items() if k != "jobs"}
+        lines.append("{" + ",".join(f'"{k}":{dump(v)}' for k, v in head.items()) + ',"jobs":[')
+        jobs = account["jobs"]
+        for i, job in enumerate(jobs):
+            lines.append(dump(job) + ("," if i < len(jobs) - 1 else ""))
+        lines.append("]}" + ("," if n < len(accounts) - 1 else ""))  # type: ignore[arg-type]
     lines.append("]")
     lines.append("}")
     return "\n".join(lines) + "\n"

@@ -1,6 +1,6 @@
 import { londonDateOf } from "@jobproof/shared";
 import type { AppStatus, Branding, DeviceSession, OperativeJob, OperativeJobList, OperativeReport, User } from "@jobproof/shared";
-import type { DemoJob, OperativeMockData } from "./data";
+import type { DemoAccount, DemoJob, OperativeMockData } from "./data";
 
 /** Mirrors backend/app/services/operative_jobs.py: 30 days back, 50 rows. */
 export const EARLIER_DAYS = 30;
@@ -26,6 +26,8 @@ const addDays = (isoDate: string, days: number) => new Date((dayNumber(isoDate) 
 
 interface Session {
   id: string;
+  /** Whose session this is: every read and write is limited to this account's jobs. */
+  userId: string;
   deviceId: string;
   currentRefresh: string;
   /** The token that was replaced last, and when: the real server tolerates a lost response for 60 s. */
@@ -52,13 +54,14 @@ const token = (prefix: string) => `${prefix}.${Date.now().toString(36)}${(++coun
 const uuid = () => globalThis.crypto.randomUUID();
 
 /**
- * The operative API, answered in memory. One published demo account signs in; everything else is
+ * The operative API, answered in memory. A few published demo operatives sign in, each seeing only
+ * their own jobs (another operative's job is a 404, as on the real server); everything else is
  * refused the way the real server refuses it. Dates in the exported data are shifted so that its
  * "today" is the visitor's today in London. Writes (the draft report) change only this object and
  * are gone on reload.
  */
 export class OperativeBackend {
-  private readonly jobs: DemoJob[];
+  private readonly jobsByUser = new Map<string, DemoJob[]>();
   private readonly sessions = new Map<string, Session>();
   private readonly accessTokens = new Map<string, { sessionId: string; expiresAt: number }>();
   private readonly now: () => Date;
@@ -67,7 +70,9 @@ export class OperativeBackend {
   constructor(private readonly data: OperativeMockData, options: BackendOptions = {}) {
     this.now = options.now ?? (() => new Date());
     this.shiftDays = dayNumber(this.today()) - dayNumber(data.anchor);
-    this.jobs = data.jobs.map((job) => this.shift(structuredClone(job)));
+    for (const account of data.accounts) {
+      this.jobsByUser.set(account.user.id, account.jobs.map((job) => this.shift(structuredClone(job))));
+    }
   }
 
   today(): string {
@@ -105,13 +110,15 @@ export class OperativeBackend {
     if (typeof b.app_version !== "string" || !SEMVER.test(b.app_version)) errors.push({ loc: ["body", "app_version"], message: "Input should be a version such as 1.2.3." });
     if (errors.length > 0) throw new MockProblem(422, "validation_error", "Request validation failed.", errors);
     const { email, password, device_id } = b as { email: string; password: string; device_id: string };
-    const account = this.data.account;
-    if (email.trim().toLowerCase() !== account.email.toLowerCase() || password !== account.password) {
+    const wanted = email.trim().toLowerCase();
+    const account = this.data.accounts.find((a) => a.email.toLowerCase() === wanted);
+    // One answer for an unknown email and a wrong password.
+    if (!account || password !== account.password) {
       throw new MockProblem(401, "invalid_credentials", "Wrong email or password.");
     }
     // A new session for the same device ends that device's previous one.
     for (const s of this.sessions.values()) if (s.deviceId === device_id) s.revoked = true;
-    return this.issue({ id: uuid(), deviceId: device_id, currentRefresh: "", spent: new Set(), revoked: false });
+    return this.issue({ id: uuid(), userId: account.user.id, deviceId: device_id, currentRefresh: "", spent: new Set(), revoked: false });
   }
 
   refreshSession(body: unknown): DeviceSession {
@@ -147,7 +154,7 @@ export class OperativeBackend {
       refresh_token: session.currentRefresh,
       refresh_expires_at: new Date(this.now().getTime() + 30 * DAY_MS).toISOString(),
       session_id: session.id,
-      user: this.data.account.user,
+      user: this.account(session.userId).user,
     };
   }
 
@@ -159,7 +166,11 @@ export class OperativeBackend {
     if (!entry || !session || session.revoked || entry.expiresAt <= this.now().getTime()) {
       throw new MockProblem(401, "unauthenticated", "Sign in to continue.");
     }
-    return { user: this.data.account.user, session };
+    return { user: this.account(session.userId).user, session };
+  }
+
+  private account(userId: string): DemoAccount {
+    return this.data.accounts.find((a) => a.user.id === userId)!;
   }
 
   endSession(header: string | null): void {
@@ -174,14 +185,15 @@ export class OperativeBackend {
     return structuredClone(api);
   }
 
-  listJobs(): OperativeJobList {
+  listJobs(header: string | null): OperativeJobList {
+    const jobs = this.jobsOf(header);
     const today = this.today();
     const floor = addDays(today, -EARLIER_DAYS);
     const rank = (j: DemoJob) => (j.status === "in_progress" || j.status === "to_do" ? 0 : j.status === "submitted" ? 1 : j.status === "completed_by_office" ? 2 : 3);
-    const todays = this.jobs
+    const todays = jobs
       .filter((j) => j.scheduled_start === today)
       .sort((a, b) => rank(a) - rank(b) || a.reference.localeCompare(b.reference));
-    const earlier = this.jobs
+    const earlier = jobs
       .filter(
         (j) =>
           j.scheduled_start < today &&
@@ -200,19 +212,23 @@ export class OperativeBackend {
     };
   }
 
-  private own(id: string): DemoJob {
-    const job = ID.test(id) ? this.jobs.find((j) => j.id === id.toLowerCase()) : undefined;
+  private jobsOf(header: string | null): DemoJob[] {
+    return this.jobsByUser.get(this.authenticate(header).user.id) ?? [];
+  }
+
+  private own(header: string | null, id: string): DemoJob {
+    const job = ID.test(id) ? this.jobsOf(header).find((j) => j.id === id.toLowerCase()) : undefined;
     if (!job) throw new MockProblem(404, "not_found", "Job not found.");
     return job;
   }
 
-  getJob(id: string): OperativeJob {
-    return this.strip(this.own(id));
+  getJob(header: string | null, id: string): OperativeJob {
+    return this.strip(this.own(header, id));
   }
 
   /** PATCH /operative/jobs/{id}/report: same rules as backend/app/services/drafts.py and schemas/operative.py. */
-  saveDraft(id: string, body: unknown): OperativeJob {
-    const job = this.own(id);
+  saveDraft(header: string | null, id: string, body: unknown): OperativeJob {
+    const job = this.own(header, id);
     const b = body as { notes?: unknown; checklist?: unknown } | null;
     const errors: { loc: (string | number)[]; message: string }[] = [];
     if (typeof b !== "object" || b === null || Array.isArray(b)) throw new MockProblem(422, "validation_error", "Request validation failed.", [{ loc: ["body"], message: "Input should be an object." }]);

@@ -9,7 +9,7 @@ import { createDemoFetch } from "./fetch";
 const D = data as unknown as OperativeMockData;
 const DEVICE = "6f1b6d0c-0000-4000-8000-000000000002";
 const BASE = "http://demo.test";
-const body = { email: D.account.email, password: D.account.password, device_id: DEVICE, platform: "android" as const, app_version: "0.1.0" };
+const body = { email: D.accounts[0]!.email, password: D.accounts[0]!.password, device_id: DEVICE, platform: "android" as const, app_version: "0.1.0" };
 
 function setup() {
   const backend = new OperativeBackend(D, { now: () => new Date("2027-03-01T10:00:00Z") });
@@ -46,6 +46,17 @@ describe("the demo fetch, through the real generated API client", () => {
     expect(saved.report!.notes).toBe("Started");
   });
 
+  it("each operative sees only their own jobs over HTTP; another operative's job is a 404", async () => {
+    const { setToken } = setup();
+    const sign = (i: number) => callApi(() => createDeviceSession({ body: { ...body, email: D.accounts[i]!.email, password: D.accounts[i]!.password } }), { refresh: false });
+    setToken((await sign(1)).access_token);
+    const priya = await callApi(() => listOperativeJobs());
+    expect(priya.jobs_today.map((j) => j.reference)).toEqual(["JP-1066", "JP-1065"]);
+    const danJob = D.accounts[0]!.jobs.find((j) => j.reference === "JP-1061")!;
+    const error = await callApi(() => getOperativeJob({ path: { job_id: danJob.id } }), { refresh: false }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ status: 404 });
+  });
+
   it("refuses a wrong password with the app's invalid_credentials error", async () => {
     setup();
     const error = await callApi(() => createDeviceSession({ body: { ...body, password: "nope" } }), { refresh: false }).catch((e: unknown) => e);
@@ -63,7 +74,7 @@ describe("the demo fetch, through the real generated API client", () => {
     const { demoFetch, backend } = setup();
     const s = backend.createSession(body);
     const auth = { Authorization: `Bearer ${s.access_token}` };
-    const id = backend.listJobs().jobs_today[0]!.id;
+    const id = backend.listJobs(`Bearer ${s.access_token}`).jobs_today[0]!.id;
     for (const [method, path] of [
       ["POST", `/api/v1/operative/jobs/${id}/report/submit`],
       ["PUT", `/api/v1/operative/jobs/${id}/photos/00000000-0000-4000-8000-000000000001`],

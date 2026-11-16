@@ -27,7 +27,10 @@
         <article class="card" data-testid="card-mobile">
           <h2><a href="mobile/" data-testid="link-mobile">Operative mobile app</a></h2>
           <p>See today&rsquo;s jobs on a phone-sized screen, open a job and add photos.</p>
-          <p class="hint" data-testid="mobile-signin">Sign in with <code>{{OPERATIVE_EMAIL}}</code> and <code>{{OPERATIVE_PASSWORD}}</code>.</p>
+          <p class="hint" id="mobile-logins-title">Demo logins: name, email, password. Open the demo and tap &ldquo;Use this login&rdquo; to fill them in.</p>
+          <ul class="logins" aria-labelledby="mobile-logins-title" data-testid="mobile-signin">
+            {{OPERATIVE_LOGINS}}
+          </ul>
         </article>
       </section>
     </main>

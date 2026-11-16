@@ -1,6 +1,6 @@
 import data from "./mock/operativeData.json";
 import { OperativeBackend } from "./mock/backend";
-import type { OperativeMockData } from "./mock/data";
+import { loginsOf, type OperativeMockData } from "./mock/data";
 import { createDemoFetch } from "./mock/fetch";
 import { installFrame } from "./frame";
 
@@ -23,7 +23,6 @@ export function installDemo(env: { home?: string } = {}): OperativeBackend | und
   globalThis.fetch = createDemoFetch(backend, real);
   (window as unknown as Record<string, unknown>)[DEMO_MARKER] = true;
   document.title = "JobProof operative app (demo)";
-  const { email, password } = (data as unknown as OperativeMockData).account;
-  installFrame(env.home && env.home !== "" ? env.home : "/", { email, password });
+  installFrame(env.home && env.home !== "" ? env.home : "/", loginsOf(data as unknown as OperativeMockData));
   return backend;
 }

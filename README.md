@@ -63,7 +63,21 @@ anywhere and nothing is stored: state resets on page reload.
 **Web demo.** Writes (mark reviewed, edit notes, customer details, settings) work in memory, keep the version
 checks and the 409 "Apply my changes on top" flow. Sign in with the demo accounts shown on the login page.
 
-**Mobile demo.** Sign in as the demo operative (`painter@jobproof.test` / `Painter123!`; only this account works).
+**Mobile demo.** Three demo operatives can sign in, each with only their own jobs for "today" and earlier unfinished
+ones (another operative's job is a 404, as on the real server):
+
+| Operative | Email | Password |
+| --- | --- | --- |
+| Dan Hughes | `painter@jobproof.test` | `Painter123!` |
+| Priya Shah | `priya.shah@jobproof.test` | `Painter123!` |
+| Tom Bennett | `tom.bennett@jobproof.test` | `Painter123!` |
+
+A "Demo logins" panel beside the phone (collapsed above it on narrow screens) lists them, and its "Use this login"
+button fills the app's sign-in fields (the frame sets the inputs and fires input events; app code is untouched).
+The landing page card lists the same logins. Dan's password is the one the real seed already publishes. Priya and
+Tom have no password in the real seed (they cannot log in to a real deployment); `Painter123!` for them exists
+only in the demo data export (`DEMO_PASSWORD` in `scripts/export-operative-mock-data.py`). Any other email or a
+wrong password gets the same 401.
 The app's own screens run unchanged: today's jobs, job detail, camera and gallery import, settings and sign-out.
 The browser stand-ins live in `mobile/demo` and are swapped in by `mobile/metro.config.js` only when
 `JOBPROOF_DEMO=1` and the platform is web, so the Android build is untouched:

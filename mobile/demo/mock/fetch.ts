@@ -64,11 +64,11 @@ export function createDemoFetch(backend: OperativeBackend, passthrough?: typeof 
         throw new MockProblem(404, "not_found", "This is not available in the demo.");
       }
       backend.authenticate(auth);
-      if (path === "/api/v1/operative/jobs") return only("GET"), json(backend.listJobs());
+      if (path === "/api/v1/operative/jobs") return only("GET"), json(backend.listJobs(auth));
       const report = /^\/api\/v1\/operative\/jobs\/([^/]+)\/report$/.exec(path);
-      if (report) return only("PATCH"), json(backend.saveDraft(report[1]!, await body()));
+      if (report) return only("PATCH"), json(backend.saveDraft(auth, report[1]!, await body()));
       const one = /^\/api\/v1\/operative\/jobs\/([^/]+)$/.exec(path);
-      if (one) return only("GET"), json(backend.getJob(one[1]!));
+      if (one) return only("GET"), json(backend.getJob(auth, one[1]!));
     }
     throw new MockProblem(404, "not_found", "Not found.");
   }

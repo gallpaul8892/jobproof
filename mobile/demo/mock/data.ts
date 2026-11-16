@@ -8,9 +8,22 @@ export interface DemoJob extends OperativeJob {
   _job_items: string[];
 }
 
+/** One operative who can sign in to the demo, with only their own jobs. */
+export interface DemoAccount {
+  email: string;
+  /** Demo-only and published (see the export script); never a real credential. */
+  password: string;
+  user: User;
+  jobs: DemoJob[];
+}
+
 export interface OperativeMockData {
   anchor: string;
   branding: Branding;
-  account: { email: string; password: string; user: User };
-  jobs: DemoJob[];
+  accounts: DemoAccount[];
 }
+
+/** What the demo shows visitors: who can sign in, never the jobs. */
+export type DemoLogin = { name: string; email: string; password: string };
+
+export const loginsOf = (data: OperativeMockData): DemoLogin[] => data.accounts.map((a) => ({ name: a.user.full_name, email: a.email, password: a.password }));

@@ -19,7 +19,7 @@ const base = trimmed === "" ? "/" : `/${trimmed}/`;
 
 const run = (cmd, args, options = {}) => execFileSync(cmd, args, { stdio: "inherit", cwd: root, ...options });
 const mockSettings = JSON.parse(readFileSync(join(root, "web/src/mock/mockData.json"), "utf8")).settings;
-const operative = JSON.parse(readFileSync(join(root, "mobile/demo/mock/operativeData.json"), "utf8")).account;
+const operatives = JSON.parse(readFileSync(join(root, "mobile/demo/mock/operativeData.json"), "utf8")).accounts;
 
 // 1. Start clean. `out` is the fixed folder above, never user input.
 rmSync(out, { recursive: true, force: true });
@@ -51,8 +51,15 @@ const themeCss = `:root{${Object.entries(vars).map(([k, v]) => `${v}:${theme[k]}
 const escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const landing = readFileSync(join(root, "pages/landing/index.html"), "utf8")
   .replace("{{THEME}}", themeCss)
-  .replace("{{OPERATIVE_EMAIL}}", escapeHtml(operative.email))
-  .replace("{{OPERATIVE_PASSWORD}}", escapeHtml(operative.password));
+  .replace(
+    "{{OPERATIVE_LOGINS}}",
+    operatives
+      .map(
+        (a, i) =>
+          `<li data-testid="mobile-login-${i}"><strong>${escapeHtml(a.user.full_name)}</strong> <code>${escapeHtml(a.email)}</code> <code>${escapeHtml(a.password)}</code></li>`,
+      )
+      .join("\n            "),
+  );
 if (landing.includes("{{")) throw new Error("build-pages: an unreplaced {{placeholder}} is left in the landing page");
 writeFileSync(join(out, "index.html"), landing);
 cpSync(join(root, "pages/landing/landing.css"), join(out, "landing.css"));

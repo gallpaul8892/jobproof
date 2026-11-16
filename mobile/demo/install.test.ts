@@ -15,7 +15,9 @@ describe("installDemo", () => {
     expect(globalThis.fetch).not.toBe(before);
     expect(document.title).toMatch(/demo/i);
     expect(document.querySelector('[data-testid="demo-home-link"]')!.getAttribute("href")).toBe("/jobproof/");
-    expect(document.querySelector('[data-testid="demo-signin-hint"]')!.textContent).toContain("painter@");
+    const panel = document.querySelector('[data-testid="demo-logins"]')!.textContent!;
+    for (const who of ["Dan Hughes", "Priya Shah", "Tom Bennett", "priya.shah@jobproof.test", "Painter123!"]) expect(panel).toContain(who);
+    expect(document.querySelectorAll('[data-testid^="demo-use-login-"]')).toHaveLength(3);
     expect(installDemo({ home: "/other/" })).toBeUndefined(); // a second call does nothing
     expect(document.querySelectorAll('[data-testid="demo-note"]')).toHaveLength(1);
   });
