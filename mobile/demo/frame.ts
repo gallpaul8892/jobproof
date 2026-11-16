@@ -19,10 +19,13 @@ body { display: flex; flex-direction: column; align-items: center; justify-conte
 .demo-logins > summary { font-size: 18px; font-weight: 700; cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 .demo-logins > p { margin: 8px 0; color: #4a5560; }
 .demo-logins ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.demo-logins li { border: 1px solid #8a949e; border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
-.demo-logins li strong { font-size: 16px; }
+.demo-logins li { background: #f4f7f2; border: 1px solid #c9d0c6; border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; }
+.demo-logins li .demo-role { grid-column: 1; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #2f5d3a; }
+.demo-logins li strong { grid-column: 1; font-size: 16px; }
+.demo-logins li > span { grid-column: 1; }
+.demo-logins li button { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
 .demo-logins code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; overflow-wrap: anywhere; }
-.demo-logins button { margin-top: 6px; min-height: 44px; font-size: 16px; font-weight: 700; border-radius: 8px; border: 2px solid #1b1f23; background: #1b1f23; color: #fff; cursor: pointer; }
+.demo-logins button { min-height: 44px; min-width: 64px; padding: 0 16px; font-size: 16px; font-weight: 600; border-radius: 8px; border: 1px solid #8a949e; background: #fff; color: #1b1f23; cursor: pointer; }
 .demo-logins button:focus-visible, .demo-logins summary:focus-visible { outline: 3px solid #0b4a8f; outline-offset: 2px; }
 .demo-logins-status { min-height: 20px; margin: 8px 0 0; font-weight: 600; }
 .demo-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1000; }
@@ -142,9 +145,8 @@ function loginsPanel(logins: readonly DemoLoginInfo[], doc: Document): HTMLEleme
   const panel = doc.createElement("details");
   panel.className = "demo-logins";
   panel.setAttribute("data-testid", "demo-logins");
-  // Open beside the phone on a wide screen; collapsed above it on a narrow one.
-  const narrow = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 900px)").matches;
-  panel.open = !narrow;
+  // Collapsed by default everywhere, so it takes no room until the visitor opens it.
+  panel.open = false;
   const summary = doc.createElement("summary");
   summary.textContent = "Demo logins";
   const intro = doc.createElement("p");
@@ -165,7 +167,7 @@ function loginsPanel(logins: readonly DemoLoginInfo[], doc: Document): HTMLEleme
     password.textContent = login.password;
     const use = doc.createElement("button");
     use.type = "button";
-    use.textContent = "Use this login";
+    use.textContent = "Use";
     use.setAttribute("aria-label", `Use this login: ${login.name}`);
     use.setAttribute("data-testid", `demo-use-login-${i}`);
     use.addEventListener("click", () => {
@@ -173,7 +175,10 @@ function loginsPanel(logins: readonly DemoLoginInfo[], doc: Document): HTMLEleme
         ? `${login.name}'s login is filled in. Tap Sign in.`
         : "Open the app's sign-in screen first (sign out to get back to it).";
     });
-    item.append(name, labelled("Email", email, doc), labelled("Password", password, doc), use);
+    const role = doc.createElement("span");
+    role.className = "demo-role";
+    role.textContent = "Operative";
+    item.append(role, name, labelled("Email", email, doc), labelled("Password", password, doc), use);
     list.appendChild(item);
   });
   panel.append(summary, intro, list, status);

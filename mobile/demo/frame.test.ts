@@ -107,20 +107,15 @@ describe("demo logins panel", () => {
     expect(q("demo-login-0").textContent).toContain("ann@b.test");
     expect(q("demo-login-0").textContent).toContain("pw1");
     expect(q("demo-login-1").textContent).toContain("bo@b.test");
-    expect(q("demo-use-login-1").textContent).toBe("Use this login");
+    expect(q("demo-use-login-1").textContent).toBe("Use");
     expect(q("demo-logins-status").getAttribute("role")).toBe("status");
   });
 
-  it("is collapsed on a narrow screen and open on a wide one, and collapses above the frame in CSS", () => {
-    window.matchMedia = ((query: string) => ({ matches: query.includes("900px") })) as unknown as typeof window.matchMedia;
+  it("is collapsed by default on any screen, and collapses above the frame on narrow ones in CSS", () => {
+    window.matchMedia = (() => ({ matches: false })) as unknown as typeof window.matchMedia;
     installFrame("/", LOGINS);
     expect((q("demo-logins") as HTMLDetailsElement).open).toBe(false);
     expect(document.head.querySelector("style[data-demo-frame]")!.textContent).toMatch(/@media \(max-width: 900px\)[\s\S]*\.demo-logins[^}]*order: -1/);
-    resetFrameForTests();
-    document.body.innerHTML = '<div id="root"></div>';
-    window.matchMedia = (() => ({ matches: false })) as unknown as typeof window.matchMedia;
-    installFrame("/", LOGINS);
-    expect((q("demo-logins") as HTMLDetailsElement).open).toBe(true);
     delete (window as unknown as Record<string, unknown>).matchMedia;
   });
 
