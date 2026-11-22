@@ -89,3 +89,6 @@ export * from "./operative/semver";
 export * from "./operative/status";
 export * from "./operative/validation";
 export { useOperativeJobs, useOperativeJob } from "./hooks/useOperative";
+// Writes are not shared hooks (they must work offline): the mobile sync engine calls the generated operation itself.
+export { saveOperativeDraft } from "./generated";
+export type { DraftUpdate, DraftChecklistUpdate } from "./generated";

@@ -1,4 +1,5 @@
 import { applyPragmas, migrate, schemaVersion, LATEST_VERSION } from "../src/db/migrations";
+import { DraftRepo } from "../src/db/draftRepo";
 import { PhotoRepo, PhotoLockedError, type NewPhoto } from "../src/db/photoRepo";
 import { SqliteUnsentItemsSource } from "../src/db/unsentSource";
 import type { LocalDb } from "../src/db/localDb";
@@ -90,6 +91,44 @@ function scenario(db: LocalDb): unknown[] {
   });
   out.push(repo.reportState("dan", "job-y"), repo.reportState("dan", "job-x"));
   out.push(db.run("DELETE FROM photos WHERE owner_user_id = ?", ["priya"]).changes, repo.knownIds("priya"));
+  out.push(...draftScenario(db));
+  return out;
+}
+
+/** The checklist and notes of the draft report (T-003f): the same answers from both databases. */
+function draftScenario(db: LocalDb): unknown[] {
+  const out: unknown[] = [];
+  const drafts = new DraftRepo(db);
+  const open = { status: "open", note: null } as const;
+  const attempt = (fn: () => unknown) => {
+    try {
+      return fn();
+    } catch (e) {
+      return `threw ${(e as Error).constructor.name}`;
+    }
+  };
+  drafts.setItem("dan", "job-d", "i1", { status: "done" }, open);
+  drafts.setItem("dan", "job-d", "i2", { status: "not_done", note: "Customer took the tin" }, open);
+  drafts.setItem("dan", "job-d", "i2", { status: "not_done", note: "Customer took the tin" }, open); // no change
+  drafts.setNotes("dan", "job-d", "All rooms done.", null);
+  drafts.setItem("priya", "job-d", "i1", { status: "not_done" }, open);
+  out.push(drafts.checklist("dan", "job-d"), drafts.draft("dan", "job-d"), drafts.dirtyJobIds("dan"), drafts.dirtyJobIds("priya"), drafts.readDirty("dan", "job-d"));
+  const sent = drafts.readDirty("dan", "job-d")!;
+  drafts.setItem("dan", "job-d", "i1", { note: "while sending" }, open);
+  drafts.markSynced("dan", sent);
+  out.push(drafts.checklist("dan", "job-d"), drafts.draft("dan", "job-d"), drafts.readDirty("dan", "job-d"));
+  drafts.setError("dan", "job-d", "job_cancelled");
+  out.push(drafts.dirtyJobIds("dan"), drafts.dirtyJobIds("dan", true), drafts.attentionJobIds("dan"));
+  drafts.clearErrors("dan");
+  out.push(drafts.attentionJobIds("dan"), drafts.dirtyJobIds("dan"));
+  db.run("UPDATE drafts SET local_state = 'submitted' WHERE owner_user_id = ? AND job_id = ?", ["dan", "job-d"]);
+  out.push(drafts.isEditable("dan", "job-d"), attempt(() => drafts.setNotes("dan", "job-d", "late", null)), drafts.readDirty("dan", "job-d"));
+  const photos = new PhotoRepo(db);
+  photos.insert(photo({ id: "photo-0101", jobId: "job-e", checklistItemId: "item-3" }));
+  photos.setItem("dan", "photo-0101", "item-5");
+  out.push(photos.get("dan", "photo-0101"), photos.countForItem("dan", "job-e", "item-5"));
+  photos.setItem("dan", "photo-0101", null);
+  out.push(photos.get("dan", "photo-0101")?.checklist_item_id, new SqliteUnsentItemsSource(db).summaryFor("dan"));
   return out;
 }
 

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { isFinishedJob, jobTypeLabel, operativeJobStatusLabel, type OperativeJob } from "@jobproof/shared";
 import { useHasLocalDraft } from "../../db/localStore";
+import { useLocalView } from "../checklist/localView";
 import { useAppBranding } from "../../theme/BrandingProvider";
 import { DIVIDER, MUTED_TEXT } from "../../ui/colours";
 import { StatusBadge } from "../../ui/StatusBadge";
@@ -18,7 +19,9 @@ export function JobRow({ job: serverJob, onPress }: { job: OperativeJob; onPress
   const { theme } = useAppBranding();
   // Photos taken on this phone already make a "To do" job "In progress".
   const startedHere = useHasLocalDraft(serverJob.id);
-  const job = startedHere && serverJob.status === "to_do" ? { ...serverJob, status: "in_progress" as const } : serverJob;
+  // The same local-over-server view as the job screen, so both show the same "6 of 9 done".
+  const local = useLocalView(serverJob).job;
+  const job = startedHere && local.status === "to_do" ? { ...local, status: "in_progress" as const } : local;
   const finished = isFinishedJob(job);
   const secondary = finished ? MUTED_TEXT : theme.text;
   return (

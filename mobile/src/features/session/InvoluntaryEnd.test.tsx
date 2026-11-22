@@ -33,6 +33,7 @@ describe("involuntary session end wipes the job cache (customer numbers, address
     const t = await danHasUnsentWork();
     const server = fakeServer();
     server.setJobs(list({ jobs_today: [LOUNGE, WALL, EXTERIOR] }));
+    server.operative.saveFailWith = { status: 503, code: "unavailable" }; // saving is down, so the draft stays unsent (the engine would send it otherwise)
     const first = await launchSignedIn(server, DAN, t.store);
     await screen.findByTestId("jobs-today");
     await waitFor(() => expect(kv().has(persistedKey(DAN))).toBe(true), { timeout: 4000 });
@@ -54,6 +55,7 @@ describe("involuntary session end wipes the job cache (customer numbers, address
     const t = await danHasUnsentWork();
     const server = fakeServer();
     server.setJobs(list({ jobs_today: [LOUNGE, WALL, EXTERIOR] }));
+    server.operative.saveFailWith = { status: 503, code: "unavailable" }; // saving is down, so the draft stays unsent
     const { client } = await launchSignedIn(server, DAN, t.store);
     await screen.findByTestId("jobs-today");
     await waitFor(() => expect(kv().has(persistedKey(DAN))).toBe(true), { timeout: 4000 });

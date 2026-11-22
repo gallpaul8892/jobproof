@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { clearPersistedQueries } from "../../api/queryPersister";
 import type { SessionManager } from "../../api/sessionManager";
 import { LocalStoreProvider, type LocalStore } from "../../db/localStore";
+import { SyncProvider } from "../../sync/SyncProvider";
 import { AppShell } from "../shell/AppShell";
 import { RootNavigator } from "./RootNavigator";
 import { SessionProvider } from "./SessionProvider";
@@ -40,9 +41,11 @@ export function AppRoot({ manager, client, store, unsent }: { manager: SessionMa
   return (
     <SessionProvider manager={manager}>
       <WithLocalStore store={store} unsent={unsent}>
-        <AppShell client={client}>
-          <RootNavigator />
-        </AppShell>
+        <SyncProvider store={store} client={client}>
+          <AppShell client={client}>
+            <RootNavigator />
+          </AppShell>
+        </SyncProvider>
       </WithLocalStore>
     </SessionProvider>
   );

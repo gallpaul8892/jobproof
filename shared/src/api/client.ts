@@ -119,6 +119,7 @@ async function attempt<T>(call: () => Promise<SdkResult<T>>, mayRefresh: boolean
       result.error,
       result.response?.status ?? 0,
       result.response?.headers.get("X-Request-ID"),
+      result.response?.headers.get("Retry-After"),
     );
     // A wrong password is also a 401, but it is not a lost session.
     if (error.status === 401 && error.code !== "invalid_credentials" && notify) {

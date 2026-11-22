@@ -1,6 +1,10 @@
 import { callApi, configureApiClient, ApiError } from "@jobproof/shared";
 // The generated SDK calls are not part of the shared public entry; tests reach them directly (as test/helpers.ts does).
 import { createDeviceSession, getAppStatus, getBranding, getOperativeJob, listOperativeJobs, saveOperativeDraft } from "../../../shared/src/generated";
+import { DraftRepo } from "../../src/db/draftRepo";
+import { applyPragmas, migrate } from "../../src/db/migrations";
+import { SyncEngine, httpDraftApi } from "../../src/sync/engine";
+import { MemoryDb } from "../memoryDb";
 import data from "./operativeData.json";
 import { OperativeBackend } from "./backend";
 import type { OperativeMockData } from "./data";
@@ -106,5 +110,43 @@ describe("the demo fetch, through the real generated API client", () => {
     const c = new AbortController();
     c.abort();
     await expect(demoFetch(`${BASE}/api/v1/app/status`, { signal: c.signal })).rejects.toBeDefined();
+  });
+});
+
+describe("the app's draft sync engine against the demo backend (T-003f)", () => {
+  async function engineFor(userIndex: number, jobId: string) {
+    const { setToken } = setup();
+    const account = D.accounts[userIndex]!;
+    const session = await callApi(() => createDeviceSession({ body: { ...body, email: account.email, password: account.password } }), { refresh: false });
+    setToken(session.access_token);
+    const db = new MemoryDb();
+    applyPragmas(db);
+    migrate(db);
+    const drafts = new DraftRepo(db);
+    const saved: string[] = [];
+    const engine = new SyncEngine({ drafts, api: httpDraftApi, currentUserId: () => account.user.id, subscribeLocal: () => () => undefined, onSaved: (j) => void saved.push(j.id) });
+    return { drafts, engine, saved, user: account.user.id, jobId };
+  }
+
+  it("sends the app's real request body and the demo accepts it, as the real server would", async () => {
+    const job = D.accounts[0]!.jobs.find((j) => j.reference === "JP-1061")!;
+    const { drafts, engine, saved, user } = await engineFor(0, job.id);
+    const [first, second] = job.checklist;
+    drafts.setItem(user, job.id, first!.id, { status: "done" }, { status: first!.status, note: first!.note });
+    drafts.setItem(user, job.id, second!.id, { status: "not_done", note: "Customer took the tin" }, { status: second!.status, note: second!.note });
+    drafts.setNotes(user, job.id, "All rooms done.\nCustomer happy.", null);
+    await engine.syncNow();
+    expect(saved).toEqual([job.id]);
+    expect(drafts.dirtyJobIds(user)).toEqual([]);
+    expect(drafts.attentionJobIds(user)).toEqual([]);
+  });
+
+  it("another operative's job is a 404: the work is kept and shown as needing attention", async () => {
+    const danJob = D.accounts[0]!.jobs.find((j) => j.reference === "JP-1061")!;
+    const { drafts, engine, user } = await engineFor(1, danJob.id); // Priya, Dan's job
+    drafts.setNotes(user, danJob.id, "not mine", null);
+    await engine.syncNow();
+    expect(drafts.attentionJobIds(user)).toEqual([{ jobId: danJob.id, code: "job_changed" }]);
+    expect(drafts.draft(user, danJob.id)?.notes).toBe("not mine");
   });
 });

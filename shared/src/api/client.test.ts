@@ -37,6 +37,19 @@ describe("api client adapter", () => {
     expect(err).toMatchObject({ status: 404, code: "not_found", requestId: "abc-123" });
   });
 
+  it("carries Retry-After (whole seconds) on the ApiError, and ignores an unreadable one", async () => {
+    const busy = (header: string | null) =>
+      new Response(JSON.stringify({ title: "Busy", status: 503, code: "busy" }), {
+        status: 503,
+        headers: { "Content-Type": "application/problem+json", ...(header ? { "Retry-After": header } : {}) },
+      });
+    for (const [header, expected] of [["5", 5], ["Wed, 21 Oct 2026 07:28:00 GMT", undefined], [null, undefined]] as const) {
+      configureApiClient({ baseUrl: "http://api.test", fetch: async () => busy(header) });
+      const err = (await callApi(() => getHealth()).catch((e: unknown) => e)) as ApiError;
+      expect(err.retryAfterSeconds).toBe(expected);
+    }
+  });
+
   it("maps a 503 health body to ApiError 'unavailable'", async () => {
     configureApiClient({
       baseUrl: "http://api.test",

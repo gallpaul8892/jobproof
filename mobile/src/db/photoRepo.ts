@@ -59,6 +59,14 @@ export class PhotoLockedError extends Error {
   }
 }
 
+/** Moving a photo onto an item that already has the maximum number of photos. */
+export class ItemFullError extends Error {
+  constructor() {
+    super("This item has the maximum 12 photos.");
+    this.name = "ItemFullError";
+  }
+}
+
 export const MAX_PHOTOS_PER_REPORT = 60;
 export const MAX_PHOTOS_PER_ITEM = 12;
 
@@ -123,6 +131,18 @@ export class PhotoRepo {
 
   setStage(ownerUserId: string, id: string, stage: Stage): void {
     this.edit(ownerUserId, id, "stage = ?", stage);
+  }
+
+  /**
+   * Moves the photo to another checklist item (or to none). A local change only: the row is
+   * updated in place with `meta_rev` bumped, so there is no new row and no re-upload; the server
+   * learns of it with the photo's metadata (T-003g).
+   */
+  setItem(ownerUserId: string, id: string, itemId: string | null): void {
+    const photo = this.get(ownerUserId, id);
+    if (!photo || photo.deleted || photo.checklist_item_id === itemId) return;
+    if (itemId !== null && this.countForItem(ownerUserId, photo.job_id, itemId) >= MAX_PHOTOS_PER_ITEM) throw new ItemFullError();
+    this.edit(ownerUserId, id, "checklist_item_id = ?", itemId);
   }
 
   setCaption(ownerUserId: string, id: string, caption: string | null): void {

@@ -3,20 +3,20 @@ import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View 
 import { useRouter } from "expo-router";
 import {
   ApiError,
-  checklistItemStateLabel,
-  checklistSummary,
   formatAddress,
   formatDate,
   formatTime,
   jobTypeLabel,
   useOperativeJob,
-  type OperativeChecklistItem,
   type OperativeJob,
 } from "@jobproof/shared";
 import { useHasLocalDraft } from "../../db/localStore";
 import { PhotoSection } from "../capture/PhotoSection";
+import { CHECKLIST_MSG } from "../checklist/messages";
+import { ChecklistSection } from "../checklist/ChecklistSection";
+import { useLocalView } from "../checklist/localView";
 import { useAppBranding } from "../../theme/BrandingProvider";
-import { DIVIDER, ERROR_COLOUR, MUTED_TEXT, SKELETON } from "../../ui/colours";
+import { ERROR_COLOUR, MUTED_TEXT, SKELETON } from "../../ui/colours";
 import { Button } from "../../ui/Button";
 import { Notice } from "../../ui/Notice";
 import { StatusBadge } from "../../ui/StatusBadge";
@@ -27,7 +27,7 @@ export const MSG = {
   notSaved: "This job's details weren't saved. Connect once to load it.",
   loadFailed: "Couldn't load this job. Check your signal.",
   offline: "Offline. Showing details saved on this phone.",
-  noChecklist: "No checklist for this job. You can still take photos and submit.",
+  noChecklist: CHECKLIST_MSG.noChecklist,
   noNotes: "No notes for this job.",
   noPhone: "No phone number for this contact.",
   cantCall: "Couldn't open the phone app.",
@@ -153,50 +153,10 @@ function Notes({ notes }: { notes: string | null }) {
   );
 }
 
-const ITEM_ICON = { open: "☐", done: "✓", not_done: "✕" } as const;
-
-function ChecklistRow({ item, number, total }: { item: OperativeChecklistItem; number: number; total: number }) {
-  const { theme } = useAppBranding();
-  const state = checklistItemStateLabel(item);
-  const removed = item.removed ? " Removed by the office." : "";
-  return (
-    <View
-      accessible
-      accessibilityLabel={`Item ${number} of ${total}. ${item.label}. ${state}.${removed}`}
-      style={[styles.item, { borderColor: DIVIDER }]}
-      testID={`checklist-item-${item.id}`}
-    >
-      <Text style={[styles.itemIcon, { color: theme.text }]} importantForAccessibility="no" accessibilityElementsHidden>
-        {ITEM_ICON[item.status]}
-      </Text>
-      <View style={styles.itemText}>
-        <Text style={[styles.value, { color: theme.text }]}>{item.label}</Text>
-        <Text style={[styles.itemState, { color: MUTED_TEXT }]}>{item.removed ? `${state} (removed by the office)` : state}</Text>
-      </View>
-    </View>
-  );
-}
-
-function Checklist({ job }: { job: OperativeJob }) {
-  const { theme } = useAppBranding();
-  const items = job.checklist;
-  if (items.length === 0) {
-    return (
-      <Text style={[styles.value, { color: theme.text }]} testID="checklist-empty">
-        {MSG.noChecklist}
-      </Text>
-    );
-  }
-  return (
-    <View style={styles.group} testID="checklist">
-      <Text style={[styles.value, { color: theme.text, fontWeight: "600" }]} testID="checklist-summary">
-        {checklistSummary(job)}
-      </Text>
-      {items.map((item, i) => (
-        <ChecklistRow key={item.id} item={item} number={i + 1} total={items.length} />
-      ))}
-    </View>
-  );
+/** Status with the progress the operative has made on this phone ("In progress, 6 of 9 done"), same count as the My jobs list. */
+function JobStatus({ job, startedHere }: { job: OperativeJob; startedHere: boolean }) {
+  const view = useLocalView(job);
+  return <StatusBadge job={startedHere && view.job.status === "to_do" ? { ...view.job, status: "in_progress" } : view.job} testID="job-status" />;
 }
 
 function SubmittedLine({ job }: { job: OperativeJob }) {
@@ -249,9 +209,9 @@ function Unavailable() {
 }
 
 /**
- * Job detail (T-003d), read only. Reads the job from the cache the list filled, so it opens with
- * no signal; a refresh only replaces the server's fields (nothing the operative did on the phone
- * lives in this cache).
+ * Job detail (T-003d, T-003f). Reads the job from the cache the list filled, so it opens with no
+ * signal; a refresh only replaces the server's fields. What the operative did on the phone (ticks,
+ * notes) lives in the local database and is laid over the server's job until it has been sent.
  */
 export function JobDetailScreen({ jobId }: { jobId: string }) {
   const { theme } = useAppBranding();
@@ -308,7 +268,7 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
       <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]} testID="job-title">
         {job.title}
       </Text>
-      <StatusBadge job={startedHere && job.status === "to_do" ? { ...job, status: "in_progress" } : job} testID="job-status" />
+      <JobStatus job={job} startedHere={startedHere} />
       <SubmittedLine job={job} />
       <Fact label="Reference" value={job.reference} testID="job-reference" />
       <Fact label="Job type" value={jobTypeLabel(job.job_type)} testID="job-type" />
@@ -339,7 +299,7 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
       <Notes notes={job.notes} />
 
       <Heading>Checklist</Heading>
-      <Checklist job={job} />
+      <ChecklistSection serverJob={job} />
 
       <PhotoSection jobId={jobId} submitted={submitted} />
     </Frame>
@@ -361,8 +321,4 @@ const styles = StyleSheet.create({
   failed: { fontSize: 16, fontWeight: "600" },
   toggle: { minHeight: 48, justifyContent: "center", alignSelf: "flex-start" },
   toggleText: { fontSize: 18, fontWeight: "700" },
-  item: { flexDirection: "row", gap: 12, minHeight: 48, paddingVertical: 10, borderBottomWidth: 1, alignItems: "flex-start" },
-  itemIcon: { fontSize: 22, width: 28, textAlign: "center" },
-  itemText: { flex: 1, gap: 2 },
-  itemState: { fontSize: 16 },
 });

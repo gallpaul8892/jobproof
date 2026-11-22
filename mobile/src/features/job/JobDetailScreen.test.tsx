@@ -134,7 +134,7 @@ describe("T-003d scenario 4: checklist shown", () => {
     expect(within(rows[0]!).getByText("Walls filled and sanded")).toBeTruthy();
     expect(within(rows[1]!).getByText("Ceilings painted, two coats")).toBeTruthy();
     for (const row of rows) expect(within(row).getByText("Not done yet")).toBeTruthy();
-    expect(rows[0]!.props.accessibilityLabel).toBe("Item 1 of 9. Walls filled and sanded. Not done yet.");
+    expect(screen.getByTestId("checklist-toggle-job-lounge-item-1").props.accessibilityLabel).toBe("Item 1 of 9. Walls filled and sanded. Not done yet.");
   });
 
   it("shows done and can't-do items, with the reason", async () => {
@@ -144,7 +144,7 @@ describe("T-003d scenario 4: checklist shown", () => {
     await openJob(serverWith(makeJob({ ...LOUNGE, checklist: items, checklist_total: 3, checklist_dealt_with: 2, status: "in_progress" })), "job-lounge");
     expect(screen.getByTestId("checklist-summary")).toHaveTextContent(contains("2 of 3 done"));
     expect(screen.getByText("Done")).toBeTruthy();
-    expect(screen.getByText("Can't do this: Wet weather")).toBeTruthy();
+    expect(screen.getByText("Not done: Wet weather")).toBeTruthy();
   });
 });
 

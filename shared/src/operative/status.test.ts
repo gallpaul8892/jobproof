@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checklistItemStateLabel,
+  isDealtWith,
   checklistSummary,
   isFinishedJob,
   operativeJobStatusLabel,
@@ -64,8 +65,17 @@ describe("checklistItemStateLabel", () => {
   it("describes each state", () => {
     expect(checklistItemStateLabel({ status: "open", note: null })).toBe("Not done yet");
     expect(checklistItemStateLabel({ status: "done", note: null })).toBe("Done");
-    expect(checklistItemStateLabel({ status: "not_done", note: "Wet weather" })).toBe("Can't do this: Wet weather");
-    expect(checklistItemStateLabel({ status: "not_done", note: null })).toBe("Can't do this");
+    expect(checklistItemStateLabel({ status: "not_done", note: "Wet weather" })).toBe("Not done: Wet weather");
+    expect(checklistItemStateLabel({ status: "not_done", note: null })).toBe("Not done: add a reason");
+  });
+});
+
+describe("isDealtWith", () => {
+  it("counts done, and not done only with a reason", () => {
+    expect(isDealtWith({ status: "done", note: null })).toBe(true);
+    expect(isDealtWith({ status: "not_done", note: "Customer took the tin" })).toBe(true);
+    expect(isDealtWith({ status: "not_done", note: "  " })).toBe(false);
+    expect(isDealtWith({ status: "open", note: "A note alone is not enough" })).toBe(false);
   });
 });
 

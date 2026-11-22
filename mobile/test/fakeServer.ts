@@ -1,4 +1,4 @@
-import type { OperativeJob, OperativeJobList, User } from "@jobproof/shared";
+import type { DraftUpdate, OperativeJob, OperativeJobList, User } from "@jobproof/shared";
 import { DAN, PRIYA, json, problemResponse } from "./helpers";
 
 export const MANAGER: User = { id: "33333333-3333-4333-8333-333333333333", email: "manager@jobproof.test", full_name: "Mia Manager", role: "manager" } as User;
@@ -38,6 +38,8 @@ export function fakeServer() {
     failWith: undefined as number | undefined,
     /** Resolves when the list is allowed to answer (to hold a request in flight). */
     hold: undefined as Promise<void> | undefined,
+    /** When set, saving a draft (PATCH .../report) answers with this problem instead of saving. */
+    saveFailWith: undefined as { status: number; code: string } | undefined,
   };
   const requests: { method: string; path: string; body?: unknown }[] = [];
   let counter = 0;
@@ -49,6 +51,8 @@ export function fakeServer() {
     setJobs: (list: Partial<OperativeJobList>) => {
       operative.list = { ...operative.list, ...list };
       operative.jobs.clear();
+      // Copies: a save changes the server's job, never the shared fixtures other tests start from.
+      operative.list = { ...operative.list, jobs_today: structuredClone(operative.list.jobs_today), earlier_unfinished: structuredClone(operative.list.earlier_unfinished) };
       for (const j of [...operative.list.jobs_today, ...operative.list.earlier_unfinished]) operative.jobs.set(j.id, j);
     },
     offline: false,
@@ -65,7 +69,7 @@ export function fakeServer() {
       if (server.offline) throw new TypeError("Network request failed");
       const request = input as Request;
       const path = new URL(request.url).pathname.replace("/api/v1", "");
-      const body = request.method === "POST" ? await request.clone().json().catch(() => undefined) : undefined;
+      const body = request.method === "POST" || request.method === "PATCH" ? await request.clone().json().catch(() => undefined) : undefined;
       requests.push({ method: request.method, path, body });
       const bearer = request.headers.get("Authorization")?.replace("Bearer ", "");
       if (path === "/app/status") return json(STATUS);
@@ -105,6 +109,13 @@ export function fakeServer() {
         return new Response(null, { status: 204 });
       }
       if (path === "/auth/me" || path === "/me") return json(owner.user);
+      const draftPath = /^\/operative\/jobs\/([^/]+)\/report$/.exec(path);
+      if (draftPath && request.method === "PATCH") {
+        if (operative.saveFailWith) return problemResponse(operative.saveFailWith.status, operative.saveFailWith.code);
+        const job = operative.jobs.get(draftPath[1]!);
+        if (!job) return problemResponse(404, "not_found");
+        return json(saveDraft(job, body as DraftUpdate));
+      }
       if (path.startsWith("/operative/jobs") && request.method === "GET") {
         if (operative.hold) await operative.hold;
         if (operative.failWith) return problemResponse(operative.failWith, operative.failWith === 404 ? "not_found" : "server_error");
@@ -127,4 +138,19 @@ export function fakeServer() {
     };
   }
   return server;
+}
+
+/** What the real server does with a draft save, in the small: values replace values, the job becomes In progress, the count follows. */
+function saveDraft(job: OperativeJob, body: DraftUpdate): OperativeJob {
+  job.report ??= { id: `report-${job.id}`, state: "draft", notes: null, submitted_at: null, submitted_by: null, review_status: null, reviewed_at: null, reviewed_by: null, submission_id: null, device_submitted_at: null, photos: [], sign_off: null };
+  if (job.status === "to_do") job.status = "in_progress";
+  if ("notes" in body) job.report.notes = body.notes ?? null;
+  for (const u of body.checklist ?? []) {
+    const item = job.checklist.find((i) => i.id === u.item_id);
+    if (!item) continue;
+    if (u.status !== undefined) item.status = u.status;
+    if ("note" in u) item.note = u.note ?? null;
+  }
+  job.checklist_dealt_with = job.checklist.filter((i) => !i.removed && (i.status === "done" || (i.status === "not_done" && (i.note ?? "").trim() !== ""))).length;
+  return structuredClone(job);
 }

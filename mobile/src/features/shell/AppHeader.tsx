@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SyncStatusLine } from "../../sync/SyncStatusLine";
 import { useAppBranding } from "../../theme/BrandingProvider";
 
 /** Neutral heading while the company name is unknown (T-003a scenario 3). */
@@ -14,6 +15,7 @@ export function AppHeader() {
       <Text accessibilityRole="header" style={[styles.title, { color: theme.onPrimary }]} testID="app-header-title">
         {companyName ?? NEUTRAL_HEADING}
       </Text>
+      <SyncStatusLine />
     </View>
   );
 }

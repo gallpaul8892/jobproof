@@ -21,6 +21,7 @@ const JobRoute = require("../app/(app)/jobs/[jobId]/index").default;
 const SettingsRoute = require("../app/(app)/settings").default;
 const CameraRoute = require("../app/(app)/jobs/[jobId]/camera").default;
 const PhotoRoute = require("../app/(app)/jobs/[jobId]/photos/[photoId]").default;
+const ItemRoute = require("../app/(app)/jobs/[jobId]/items/[itemId]").default;
 
 export interface Launched {
   manager: SessionManager;
@@ -60,6 +61,7 @@ export async function launch(server: ReturnType<typeof fakeServer>, unsent?: Uns
       "(app)/jobs/[jobId]/index": JobRoute,
       "(app)/jobs/[jobId]/camera": CameraRoute,
       "(app)/jobs/[jobId]/photos/[photoId]": PhotoRoute,
+      "(app)/jobs/[jobId]/items/[itemId]": ItemRoute,
     },
     { initialUrl: "/" },
   );

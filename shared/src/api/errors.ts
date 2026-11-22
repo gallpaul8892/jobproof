@@ -15,6 +15,8 @@ export class ApiError extends Error {
   readonly fieldErrors: FieldError[];
   /** The parsed problem body, so callers can read extension members. */
   readonly problem: Record<string, unknown> | undefined;
+  /** `Retry-After` in whole seconds when the server sent one (429, 503 `busy`); the mobile sync engine honours it. */
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(init: {
     status: number;
@@ -24,6 +26,7 @@ export class ApiError extends Error {
     requestId?: string;
     fieldErrors?: FieldError[];
     problem?: Record<string, unknown>;
+    retryAfterSeconds?: number;
   }) {
     super(init.detail ?? init.title);
     this.name = "ApiError";
@@ -34,6 +37,7 @@ export class ApiError extends Error {
     this.requestId = init.requestId;
     this.fieldErrors = init.fieldErrors ?? [];
     this.problem = init.problem;
+    this.retryAfterSeconds = init.retryAfterSeconds;
   }
 }
 
@@ -42,7 +46,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /** Builds an ApiError from a parsed error body (problem+json or anything else) and status. */
-export function toApiError(body: unknown, status: number, headerRequestId?: string | null): ApiError {
+export function toApiError(body: unknown, status: number, headerRequestId?: string | null, retryAfter?: string | null): ApiError {
+  const retryAfterSeconds = parseRetryAfter(retryAfter);
   if (isRecord(body)) {
     const errors = Array.isArray(body.errors) ? body.errors : [];
     return new ApiError({
@@ -59,6 +64,7 @@ export function toApiError(body: unknown, status: number, headerRequestId?: stri
         ...(typeof e.required_ratio === "number" ? { required_ratio: e.required_ratio } : {}),
       })),
       problem: body,
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     });
   }
   return new ApiError({
@@ -66,7 +72,14 @@ export function toApiError(body: unknown, status: number, headerRequestId?: stri
     code: status === 503 ? "unavailable" : "http_error",
     title: `HTTP ${status}`,
     requestId: headerRequestId ?? undefined,
+    ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
   });
+}
+
+/** Whole seconds from a `Retry-After: 5` header. The HTTP-date form is ignored (the server sends seconds). */
+export function parseRetryAfter(value: string | null | undefined): number | undefined {
+  if (value === null || value === undefined || !/^\d{1,6}$/.test(value.trim())) return undefined;
+  return Number(value.trim());
 }
 
 export function networkError(cause: unknown): ApiError {

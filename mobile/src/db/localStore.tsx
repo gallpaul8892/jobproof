@@ -6,6 +6,7 @@ import { cleanUpPhotoStorage } from "../files/orphans";
 import type { PhotoFiles } from "../files/photoFiles";
 import { useSession } from "../features/session/SessionProvider";
 import type { UnsentItemsSource } from "../features/session/unsent";
+import { DraftRepo, type ChecklistStateRow, type DraftRow } from "./draftRepo";
 import type { LocalDb } from "./localDb";
 import { PhotoRepo, type PhotoRow } from "./photoRepo";
 import { SqliteUnsentItemsSource } from "./unsentSource";
@@ -15,6 +16,8 @@ export interface LocalStore {
   db: LocalDb;
   files: PhotoFiles;
   photos: PhotoRepo;
+  /** The draft report: checklist ticks, notes and their dirty flags (T-003f). */
+  drafts: DraftRepo;
   capture: PhotoCapture;
   picker: GalleryPicker;
   unsent: UnsentItemsSource;
@@ -31,10 +34,12 @@ export function createLocalStore(parts: { db: LocalDb; files: PhotoFiles; tools:
     listeners.forEach((l) => l());
   };
   const photos = new PhotoRepo(parts.db, changed);
+  const drafts = new DraftRepo(parts.db, changed);
   return {
     db: parts.db,
     files: parts.files,
     photos,
+    drafts,
     capture: new PhotoCapture({ repo: photos, files: parts.files, tools: parts.tools, now: parts.now, newId: parts.newId }),
     picker: parts.picker,
     unsent: new SqliteUnsentItemsSource(parts.db),
@@ -116,4 +121,14 @@ export function useReportEditable(jobId: string): boolean {
   const version = useStoreVersion(store);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the change signal
   return useMemo(() => (store && userId ? store.photos.isEditable(userId, jobId) : true), [store, userId, jobId, version]);
+}
+
+/** The signed-in operative's draft row and checklist rows for one job (what they changed on this phone). */
+export function useDraftRows(jobId: string): { draft: DraftRow | undefined; states: ChecklistStateRow[] } {
+  const store = useLocalStore();
+  const { state } = useSession();
+  const userId = state.user?.id;
+  const version = useStoreVersion(store);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the change signal
+  return useMemo(() => (store && userId ? { draft: store.drafts.draft(userId, jobId), states: store.drafts.checklist(userId, jobId) } : { draft: undefined, states: [] }), [store, userId, jobId, version]);
 }

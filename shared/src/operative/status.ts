@@ -53,9 +53,17 @@ export function orderJobsForDisplay<T extends StatusLike>(jobs: readonly T[]): T
   return [...jobs.filter((j) => !isFinishedJob(j)), ...jobs.filter(isFinishedJob)];
 }
 
-/** Items the operative has recorded something on, for the checklist's row text. */
+/**
+ * What a checklist row says about its state (T-003f scenario 3): "Not done yet", "Done",
+ * "Not done: <reason>". A not-done item with no reason is shown as incomplete.
+ */
 export function checklistItemStateLabel(item: Pick<OperativeChecklistItem, "status" | "note">): string {
   if (item.status === "done") return "Done";
-  if (item.status === "not_done") return item.note ? `Can't do this: ${item.note}` : "Can't do this";
+  if (item.status === "not_done") return (item.note ?? "").trim() !== "" ? `Not done: ${item.note}` : "Not done: add a reason";
   return "Not done yet";
+}
+
+/** Counts as dealt with for submission: done, or not done with a reason (P2). */
+export function isDealtWith(item: Pick<OperativeChecklistItem, "status" | "note">): boolean {
+  return item.status === "done" || (item.status === "not_done" && (item.note ?? "").trim() !== "");
 }
