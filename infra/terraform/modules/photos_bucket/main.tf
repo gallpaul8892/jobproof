@@ -1,5 +1,9 @@
-# Private bucket for job photos (spec section 3, `photos_bucket`). NO access is granted to
-# anyone yet: the task role gets GetObject/PutObject when S3PhotoStore is specified.
+# Private bucket for job photos (spec section 3, `photos_bucket`). Nothing here grants access:
+# the API task role gets PutObject/GetObject/DeleteObject on `reports/*` in the ecs_service module
+# (T-003g). Browsers and phones read photos through short-lived presigned GET URLs on the
+# regional virtual-hosted origin (output `regional_origin`, used in the CSP).
+
+data "aws_region" "current" {}
 
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name

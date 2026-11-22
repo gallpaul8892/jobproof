@@ -4,7 +4,7 @@
 #   /api/*, /health, /health/* -> VPC origin -> internal ALB (same origin as the app, no CORS)
 
 locals {
-  csp = trimspace(file("${path.module}/csp.txt"))
+  csp = trimspace(templatefile("${path.module}/csp.tftpl", { photos_origin = var.photos_origin }))
 }
 
 # =============================================================================================
@@ -236,7 +236,8 @@ resource "aws_cloudfront_function" "spa_routing" {
   code    = file("${path.module}/spa-routing.js")
 }
 
-# CSP text lives in csp.txt (one source of truth, parity-tested against the nginx script).
+# CSP text lives in csp.tftpl (one source of truth, parity-tested against the nginx script). The
+# only parameter is the photos bucket origin, allowed in img-src (T-003g).
 resource "aws_cloudfront_response_headers_policy" "web" {
   name    = "${var.name}-web"
   comment = "CSP and security headers for the app shell and assets"

@@ -14,8 +14,9 @@ from sqlalchemy import Select, and_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.errors import ProblemError
-from app.models import Job, JobReport, ReportChecklistItem, User
-from app.models.enums import JobStatus, ReportState
+from app.models import Job, JobReport, ReportChecklistItem, ReportPhoto, User
+from app.models.enums import JobStatus, PhotoStage, ReportState
+from app.photos.store import DispatchingPhotoStore
 from app.schemas import operative as schemas
 from app.schemas.common import Address, PersonRef
 
@@ -26,6 +27,7 @@ _LOAD_OPTIONS: tuple[Any, ...] = (
         joinedload(JobReport.submitted_by),
         joinedload(JobReport.reviewed_by),
         selectinload(JobReport.checklist_items),
+        selectinload(JobReport.photos),
     ),
 )
 
@@ -84,7 +86,7 @@ def job_status(job: Job) -> schemas.OperativeJobStatus:
     return schemas.OperativeJobStatus.to_do
 
 
-def _item_status(item: ReportChecklistItem | None) -> schemas.ChecklistStatus:
+def item_status(item: ReportChecklistItem | None) -> schemas.ChecklistStatus:
     if item is None:
         return schemas.ChecklistStatus.open
     if item.done:
@@ -105,10 +107,47 @@ def _person(user: User | None) -> PersonRef | None:
     return PersonRef(id=user.id, name=user.full_name) if user is not None else None
 
 
-def build_job(job: Job) -> schemas.OperativeJob:
+_STAGE_RANK = {PhotoStage.before: 0, PhotoStage.during: 1, PhotoStage.after: 2}
+
+
+def _operative_photos(
+    report: JobReport, photo_store: DispatchingPhotoStore
+) -> list[schemas.OperativePhoto]:
+    """Registered photos by stage then `taken_at`. Seeded placeholders (never registered through
+    the app) have no file on any phone and are not part of the operative's report."""
+    registered = [p for p in report.photos if p.registered_at is not None]
+    registered.sort(key=lambda p: (_STAGE_RANK[p.stage], p.taken_at, p.position, p.id))
+    return [operative_photo(p, photo_store) for p in registered]
+
+
+def operative_photo(
+    photo: ReportPhoto, photo_store: DispatchingPhotoStore
+) -> schemas.OperativePhoto:
+    assert photo.registered_at is not None  # noqa: S101 - callers filter
+    return schemas.OperativePhoto(
+        id=photo.id,
+        stage=photo.stage,
+        checklist_item_id=photo.checklist_item_id,
+        caption=photo.caption,
+        source=photo.source,
+        taken_at=photo.taken_at,
+        taken_at_source=photo.taken_at_source,
+        registered_at=photo.registered_at,
+        received_at=photo.received_at,
+        clock_offset_seconds=photo.clock_offset_seconds,
+        thumb_url=photo_store.thumb_url_if_received(photo),
+    )
+
+
+def build_job(job: Job, photo_store: DispatchingPhotoStore) -> schemas.OperativeJob:
     """The full OperativeJob for a loaded job (used by the list and the detail alike)."""
     report = job.report
     recorded = {i.id: i for i in report.checklist_items} if report is not None else {}
+    with_photos = (
+        {p.checklist_item_id for p in report.photos if p.registered_at is not None}
+        if report is not None
+        else set()
+    )
 
     live = [i for i in job.checklist_items if i.removed_at is None]
     checklist: list[schemas.OperativeChecklistItem] = []
@@ -119,19 +158,19 @@ def build_job(job: Job) -> schemas.OperativeJob:
                 id=item.id,
                 position=item.position,
                 label=item.label,
-                status=_item_status(row),
+                status=item_status(row),
                 note=row.note if row is not None else None,
                 removed=False,
             )
         )
     # Removed by the office after the operative recorded something: kept, last, not counted.
-    # (Photos on an item will count here too once they carry an item id, T-003g.)
+    # An item that only has photos on it is kept too.
     for item in job.checklist_items:
         row = recorded.get(item.id)
         if item.removed_at is None or row is None:
             continue
-        status = _item_status(row)
-        if status != schemas.ChecklistStatus.open or row.note:
+        status = item_status(row)
+        if status != schemas.ChecklistStatus.open or row.note or item.id in with_photos:
             checklist.append(
                 schemas.OperativeChecklistItem(
                     id=item.id,
@@ -175,6 +214,9 @@ def build_job(job: Job) -> schemas.OperativeJob:
                 review_status=report.review_status,
                 reviewed_at=report.reviewed_at,
                 reviewed_by=_person(report.reviewed_by),
+                submission_id=report.submission_id,
+                device_submitted_at=report.device_submitted_at,
+                photos=_operative_photos(report, photo_store),
             )
             if report is not None
             else None
@@ -182,12 +224,19 @@ def build_job(job: Job) -> schemas.OperativeJob:
     )
 
 
-def get_job(session: Session, user: User, job_id: uuid.UUID) -> schemas.OperativeJob:
-    return build_job(get_own_job(session, user, job_id))
+def get_job(
+    session: Session, user: User, job_id: uuid.UUID, photo_store: DispatchingPhotoStore
+) -> schemas.OperativeJob:
+    return build_job(get_own_job(session, user, job_id), photo_store)
 
 
 def list_jobs(
-    session: Session, user: User, *, now: dt.datetime, today: dt.date
+    session: Session,
+    user: User,
+    *,
+    now: dt.datetime,
+    today: dt.date,
+    photo_store: DispatchingPhotoStore,
 ) -> schemas.OperativeJobList:
     """Today's jobs (any state) plus earlier jobs that are still open and unsubmitted.
 
@@ -217,10 +266,10 @@ def list_jobs(
         .all()
     )
     todays = sorted(
-        (build_job(job) for job in todays_jobs),
+        (build_job(job, photo_store) for job in todays_jobs),
         key=lambda b: (_STATUS_RANK[b.status], b.reference),
     )
-    earlier = [build_job(job) for job in earlier_jobs]
+    earlier = [build_job(job, photo_store) for job in earlier_jobs]
     return schemas.OperativeJobList(
         as_of=now, today=today, jobs_today=todays, earlier_unfinished=earlier
     )

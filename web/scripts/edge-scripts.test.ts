@@ -14,7 +14,8 @@ import { startEdge } from "../../infra/scripts/local-edge.mjs";
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const uploadScript = join(root, "infra/scripts/upload-web.sh");
 const smokeScript = join(root, "infra/scripts/smoke-test.sh");
-const cspFile = join(root, "infra/terraform/modules/web_static/csp.txt");
+const cspFile = join(root, "infra/terraform/modules/web_static/csp.tftpl");
+const PHOTOS_ORIGIN = "https://photos.example.test";
 
 let work: string;
 let dist: string;
@@ -185,7 +186,14 @@ afterAll(() => new Promise<void>((done) => upstream.close(() => done())));
 
 async function smoke(breakWith: string[] = [], env: Record<string, string> = {}) {
   const configDir = mkdtempSync(join(work, "cfg-"));
-  const edge = await startEdge({ dist, upstream: upstreamUrl, configDir, cspFile, breakWith });
+  const edge = await startEdge({
+    dist,
+    upstream: upstreamUrl,
+    configDir,
+    cspFile,
+    photosOrigin: PHOTOS_ORIGIN,
+    breakWith,
+  });
   try {
     writeFileSync(
       join(configDir, "config.js"),
@@ -193,7 +201,7 @@ async function smoke(breakWith: string[] = [], env: Record<string, string> = {})
     );
     return await new Promise<{ status: number | null; out: string }>((done) => {
       const child = spawn("bash", [smokeScript, edge.url], {
-        env: { PATH: process.env.PATH ?? "", SMOKE_WAIT_SECONDS: "0", ...env },
+        env: { PATH: process.env.PATH ?? "", SMOKE_WAIT_SECONDS: "0", PHOTOS_ORIGIN, ...env },
       });
       let out = "";
       child.stdout.on("data", (d) => (out += d));

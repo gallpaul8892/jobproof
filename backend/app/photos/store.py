@@ -1,7 +1,8 @@
 """PhotoStore strategy: where photo bytes and URLs come from.
 
-Phase 1 uses `PlaceholderPhotoStore` (generated SVG, no files, no network). A later
-`S3PhotoStore` will return presigned URLs behind the same two methods.
+Seeded photos (`registered_at` null) use `PlaceholderPhotoStore` (generated SVG, no files, no
+network). Photos uploaded from the app (T-003g) have files in the `ObjectStore`; the
+`DispatchingPhotoStore` hands out presigned GET URLs for them and delegates the rest.
 """
 
 import datetime as dt
@@ -14,6 +15,7 @@ from xml.sax.saxutils import escape
 from app.clock import LONDON
 from app.models import ReportPhoto
 from app.models.enums import PhotoStage
+from app.photos.object_store import ObjectStore
 from app.photos.signing import expiry_for, sign
 
 Variant = Literal["thumb", "full"]
@@ -143,3 +145,32 @@ class PlaceholderPhotoStore:
             f"</svg>"
         )
         return svg.encode(), SVG_CONTENT_TYPE
+
+
+class DispatchingPhotoStore:
+    """Chooses per photo: placeholder URL when never registered, else a presigned object URL."""
+
+    def __init__(
+        self, placeholder: PlaceholderPhotoStore, objects: ObjectStore, ttl_seconds: int
+    ) -> None:
+        self._placeholder = placeholder
+        self._objects = objects
+        self._ttl = ttl_seconds
+
+    def url_for(self, photo: ReportPhoto, variant: Variant) -> str:
+        if photo.registered_at is None:
+            return self._placeholder.url_for(photo, variant)
+        key = photo.thumb_storage_key if variant == "thumb" else photo.storage_key
+        key = key or photo.storage_key or photo.thumb_storage_key
+        if key is None:  # registered but not received: managers are never shown these
+            raise ValueError("photo has no stored file")
+        return self._objects.presign_get(key, self._ttl)
+
+    def thumb_url_if_received(self, photo: ReportPhoto) -> str | None:
+        """The operative's thumbnail link: null until the file has arrived."""
+        if photo.received_at is None or photo.thumb_storage_key is None:
+            return None
+        return self._objects.presign_get(photo.thumb_storage_key, self._ttl)
+
+    def render(self, photo: ReportPhoto, variant: Variant) -> tuple[bytes, str]:
+        return self._placeholder.render(photo, variant)

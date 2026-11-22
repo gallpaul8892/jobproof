@@ -11,11 +11,14 @@ from app.models.enums import (
     JobType,
     PaymentKind,
     PaymentMethod,
+    PhotoSource,
     PhotoStage,
     QuoteStatus,
     ReviewStatus,
+    TakenAtSource,
 )
 from app.schemas.common import Address, Currency, PersonRef, UtcDatetime
+from app.schemas.operative import PhotoLocation
 from app.services.billing import BillingStatus, InvoiceStatus
 
 
@@ -60,6 +63,8 @@ class ChecklistItem(BaseModel):
     label: str
     done: bool
     note: str | None
+    cannot_do: bool
+    removed: bool
 
 
 class ReportPhoto(BaseModel):
@@ -71,6 +76,13 @@ class ReportPhoto(BaseModel):
     height: int
     url: str
     thumb_url: str
+    checklist_item_id: uuid.UUID | None
+    source: PhotoSource
+    taken_at_source: TakenAtSource
+    received_at: UtcDatetime | None
+    clock_offset_seconds: int | None
+    # Managers only: the operative's responses have no location at all (T-003k).
+    location: PhotoLocation | None
 
 
 class JobDetail(BaseModel):
@@ -136,6 +148,10 @@ class ReportDetail(BaseModel):
     id: uuid.UUID
     review_status: ReviewStatus
     submitted_at: UtcDatetime
+    submitted_by: PersonRef
+    pending_photo_count: int
+    device_submitted_at: UtcDatetime | None
+    submit_clock_offset_seconds: int | None
     reviewed_at: UtcDatetime | None
     reviewed_by: PersonRef | None
     version: int

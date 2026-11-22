@@ -38,11 +38,14 @@ def temp_job(
     notes: str | None = None,
     report: ReportState | None = None,
     recorded: dict[str, dict[str, Any]] | None = None,
+    keep: bool = False,
 ) -> Iterator[uuid.UUID]:
     """Insert a job (committed, so the API sees it) and remove it afterwards.
 
     `report` adds a report in that state. `recorded` maps a label to the operative's data on that
-    item (`done`, `cannot_do`, `note`); items with data get a report item.
+    item (`done`, `cannot_do`, `note`); items with data get a report item. `keep` leaves the rows
+    in place (a submitted report has audit events, which cannot be deleted): use it with the
+    `reseed` fixture, which truncates everything afterwards.
     """
     job_id = uuid.uuid4()
     report_id = uuid.uuid4()
@@ -111,15 +114,20 @@ def temp_job(
     try:
         yield job_id
     finally:
-        with engine.begin() as connection:
-            params = {"j": job_id}
-            connection.execute(
-                text(
-                    "DELETE FROM report_checklist_items WHERE report_id IN "
-                    "(SELECT id FROM job_reports WHERE job_id = :j)"
-                ),
-                params,
-            )
-            connection.execute(text("DELETE FROM job_reports WHERE job_id = :j"), params)
-            connection.execute(text("DELETE FROM job_checklist_items WHERE job_id = :j"), params)
-            connection.execute(text("DELETE FROM jobs WHERE id = :j"), params)
+        if not keep:
+            _delete_job(engine, job_id)
+
+
+def _delete_job(engine: Engine, job_id: uuid.UUID) -> None:
+    with engine.begin() as connection:
+        params = {"j": job_id}
+        connection.execute(
+            text(
+                "DELETE FROM report_checklist_items WHERE report_id IN "
+                "(SELECT id FROM job_reports WHERE job_id = :j)"
+            ),
+            params,
+        )
+        connection.execute(text("DELETE FROM job_reports WHERE job_id = :j"), params)
+        connection.execute(text("DELETE FROM job_checklist_items WHERE job_id = :j"), params)
+        connection.execute(text("DELETE FROM jobs WHERE id = :j"), params)

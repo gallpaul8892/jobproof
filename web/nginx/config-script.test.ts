@@ -26,9 +26,10 @@ function longHost(length: number): string {
   return labels.join(".");
 }
 
-function run(value: string | undefined) {
+function run(value: string | undefined, photoOrigin?: string) {
   const env: Record<string, string> = { PATH: process.env.PATH ?? "", DIST_DIR: dir, HEADERS_FILE: join(dir, "headers.conf") };
   if (value !== undefined) env.API_BASE_URL = value;
+  if (photoOrigin !== undefined) env.PHOTO_ORIGIN = photoOrigin;
   return spawnSync("sh", [script], { env, encoding: "utf8" });
 }
 
@@ -131,9 +132,36 @@ describe("40-jobproof-config.sh", () => {
       `window.__JOBPROOF_CONFIG__ = {"apiBaseUrl": "${origin}"};\n`,
     );
     const headers = readFileSync(join(dir, "headers.conf"), "utf8");
-    expect(headers).toContain(`img-src 'self' data: ${origin};`);
+    expect(headers).toContain(`img-src 'self' data: ${origin} http://localhost:8333;`);
     expect(headers).toContain(`connect-src 'self' ${origin};`);
     expect(headers.trim().split("\n")).toHaveLength(3);
+  });
+
+  // PHOTO_ORIGIN (T-003g) goes into the same CSP header, so it gets the same hostile-input rules.
+  it.each(bad.filter(([, value]) => value !== ""))("rejects PHOTO_ORIGIN %s and writes nothing", (_name, value) => {
+    const r = run("http://localhost:8000", value);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("PHOTO_ORIGIN");
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("rejects an empty PHOTO_ORIGIN (unset means the default, empty is a mistake)", () => {
+    const r = run("http://localhost:8000", "");
+    expect(r.status).not.toBe(0);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it.each([
+    ["http://localhost:8333", "http://localhost:8333"],
+    ["https://jobproof-dev-photos-123456789012.s3.eu-west-2.amazonaws.com", "https://jobproof-dev-photos-123456789012.s3.eu-west-2.amazonaws.com"],
+    ["https://photos.example.com/", "https://photos.example.com"],
+  ])("accepts PHOTO_ORIGIN %s in img-src only", (value, origin) => {
+    const r = run("http://localhost:8000", value);
+    expect(r.status).toBe(0);
+    const headers = readFileSync(join(dir, "headers.conf"), "utf8");
+    expect(headers).toContain(`img-src 'self' data: http://localhost:8000 ${origin};`);
+    expect(headers).toContain(`connect-src 'self' http://localhost:8000;`);
+    expect(readFileSync(join(dir, "config.js"), "utf8")).not.toContain(origin);
   });
 
   it("does not execute command substitution", () => {

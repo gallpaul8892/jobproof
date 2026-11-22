@@ -1,0 +1,114 @@
+{
+  "description": "Cases for the submit completeness rule. Read by backend/tests/test_submission_rule.py (services/submission.py) and by the Vitest twin of shared/src/operative/submitRules.ts. `photos` are the stages of the registered photos; `checklist` only holds items the office has not removed. `problems` are in the order the rule reports them: Before, After, then each unfinished item in checklist order.",
+  "messages": {
+    "before": "Add at least 1 Before photo.",
+    "after": "Add at least 1 After photo.",
+    "item": "Tick this item or say why it wasn't done."
+  },
+  "cases": [
+    {
+      "name": "complete report",
+      "photos": ["before", "after"],
+      "checklist": [{ "id": "a", "status": "done", "note": null }],
+      "problems": []
+    },
+    {
+      "name": "no photos and no checklist",
+      "photos": [],
+      "checklist": [],
+      "problems": [
+        { "loc": ["photos", "before"], "message": "Add at least 1 Before photo." },
+        { "loc": ["photos", "after"], "message": "Add at least 1 After photo." }
+      ]
+    },
+    {
+      "name": "only a Before photo",
+      "photos": ["before", "before"],
+      "checklist": [],
+      "problems": [{ "loc": ["photos", "after"], "message": "Add at least 1 After photo." }]
+    },
+    {
+      "name": "only an After photo",
+      "photos": ["after"],
+      "checklist": [],
+      "problems": [{ "loc": ["photos", "before"], "message": "Add at least 1 Before photo." }]
+    },
+    {
+      "name": "During photos do not count for Before or After",
+      "photos": ["during", "during"],
+      "checklist": [],
+      "problems": [
+        { "loc": ["photos", "before"], "message": "Add at least 1 Before photo." },
+        { "loc": ["photos", "after"], "message": "Add at least 1 After photo." }
+      ]
+    },
+    {
+      "name": "an open item",
+      "photos": ["before", "after"],
+      "checklist": [
+        { "id": "a", "status": "done", "note": null },
+        { "id": "b", "status": "open", "note": null }
+      ],
+      "problems": [
+        { "loc": ["checklist", "b"], "message": "Tick this item or say why it wasn't done." }
+      ]
+    },
+    {
+      "name": "an open item with a note is still open",
+      "photos": ["before", "after"],
+      "checklist": [{ "id": "a", "status": "open", "note": "started" }],
+      "problems": [
+        { "loc": ["checklist", "a"], "message": "Tick this item or say why it wasn't done." }
+      ]
+    },
+    {
+      "name": "not done with a reason",
+      "photos": ["before", "after"],
+      "checklist": [{ "id": "a", "status": "not_done", "note": "Customer asked us to skip it" }],
+      "problems": []
+    },
+    {
+      "name": "not done without a reason",
+      "photos": ["before", "after"],
+      "checklist": [{ "id": "a", "status": "not_done", "note": null }],
+      "problems": [
+        { "loc": ["checklist", "a"], "message": "Tick this item or say why it wasn't done." }
+      ]
+    },
+    {
+      "name": "not done with a blank reason",
+      "photos": ["before", "after"],
+      "checklist": [{ "id": "a", "status": "not_done", "note": "   " }],
+      "problems": [
+        { "loc": ["checklist", "a"], "message": "Tick this item or say why it wasn't done." }
+      ]
+    },
+    {
+      "name": "done with a note",
+      "photos": ["before", "after"],
+      "checklist": [{ "id": "a", "status": "done", "note": "all good" }],
+      "problems": []
+    },
+    {
+      "name": "everything missing, in order",
+      "photos": [],
+      "checklist": [
+        { "id": "x", "status": "open", "note": null },
+        { "id": "y", "status": "done", "note": null },
+        { "id": "z", "status": "not_done", "note": "" }
+      ],
+      "problems": [
+        { "loc": ["photos", "before"], "message": "Add at least 1 Before photo." },
+        { "loc": ["photos", "after"], "message": "Add at least 1 After photo." },
+        { "loc": ["checklist", "x"], "message": "Tick this item or say why it wasn't done." },
+        { "loc": ["checklist", "z"], "message": "Tick this item or say why it wasn't done." }
+      ]
+    },
+    {
+      "name": "a job with no checklist needs only the photos",
+      "photos": ["before", "during", "after"],
+      "checklist": [],
+      "problems": []
+    }
+  ]
+}

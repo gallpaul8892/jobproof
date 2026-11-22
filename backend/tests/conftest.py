@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 # Environment must be in place before any app module reads settings.
 TEST_DATABASE_URL = os.environ.get(
@@ -11,6 +12,10 @@ os.environ.setdefault("PHOTO_URL_SECRET", "test-only-photo-secret-0123456789-abc
 os.environ["DEMO_ACCOUNTS_ENABLED"] = "true"
 os.environ["FIXED_NOW"] = "2026-10-15T10:00:00Z"
 os.environ["SEED_ANCHOR_DATE"] = "2026-10-15"
+# Photo storage is moto's in-process S3 (below): drop any endpoint scripts/dev.sh exported.
+for _name in ("PHOTO_S3_ENDPOINT_URL", "PHOTO_S3_PUBLIC_ENDPOINT_URL", "PHOTO_S3_ADDRESSING_STYLE"):
+    os.environ.pop(_name, None)
+os.environ.pop("PHOTO_BUCKET", None)
 
 from collections.abc import Iterator  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -54,8 +59,27 @@ def migrated_database() -> None:
     seed()  # SEED_ANCHOR_DATE=2026-10-15, set above
 
 
+@pytest.fixture(scope="session", autouse=True)
+def photo_storage() -> Iterator[Any]:
+    """moto's in-process S3 with the dev photos bucket, for the whole session (no network)."""
+    from moto import mock_aws
+
+    from app.config import DEV_PHOTO_BUCKET, get_settings
+
+    with mock_aws():
+        import boto3
+
+        settings = get_settings()
+        s3 = boto3.client("s3", region_name=settings.aws_region)
+        s3.create_bucket(
+            Bucket=DEV_PHOTO_BUCKET,
+            CreateBucketConfiguration={"LocationConstraint": settings.aws_region},
+        )
+        yield s3
+
+
 @pytest.fixture(scope="session")
-def client() -> Iterator[TestClient]:
+def client(photo_storage: Any) -> Iterator[TestClient]:
     from app.main import create_app
 
     with TestClient(create_app()) as test_client:
@@ -65,7 +89,6 @@ def client() -> Iterator[TestClient]:
 # ---- API test helpers -------------------------------------------------------------------------
 import datetime as dt  # noqa: E402
 import uuid  # noqa: E402
-from typing import Any  # noqa: E402
 
 import jwt  # noqa: E402
 from argon2 import PasswordHasher  # noqa: E402

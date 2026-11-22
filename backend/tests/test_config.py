@@ -11,7 +11,14 @@ BASE = {
     "database_url": "postgresql+psycopg://u:p@h:1/d",
     "jwt_secret": "j" * 32,
     "photo_url_secret": "p" * 32,
+    "photo_bucket": "jobproof-test-photos",
 }
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_aws_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The session's in-process S3 (moto) exports dummy AWS keys; real environments refuse them."""
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -101,6 +108,7 @@ def test_secrets_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("DATABASE_URL", BASE["database_url"])
     monkeypatch.setenv("JWT_SECRET", "e" * 40)
     monkeypatch.setenv("PHOTO_URL_SECRET", "f" * 40)
+    monkeypatch.setenv("PHOTO_BUCKET", BASE["photo_bucket"])
     settings = Settings()  # type: ignore[call-arg]
     assert settings.jwt_secret == "e" * 40 and settings.photo_url_secret == "f" * 40
     monkeypatch.setenv("JWT_SECRET", "")  # an empty value counts as unset
@@ -118,6 +126,7 @@ def _secrets(env: str, jwt_secret: str, photo_secret: str) -> Settings:
         app_env=env,  # type: ignore[arg-type]
         jwt_secret=jwt_secret,
         photo_url_secret=photo_secret,
+        photo_bucket=BASE["photo_bucket"],
         demo_accounts_enabled=False,
         fixed_now=None,
     )
@@ -198,6 +207,7 @@ def _settings_from_env(monkeypatch: pytest.MonkeyPatch, app_env: str | None) -> 
     monkeypatch.setenv("DATABASE_URL", BASE["database_url"])
     monkeypatch.setenv("JWT_SECRET", GOOD_JWT)
     monkeypatch.setenv("PHOTO_URL_SECRET", GOOD_PHOTO)
+    monkeypatch.setenv("PHOTO_BUCKET", BASE["photo_bucket"])
     monkeypatch.setenv("DEMO_ACCOUNTS_ENABLED", "false")
     monkeypatch.delenv("FIXED_NOW", raising=False)
     if app_env is None:
@@ -274,3 +284,32 @@ def test_device_session_timings_have_upper_bounds(field: str, limit: int) -> Non
     assert getattr(Settings(**BASE, **{field: limit}), field) == limit  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
         Settings(**BASE, **{field: limit + 1})  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_real_environments_need_a_photo_bucket_and_no_endpoint_or_static_keys(env: str) -> None:
+    without_bucket = {k: v for k, v in BASE.items() if k != "photo_bucket"}
+    with pytest.raises(ValidationError, match="PHOTO_BUCKET"):
+        Settings(**without_bucket, app_env=env, demo_accounts_enabled=False, fixed_now=None)  # type: ignore[arg-type]
+    for name, value in (
+        ("photo_s3_endpoint_url", "http://photos:8333"),
+        ("photo_s3_public_endpoint_url", "http://localhost:8333"),
+        ("aws_access_key_id", "AKIAEXAMPLE"),
+    ):
+        with pytest.raises(ValidationError, match=name.upper()):
+            Settings(
+                **BASE, app_env=env, demo_accounts_enabled=False, fixed_now=None, **{name: value}
+            )  # type: ignore[arg-type]
+    assert (
+        Settings(**BASE, app_env=env, demo_accounts_enabled=False, fixed_now=None).photo_bucket
+        == "jobproof-test-photos"
+    )  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("env", ["local", "test"])
+def test_local_photo_storage_defaults_to_the_dev_bucket(env: str) -> None:
+    without_bucket = {k: v for k, v in BASE.items() if k != "photo_bucket"}
+    settings = Settings(**without_bucket, app_env=env)  # type: ignore[arg-type]
+    assert settings.photo_bucket == "jobproof-local-photos"
+    assert settings.photo_s3_addressing_style == "virtual" and settings.aws_region == "eu-west-2"
+    assert (settings.photo_upload_concurrency, settings.photo_max_bytes) == (4, 10_485_760)

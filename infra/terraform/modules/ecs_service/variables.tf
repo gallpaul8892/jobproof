@@ -175,3 +175,13 @@ variable "demo_seed_allowed" {
     error_message = "DEMO_SEED_ALLOWED must never be set for production (INFRA spec 4.5)."
   }
 }
+
+variable "photos_bucket_name" {
+  description = "The private photos bucket (PHOTO_BUCKET)."
+  type        = string
+}
+
+variable "photos_bucket_arn" {
+  description = "ARN of the photos bucket; the app task role may use objects under reports/ only."
+  type        = string
+}

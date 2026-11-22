@@ -12,7 +12,11 @@ from sqlalchemy.engine import make_url
 from app.config import Settings
 from tests.conftest import TEST_DATABASE_URL
 
-SECRETS = {"jwt_secret": "j" * 32, "photo_url_secret": "p" * 32}
+SECRETS = {
+    "jwt_secret": "j" * 32,
+    "photo_url_secret": "p" * 32,
+    "photo_bucket": "jobproof-test-photos",
+}
 # The environment of the test session sets DATABASE_URL and DEMO_ACCOUNTS_ENABLED; init values win.
 NO_URL: dict[str, Any] = {"database_url": "", "demo_accounts_enabled": False, "fixed_now": None}
 PARTS: dict[str, Any] = {
@@ -22,6 +26,12 @@ PARTS: dict[str, Any] = {
     "db_user": "jobproof_app",
     "db_password": "p@ss:w/ord %'x",
 }
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_aws_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The session's in-process S3 (moto) exports dummy AWS keys; real environments refuse them."""
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
 
 
 def _settings(**overrides: Any) -> Settings:

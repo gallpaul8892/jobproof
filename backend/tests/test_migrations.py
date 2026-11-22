@@ -49,9 +49,14 @@ ENUMS = {
         "report.edited",
         "settings.changed",
         "customer.edited",
+        "report.submitted",
+        "report.photo_received",
     ],
     "audit_entity": ["report", "settings", "customer"],
     "report_state": ["draft", "submitted"],
+    "photo_source": ["camera", "gallery"],
+    "taken_at_source": ["device_clock", "file_metadata", "added_time"],
+    "photo_location_source": ["device", "file"],
 }
 SCRATCH = make_url(TEST_DATABASE_URL).set(database="jobproof_migrations_scratch")
 
@@ -90,8 +95,10 @@ def test_upgrade_downgrade_upgrade_and_no_drift() -> None:
 
 def test_history_is_linear_with_one_head() -> None:
     script = ScriptDirectory.from_config(alembic_config(TEST_DATABASE_URL))
-    assert script.get_heads() == ["0010"]
+    assert script.get_heads() == ["0012"]
     assert [r.revision for r in script.walk_revisions()] == [
+        "0012",
+        "0011",
         "0010",
         "0009",
         "0008",
@@ -128,6 +135,10 @@ def test_constraints_indexes_and_naming_convention(scratch_engine: Engine) -> No
             expected = "CASCADE" if table.startswith("report_") else "RESTRICT"
             if fk["referred_table"] == "job_checklist_items":
                 expected = "RESTRICT"  # a report item extends a job item (0010)
+            if table == "report_photos" and fk["referred_table"] == "report_checklist_items":
+                expected = "SET NULL"  # deleting an item must not delete its photos (0011)
+            if table == "report_photos" and fk["referred_table"] == "users":
+                expected = "RESTRICT"  # who registered the photo (0011)
             assert (fk["options"].get("ondelete") or "").upper() == expected, (table, column)
         for ck in inspector.get_check_constraints(table):
             assert re.fullmatch(rf"ck_{table}_[a-z0-9_]+", ck["name"] or ""), ck
@@ -400,7 +411,7 @@ def test_0007_upgrade_keeps_existing_customers_and_downgrade_restores_the_enums(
                 )
             ).all()
             assert dict(labels) == {
-                "audit_action": ENUMS["audit_action"],
+                "audit_action": ENUMS["audit_action"][:5],  # before 0012
                 "audit_entity": ENUMS["audit_entity"],
             }
         # a report event written at 0007 survives a round trip through 0006
@@ -492,7 +503,7 @@ def test_0007_downgrade_is_refused_while_a_customer_event_exists() -> None:
             }
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == "0010"
+                == "0012"
             )
     finally:
         with engine.begin() as connection:
@@ -938,3 +949,171 @@ def test_0010_constraints_reject_inconsistent_rows(db_engine: Engine) -> None:
         "INSERT INTO job_checklist_items (job_id, position, label) "
         "SELECT job_id, position, 'dup' FROM job_checklist_items ORDER BY id LIMIT 1"
     )
+
+
+# ---- 0011 photo evidence (T-003g) and 0012 report submission (T-003h) -------------------------
+def _load_seed(engine: Engine) -> None:
+    from app.seed.dataset import build_dataset
+    from app.seed.loader import load
+    from tests.conftest import ANCHOR
+
+    load(engine, build_dataset(ANCHOR))
+
+
+def _enum_labels(connection: Any, name: str) -> list[str] | None:
+    rows = connection.execute(
+        text(
+            "SELECT array_agg(e.enumlabel::text ORDER BY e.enumsortorder) FROM pg_type t "
+            "JOIN pg_enum e ON e.enumtypid = t.oid WHERE t.typname = :name"
+        ),
+        {"name": name},
+    ).scalar()
+    return list(rows) if rows else None
+
+
+def test_0011_keeps_seeded_photos_as_placeholders_and_downgrades_cleanly() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0010")
+    engine = create_engine(url)
+    try:
+        _load_seed(engine)
+        with engine.connect() as connection:
+            photos = connection.execute(text("SELECT count(*) FROM report_photos")).scalar_one()
+        command.upgrade(config, "0011")
+        with engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT count(*), count(*) FILTER (WHERE registered_at IS NULL "
+                    "AND received_at IS NULL AND source = 'camera' "
+                    "AND taken_at_source = 'device_clock' AND checklist_item_id IS NULL "
+                    "AND sha256 IS NULL AND location_source IS NULL) FROM report_photos"
+                )
+            ).one()
+            assert photos > 300 and tuple(row) == (photos, photos)
+            columns = {c["name"]: c for c in inspect(connection).get_columns("report_photos")}
+            assert str(columns["latitude"]["type"]) == "DOUBLE PRECISION"
+            assert str(columns["original_sha256"]["type"]) == "CHAR(64)"
+            assert "''" in str(columns["caption"]["default"])
+            index = next(
+                ix
+                for ix in inspect(connection).get_indexes("report_photos")
+                if ix["name"] == "uq_report_photos_original"
+            )
+            assert index["unique"] and index["column_names"] == ["report_id", "original_sha256"]
+            assert "original_sha256 IS NOT NULL" in index["dialect_options"]["postgresql_where"]
+            assert _enum_labels(connection, "photo_source") == ["camera", "gallery"]
+        command.downgrade(config, "0010")
+        with engine.connect() as connection:
+            assert not {"registered_at", "sha256", "source"} & {
+                c["name"] for c in inspect(connection).get_columns("report_photos")
+            }
+            assert _enum_labels(connection, "photo_source") is None
+            assert _enum_labels(connection, "photo_location_source") is None
+            assert connection.execute(text("SELECT count(*) FROM report_photos")).scalar() == photos
+        command.upgrade(config, "head")
+        command.check(config)
+    finally:
+        _wipe(engine, config)
+
+
+def test_0011_downgrade_is_refused_once_the_app_has_registered_a_photo() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "0012")
+    engine = create_engine(url)
+    try:
+        _load_seed(engine)
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE report_photos SET registered_at = now(), registered_by_id = "
+                    "(SELECT id FROM users WHERE role = 'painter' LIMIT 1) "
+                    "WHERE id = (SELECT id FROM report_photos LIMIT 1)"
+                )
+            )
+        with pytest.raises(RuntimeError, match=r"1 photo\(s\) were registered"):
+            command.downgrade(config, "0010")
+        with engine.connect() as connection:  # the refused downgrade changed nothing
+            assert (
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+                == "0012"
+            )
+            assert "registered_at" in {
+                c["name"] for c in inspect(connection).get_columns("report_photos")
+            }
+    finally:
+        _wipe(engine, config)
+
+
+def test_0011_constraints_reject_inconsistent_photo_rows(db_engine: Engine) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    with db_engine.connect() as connection:
+        for assignment in (
+            "received_at = now()",  # a received photo needs its file and checksum
+            "latitude = 51.0",  # location is all or none
+            "location_accuracy_m = 5",
+            "registered_at = now()",  # registered_at and registered_by_id come together
+        ):
+            transaction = connection.begin()
+            with pytest.raises(IntegrityError):
+                connection.execute(  # noqa: S608
+                    text(
+                        f"UPDATE report_photos SET {assignment} "
+                        "WHERE id = (SELECT id FROM report_photos LIMIT 1)"
+                    )
+                )
+            transaction.rollback()
+
+
+def test_0012_adds_submission_columns_and_audit_actions(scratch_engine: Engine) -> None:
+    inspector = inspect(scratch_engine)
+    columns = {c["name"]: c for c in inspector.get_columns("job_reports")}
+    for name in ("submission_id", "device_submitted_at", "submit_clock_offset_seconds"):
+        assert columns[name]["nullable"], name
+    assert "uq_job_reports_submission_id" in {
+        u["name"] for u in inspector.get_unique_constraints("job_reports")
+    }
+    with scratch_engine.connect() as connection:
+        assert _enum_labels(connection, "audit_action") == ENUMS["audit_action"]
+
+
+def test_0012_downgrade_is_refused_while_a_submission_event_exists_then_restores_the_enum() -> None:
+    url = SCRATCH.render_as_string(hide_password=False)
+    ensure_database(url)
+    config = alembic_config(url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+    engine = create_engine(url)
+    try:
+        _load_seed(engine)
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO audit_events (occurred_at, actor_id, actor_name, action, "
+                    "entity_type, report_id, changes) SELECT now(), (SELECT id FROM users "
+                    "WHERE role = 'painter' LIMIT 1), 'P', 'report.submitted', 'report', "
+                    "(SELECT id FROM job_reports LIMIT 1), '[]'::jsonb"
+                )
+            )
+        with pytest.raises(RuntimeError, match=r"1 report\.submitted"):
+            command.downgrade(config, "0011")
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT count(*) FROM audit_events")).scalar() == 1
+    finally:
+        _wipe(engine, config)
+    # without such events the downgrade restores the older enum and drops the columns
+    command.downgrade(config, "0011")
+    with engine.connect() as connection:
+        assert _enum_labels(connection, "audit_action") == ENUMS["audit_action"][:5]
+        assert "submission_id" not in {
+            c["name"] for c in inspect(connection).get_columns("job_reports")
+        }
+    engine.dispose()
+    command.upgrade(config, "head")
+    command.check(config)

@@ -1,21 +1,36 @@
 """Response models for the operative (mobile) endpoints (T-003c, T-003d).
 
 Dedicated schemas on purpose: they have no `manager_notes`, money, customer email or billing
-address, so those cannot leak by reuse of a manager model (design section 8). Properties that
-belong to later tickets (`photos`, `submission_id`, `device_submitted_at`, `sign_off`) are added
-by those tickets.
+address, so those cannot leak by reuse of a manager model (design section 8). `sign_off` belongs
+to T-003o and is added by that ticket. Photos carry no location: only managers see it (T-003k).
 """
 
 import datetime as dt
 import enum
 import uuid
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 
-from app.models.enums import JobType, ReportState, ReviewStatus
+from app.models.enums import (
+    JobType,
+    LocationSource,
+    PhotoSource,
+    PhotoStage,
+    ReportState,
+    ReviewStatus,
+    TakenAtSource,
+)
 from app.schemas.common import Address, PersonRef, UtcDatetime
 from app.schemas.report_write import reject_unstorable
+from app.schemas.text import clean_text
 
 
 class OperativeJobStatus(enum.StrEnum):
@@ -46,6 +61,22 @@ class OperativeChecklistItem(BaseModel):
     removed: bool
 
 
+class OperativePhoto(BaseModel):
+    """A registered photo as its operative sees it (no location, no storage keys)."""
+
+    id: uuid.UUID
+    stage: PhotoStage
+    checklist_item_id: uuid.UUID | None
+    caption: str
+    source: PhotoSource
+    taken_at: UtcDatetime
+    taken_at_source: TakenAtSource
+    registered_at: UtcDatetime
+    received_at: UtcDatetime | None
+    clock_offset_seconds: int | None
+    thumb_url: str | None
+
+
 class OperativeReport(BaseModel):
     id: uuid.UUID
     state: ReportState
@@ -55,6 +86,9 @@ class OperativeReport(BaseModel):
     review_status: ReviewStatus | None
     reviewed_at: UtcDatetime | None
     reviewed_by: PersonRef | None
+    submission_id: uuid.UUID | None
+    device_submitted_at: UtcDatetime | None
+    photos: list[OperativePhoto]
 
 
 class OperativeJob(BaseModel):
@@ -131,4 +165,75 @@ class DraftUpdate(BaseModel):
             ids = [i.item_id for i in self.checklist]
             if len(set(ids)) != len(ids):
                 raise ValueError("Each checklist item may be sent once.")
+        return self
+
+
+# ---- photo registration (T-003g, T-003k) ------------------------------------------------------
+CAPTION_MAX = 140
+_SHA256 = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class PhotoLocation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    accuracy_m: float | None = Field(ge=0, le=100000, allow_inf_nan=False)
+    source: LocationSource
+
+
+class PhotoFileFacts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    width: int = Field(ge=1, le=20000)
+    height: int = Field(ge=1, le=20000)
+    bytes: int = Field(ge=1)
+    sha256: str = _SHA256
+
+
+class UploadFileFacts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    width: int = Field(ge=1, le=4096)
+    height: int = Field(ge=1, le=4096)
+    bytes: int = Field(ge=1, le=10485760)
+    sha256: str = _SHA256
+    content_type: Literal["image/jpeg", "image/png"]
+
+
+def _caption(value: str) -> str:
+    return clean_text(value, required_message=None, max_length=CAPTION_MAX) or ""
+
+
+class PhotoRegistration(BaseModel):
+    """A full representation (PUT): an omitted item means none, an omitted caption means ""."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage: PhotoStage
+    checklist_item_id: uuid.UUID | None = None
+    caption: Annotated[str, AfterValidator(_caption)] = ""
+    source: PhotoSource
+    taken_at: AwareDatetime
+    taken_at_source: TakenAtSource
+    device_sent_at: AwareDatetime
+    location: PhotoLocation | None = None
+    original: PhotoFileFacts
+    upload: UploadFileFacts
+
+
+# ---- submit (T-003h) --------------------------------------------------------------------------
+class SubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    submission_id: uuid.UUID
+    device_submitted_at: AwareDatetime
+    device_sent_at: AwareDatetime
+    photo_ids: Annotated[list[uuid.UUID], Field(max_length=60)]
+    draft: DraftUpdate | None = None
+
+    @model_validator(mode="after")
+    def _unique_photos(self) -> Self:
+        if len(set(self.photo_ids)) != len(self.photo_ids):
+            raise ValueError("Each photo may be listed once.")
         return self

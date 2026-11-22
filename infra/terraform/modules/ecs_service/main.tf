@@ -35,6 +35,10 @@ locals {
     DB_SSLMODE     = "verify-full"
     DB_SSLROOTCERT = local.ca_bundle
     LOG_LEVEL      = "INFO"
+    # Every task loads the backend settings, which require the photos bucket outside local/test.
+    # No endpoint URL and no access key: the task role supplies credentials (config.py refuses them).
+    PHOTO_BUCKET = var.photos_bucket_name
+    AWS_REGION   = local.region
   }
   app_secrets = {
     JWT_SECRET       = var.secret_arns["jwt-secret"]
@@ -237,7 +241,7 @@ resource "aws_iam_role" "ops_execution" {
 
 resource "aws_iam_role" "app_task" {
   name               = "${var.name}-app-task"
-  description        = "The running API container. No permissions yet (photos access arrives with S3PhotoStore)"
+  description        = "The running API container. Reads, writes and deletes uploaded photos under reports/ in the photos bucket"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_trust.json
 }
 
@@ -263,6 +267,22 @@ locals {
       "arn:aws:secretsmanager:${local.region}:${local.account_id}:secret:${var.admin_initial_password_name}-*",
     ],
   )
+}
+
+# T-003g: the API stores uploaded photos and presigns GET links. Only the `reports/` prefix; no
+# list, no bucket-level action, no other bucket.
+data "aws_iam_policy_document" "app_task_photos" {
+  statement {
+    sid       = "PhotosObjects"
+    actions   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+    resources = ["${var.photos_bucket_arn}/reports/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "app_task_photos" {
+  name   = "photos-objects"
+  role   = aws_iam_role.app_task.id
+  policy = data.aws_iam_policy_document.app_task_photos.json
 }
 
 data "aws_iam_policy_document" "execution_common" {

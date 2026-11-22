@@ -21,6 +21,11 @@ output "photos_bucket" {
   value = module.photos_bucket.bucket_name
 }
 
+output "photos_origin" {
+  description = "Origin of presigned photo URLs (the CSP img-src); the smoke test compares the CSP with it."
+  value       = module.photos_bucket.regional_origin
+}
+
 output "ecr_repository_url" {
   value = module.ecr.repository_url
 }

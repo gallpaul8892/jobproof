@@ -13,6 +13,15 @@ x-backend: &backend
   # stack working (interpolated from .env or the shell, else local) and overrides env_file.
   environment:
     APP_ENV: ${APP_ENV:-local}
+    # Photo storage (T-003g): the SeaweedFS service below. The backend talks to it as `photos`;
+    # presigned links are signed for localhost, which is where browsers and phones reach it.
+    # The keys are dummies (SeaweedFS here has no identities, so any key is accepted).
+    PHOTO_BUCKET: ${PHOTO_BUCKET:-jobproof-local-photos}
+    PHOTO_S3_ENDPOINT_URL: http://photos:8333
+    PHOTO_S3_PUBLIC_ENDPOINT_URL: ${PHOTO_PUBLIC_ORIGIN:-http://localhost:8333}
+    PHOTO_S3_ADDRESSING_STYLE: path
+    AWS_ACCESS_KEY_ID: local-dev-key
+    AWS_SECRET_ACCESS_KEY: local-dev-secret
 
 services:
   db:
@@ -32,6 +41,32 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+
+  photos:
+    # S3-compatible private object store for uploaded photos (T-003g). MinIO's community images
+    # are discontinued and LocalStack needs an account; SeaweedFS runs offline.
+    # TODO(pin): floating tag (B3). Pin the exact tag/digest on a machine with registry access.
+    image: chrislusf/seaweedfs
+    command: ["server", "-s3", "-dir=/data"]
+    ports:
+      - "8333:8333"
+    volumes:
+      - photosdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9333/cluster/status || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  photos-init:
+    <<: *backend
+    # Creates the bucket (same settings as the backend; refuses to run outside local/test).
+    command: ["python", "-m", "app.photos.create_bucket"]
+    depends_on:
+      photos:
+        condition: service_healthy
+    restart: "no"
 
   migrate:
     <<: *backend
@@ -64,6 +99,8 @@ services:
     depends_on:
       seed:
         condition: service_completed_successfully
+      photos-init:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     healthcheck:
@@ -86,6 +123,8 @@ services:
       dockerfile: web/Dockerfile
     environment:
       API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+      # Where the browser loads uploaded photos from (CSP img-src): the photos service.
+      PHOTO_ORIGIN: ${PHOTO_PUBLIC_ORIGIN:-http://localhost:8333}
     depends_on:
       backend:
         condition: service_healthy
@@ -100,3 +139,4 @@ services:
 
 volumes:
   pgdata:
+  photosdata:

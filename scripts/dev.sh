@@ -3,7 +3,7 @@
 # See specs/T-000-bootstrap.md section 4.2.
 #
 #   scripts/dev.sh up [--static]   start everything (idempotent); --static serves a production build
-#   scripts/dev.sh down            stop web, backend and the local Postgres
+#   scripts/dev.sh down            stop web, backend, the photos store and the local Postgres
 #   scripts/dev.sh status          show processes and /health
 #   scripts/dev.sh seed            re-run the seed
 #   scripts/dev.sh test            run make test against the local Postgres
@@ -11,6 +11,8 @@
 #   scripts/dev.sh psql [args]     open psql on the dev database
 #
 # Environment: PG_BIN (Postgres binaries), SKIP_WEB=1 (backend and database only).
+# Uploaded photos live in a moto S3 server on PHOTOS_PORT (default 8333), in memory: they are gone
+# after `down` (photo rows survive in the database but their files do not; re-run the seed).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,6 +23,7 @@ PG_RUN="$PG_ROOT/run"
 PG_PORT=5544
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-8080}"
+PHOTOS_PORT="${PHOTOS_PORT:-8333}"
 PG_PASSWORD=jobproof
 export DEV_DATABASE_URL="postgresql+psycopg://jobproof:${PG_PASSWORD}@127.0.0.1:${PG_PORT}/jobproof"
 export DEV_TEST_DATABASE_URL="postgresql+psycopg://jobproof:${PG_PASSWORD}@127.0.0.1:${PG_PORT}/jobproof_test"
@@ -155,6 +158,14 @@ load_env() {
   set +a
   export DATABASE_URL="$DEV_DATABASE_URL"
   export TEST_DATABASE_URL="$DEV_TEST_DATABASE_URL"
+  # Local photo storage (T-003g): the moto server below. Dummy keys; same names as docker compose.
+  export PHOTO_BUCKET="${PHOTO_BUCKET:-jobproof-local-photos}"
+  export PHOTO_S3_ENDPOINT_URL="${PHOTO_S3_ENDPOINT_URL:-http://127.0.0.1:$PHOTOS_PORT}"
+  export PHOTO_S3_PUBLIC_ENDPOINT_URL="${PHOTO_S3_PUBLIC_ENDPOINT_URL:-http://localhost:$PHOTOS_PORT}"
+  export PHOTO_S3_ADDRESSING_STYLE="${PHOTO_S3_ADDRESSING_STYLE:-path}"
+  export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-local-dev-key}"
+  export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-local-dev-secret}"
+  export PHOTO_ORIGIN="${PHOTO_ORIGIN:-http://localhost:$PHOTOS_PORT}"
 }
 
 prepare_backend() {
@@ -171,6 +182,19 @@ prepare_web() {
 }
 
 backend_running() { pid_alive "$DEV_DIR/backend.pid"; }
+photos_running() { pid_alive "$DEV_DIR/photos.pid"; }
+
+# An in-memory S3 for uploaded photos (moto server, a dev dependency of the backend): started
+# before the backend, with the bucket created (idempotent).
+start_photos() {
+  if ! photos_running; then
+    log "starting the photos store (moto S3) on 127.0.0.1:$PHOTOS_PORT"
+    start_process photos "$ROOT/backend/.venv/bin/moto_server" -H 127.0.0.1 -p "$PHOTOS_PORT"
+  fi
+  wait_for_url "http://127.0.0.1:$PHOTOS_PORT/moto-api/" photos "$DEV_DIR/photos.log"
+  (cd "$ROOT/backend" && .venv/bin/python -m app.photos.create_bucket) >> "$DEV_DIR/photos.log" 2>&1 \
+    || { tail -n 20 "$DEV_DIR/photos.log" >&2; die "could not create the photos bucket"; }
+}
 web_running() { pid_alive "$DEV_DIR/web.pid"; }
 # True when the web server is running in the requested mode (dev or static).
 web_running_in_mode() {
@@ -191,7 +215,7 @@ cmd_up() {
   local mode=dev
   [[ $static -eq 1 ]] && mode=static
 
-  if pg_accepting && backend_running && { [[ -n "${SKIP_WEB:-}" ]] || web_running_in_mode "$mode"; }; then
+  if pg_accepting && backend_running && photos_running && { [[ -n "${SKIP_WEB:-}" ]] || web_running_in_mode "$mode"; }; then
     log "stack is already running"
     print_urls
     return 0
@@ -201,6 +225,7 @@ cmd_up() {
   prepare_backend
   prepare_web
   load_env
+  start_photos
 
   if ! backend_running; then
     log "applying migrations and seed"
@@ -252,11 +277,13 @@ cmd_down() {
   stop_process web
   rm -f "$DEV_DIR/web.mode"
   stop_process backend
+  stop_process photos
   stop_postgres
 }
 
 cmd_status() {
   if pg_accepting; then echo "postgres: up (127.0.0.1:$PG_PORT)"; else echo "postgres: down"; fi
+  if photos_running; then echo "photos:   up (pid $(cat "$DEV_DIR/photos.pid"))"; else echo "photos:   down"; fi
   if backend_running; then echo "backend:  up (pid $(cat "$DEV_DIR/backend.pid"))"; else echo "backend:  down"; fi
   if web_running; then echo "web:      up (pid $(cat "$DEV_DIR/web.pid"))"; else echo "web:      down"; fi
   if backend_running; then

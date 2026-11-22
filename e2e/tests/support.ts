@@ -3,11 +3,12 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 
-import { ADMIN, API_URL, DEFAULT_NAME, DEFAULT_THEME_COLOURS } from "./support-constants";
+import { ADMIN, API_URL, DEFAULT_NAME, DEFAULT_THEME_COLOURS, PHOTOS_URL } from "./support-constants";
 
-export { ADMIN, API_URL, DEFAULT_NAME, DEFAULT_THEME_COLOURS };
+export { ADMIN, API_URL, DEFAULT_NAME, DEFAULT_THEME_COLOURS, PHOTOS_URL };
 const WEB_URL = process.env.WEB_URL ?? "http://localhost:8080";
-const ALLOWED_ORIGINS = new Set([new URL(WEB_URL).origin, new URL(API_URL).origin]);
+// The photos origin is allowed: uploaded photos are served from object storage (T-003g).
+const ALLOWED_ORIGINS = new Set([new URL(WEB_URL).origin, new URL(API_URL).origin, new URL(PHOTOS_URL).origin]);
 export const TOKEN_KEY = "jobproof.token";
 
 export const MANAGER = { email: "manager@jobproof.test", password: "Manager123!", name: "Sarah Whitfield" };

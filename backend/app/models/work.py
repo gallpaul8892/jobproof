@@ -6,10 +6,12 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CHAR,
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -24,10 +26,13 @@ from app.models.base import Base, TimestampMixin, pg_enum, uuid_pk
 from app.models.enums import (
     JobStatus,
     JobType,
+    LocationSource,
+    PhotoSource,
     PhotoStage,
     QuoteStatus,
     ReportState,
     ReviewStatus,
+    TakenAtSource,
 )
 from app.models.people import Customer, User
 
@@ -179,6 +184,10 @@ class JobReport(TimestampMixin, Base):
     reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT")
     )
+    # Set by the operative's submit (T-003h); null for seeded reports.
+    submission_id: Mapped[uuid.UUID | None] = mapped_column(unique=True)
+    device_submitted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    submit_clock_offset_seconds: Mapped[int | None] = mapped_column(Integer)
 
     job: Mapped[Job] = relationship(back_populates="report")
     painter: Mapped[User] = relationship(foreign_keys=[painter_id])
@@ -216,21 +225,76 @@ class ReportChecklistItem(TimestampMixin, Base):
 
 
 class ReportPhoto(TimestampMixin, Base):
+    """A report photo. Seeded placeholders have `registered_at` null and no stored file; photos
+    from the app are registered (metadata) first, then their file arrives (`received_at`)."""
+
     __tablename__ = "report_photos"
     __table_args__ = (
         CheckConstraint("width > 0 AND height > 0", name="dimensions_positive"),
+        CheckConstraint(
+            "received_at IS NULL OR (storage_key IS NOT NULL AND sha256 IS NOT NULL)",
+            name="received_has_file",
+        ),
+        CheckConstraint(
+            "(latitude IS NULL) = (longitude IS NULL) AND (latitude IS NULL) = "
+            "(location_source IS NULL) AND (location_accuracy_m IS NULL OR latitude IS NOT NULL)",
+            name="location_all_or_none",
+        ),
+        CheckConstraint(
+            "(registered_at IS NULL) = (registered_by_id IS NULL)",
+            name="registered_fields_together",
+        ),
         Index("ix_report_photos_report_id_stage_taken_at", "report_id", "stage", "taken_at"),
+        Index(
+            "uq_report_photos_original",
+            "report_id",
+            "original_sha256",
+            unique=True,
+            postgresql_where=text("original_sha256 IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     report_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("job_reports.id", ondelete="CASCADE"))
     stage: Mapped[PhotoStage] = mapped_column(pg_enum(PhotoStage, "photo_stage"))
     position: Mapped[int] = mapped_column(SmallInteger)
-    caption: Mapped[str] = mapped_column(Text)
+    caption: Mapped[str] = mapped_column(Text, server_default=text("''"))
     taken_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
     width: Mapped[int] = mapped_column(Integer)
     height: Mapped[int] = mapped_column(Integer)
     storage_key: Mapped[str | None] = mapped_column(Text)
     content_type: Mapped[str | None] = mapped_column(Text)
+    checklist_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("report_checklist_items.id", ondelete="SET NULL"), index=True
+    )
+    source: Mapped[PhotoSource] = mapped_column(
+        pg_enum(PhotoSource, "photo_source"), server_default="camera"
+    )
+    taken_at_source: Mapped[TakenAtSource] = mapped_column(
+        pg_enum(TakenAtSource, "taken_at_source"), server_default="device_clock"
+    )
+    registered_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    registered_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    device_sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    clock_offset_seconds: Mapped[int | None] = mapped_column(Integer)
+    received_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    latitude: Mapped[float | None] = mapped_column(Float(53))
+    longitude: Mapped[float | None] = mapped_column(Float(53))
+    location_accuracy_m: Mapped[float | None] = mapped_column(Float(53))
+    location_source: Mapped[LocationSource | None] = mapped_column(
+        pg_enum(LocationSource, "photo_location_source")
+    )
+    original_width: Mapped[int | None] = mapped_column(Integer)
+    original_height: Mapped[int | None] = mapped_column(Integer)
+    original_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    original_sha256: Mapped[str | None] = mapped_column(CHAR(64))
+    upload_bytes: Mapped[int | None] = mapped_column(Integer)
+    # SHA-256 of the upload copy as registered; verified against the received bytes.
+    sha256: Mapped[str | None] = mapped_column(CHAR(64))
+    # Equal to `sha256` unless embedded metadata was removed from the stored object.
+    stored_sha256: Mapped[str | None] = mapped_column(CHAR(64))
+    thumb_storage_key: Mapped[str | None] = mapped_column(Text)
 
     report: Mapped[JobReport] = relationship(back_populates="photos")

@@ -6,7 +6,9 @@
 # Environment
 #   SMOKE_WAIT_SECONDS   how long to wait for /health/live to answer first (default 120)
 #   SMOKE_EMAIL, SMOKE_PASSWORD   optional: also sign in and read /auth/me
-#   CSP_FILE             the expected policy (default: the committed csp.txt)
+#   PHOTOS_ORIGIN        the photos bucket origin the policy allows in img-src (required; the
+#                        Terraform output `photos_origin`, exported by export-outputs.sh)
+#   CSP_FILE             the expected policy template (default: the committed csp.tftpl)
 #
 # Checks the things only the real edge can break: same-origin routing of /api and /health, SPA
 # deep links, problem+json (not HTML) for API errors, the response headers, and config.js.
@@ -15,7 +17,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SITE="${1:-}"
-CSP_FILE="${CSP_FILE:-$ROOT/infra/terraform/modules/web_static/csp.txt}"
+CSP_FILE="${CSP_FILE:-$ROOT/infra/terraform/modules/web_static/csp.tftpl}"
+PHOTOS_ORIGIN="${PHOTOS_ORIGIN:-}"
 WAIT="${SMOKE_WAIT_SECONDS:-120}"
 
 fail() { printf 'smoke-test: FAIL: %s\n' "$*" >&2; exit 1; }
@@ -64,16 +67,22 @@ case "$(header content-type)" in text/html*) ;; *) fail "/ is not text/html" ;; 
 body_has 'id="root"' || fail "/ does not look like the app shell"
 ok "/ serves the app shell"
 
-EXPECTED_CSP="$(cat "$CSP_FILE")"
+# The template's only parameter is the photos origin (a plain origin, never a pattern).
+case "$PHOTOS_ORIGIN" in
+  https://*|http://*) ;;
+  *) fail "PHOTOS_ORIGIN is not set (run a deploy to refresh the stored Terraform outputs)" ;;
+esac
+case "${PHOTOS_ORIGIN#*://}" in *[!A-Za-z0-9.:-]*|"") fail "PHOTOS_ORIGIN is not a plain origin" ;; esac
+EXPECTED_CSP="$(sed "s|\${photos_origin}|$PHOTOS_ORIGIN|g" "$CSP_FILE")"
 [ "$(header content-security-policy)" = "$EXPECTED_CSP" ] \
-  || fail "Content-Security-Policy differs from csp.txt"
+  || fail "Content-Security-Policy differs from csp.tftpl"
 [ "$(header x-content-type-options)" = "nosniff" ] || fail "X-Content-Type-Options is not nosniff"
 [ "$(header referrer-policy)" = "no-referrer" ] || fail "Referrer-Policy is not no-referrer"
 [ "$(header x-frame-options)" = "DENY" ] || fail "X-Frame-Options is not DENY"
 case "$SITE" in
   https://*) case "$(header strict-transport-security)" in max-age=*) ;; *) fail "Strict-Transport-Security is missing" ;; esac ;;
 esac
-ok "security headers (CSP identical to csp.txt)"
+ok "security headers (CSP identical to csp.tftpl)"
 
 get /reports
 [ "$STATUS" = "200" ] && body_has 'id="root"' || fail "/reports (a deep link) is not served the app shell"

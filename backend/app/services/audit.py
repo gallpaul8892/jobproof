@@ -21,6 +21,8 @@ from app.schemas import audit as schemas
 from app.schemas.common import PersonRef
 
 HISTORY_LIMIT = 100
+# Events whose meaning is the action itself: they carry no field changes (T-003h).
+_NO_CHANGE_ACTIONS = frozenset({AuditAction.report_submitted, AuditAction.report_photo_received})
 
 
 @dataclasses.dataclass(frozen=True)
@@ -56,7 +58,7 @@ def record_event(
     customer_id: uuid.UUID | None = None,
 ) -> AuditEvent:
     """Add an event to the session (the caller commits). Flushes so `seq` follows call order."""
-    if not changes:
+    if not changes and action not in _NO_CHANGE_ACTIONS:
         raise ValueError("record_event needs at least one change; do not record no-op events")
     if action == AuditAction.settings_changed:
         entity = AuditEntity.settings

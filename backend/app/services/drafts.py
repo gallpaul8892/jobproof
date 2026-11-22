@@ -49,6 +49,36 @@ def _sync_items(
     return have
 
 
+def ensure_all_items(session: Session, report: JobReport, job: Job) -> None:
+    """Report rows for every job item that is not removed (items added since the draft began)."""
+    _sync_items(session, report, job)
+
+
+def ensure_report_item(
+    session: Session, report: JobReport, job: Job, item_id: uuid.UUID
+) -> ReportChecklistItem | None:
+    """The report item for a job item (created if missing, also for a removed job item).
+
+    None when `item_id` is not one of the job's checklist items.
+    """
+    source = next((i for i in job.checklist_items if i.id == item_id), None)
+    if source is None:
+        return None
+    have = _sync_items(session, report, job)
+    row = have.get(item_id)
+    if row is None:  # removed by the office: the report row exists only once something is on it
+        row = ReportChecklistItem(
+            id=source.id,
+            report=report,
+            position=source.position,
+            label=source.label,
+            done=False,
+            cannot_do=False,
+        )
+        session.add(row)
+    return row
+
+
 def ensure_draft(session: Session, job: Job, user: User, now: dt.datetime) -> JobReport:
     """Create the draft if there is none; refuse a cancelled or office-closed job.
 

@@ -14,6 +14,8 @@ dependencies = [
     "tzdata==2026.6",
     "argon2-cffi==25.1.0",
     "pyjwt==2.15.1",
+    "boto3==1.44.9",
+    "pillow==13.0.0",
 ]
 
 [dependency-groups]
@@ -24,6 +26,7 @@ dev = [
     "mypy==2.4.1",
     "jsonschema==4.26.0",
     "pyyaml==6.0.3",
+    "moto[s3,server]==5.2.5",
 ]
 
 [tool.uv]
@@ -57,3 +60,8 @@ python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["app"]
+
+[[tool.mypy.overrides]]
+# boto3 ships no type information; the S3 client is used behind the typed ObjectStore protocol.
+module = ["boto3", "botocore.*"]
+ignore_missing_imports = true

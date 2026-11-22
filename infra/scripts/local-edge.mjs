@@ -25,11 +25,12 @@ export function startEdge({
   dist,
   upstream,
   configDir = null,
-  cspFile = join(here, "../terraform/modules/web_static/csp.txt"),
+  cspFile = join(here, "../terraform/modules/web_static/csp.tftpl"),
+  photosOrigin = "https://photos.example.test",
   breakWith = [],
   https = false,
 }) {
-  const csp = readFileSync(cspFile, "utf8");
+  const csp = readFileSync(cspFile, "utf8").replaceAll("${photos_origin}", photosOrigin);
   const broken = new Set(breakWith);
   const root = resolve(dist);
   const target = new URL(upstream);
@@ -119,6 +120,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     upstream: process.env.UPSTREAM ?? "http://127.0.0.1:8000",
     configDir: process.env.CONFIG_DIR ?? null,
     cspFile: process.env.CSP_FILE ?? undefined,
+    photosOrigin: process.env.PHOTOS_ORIGIN ?? undefined,
     breakWith: (process.env.EDGE_BREAK ?? "").split(",").filter(Boolean),
   });
   console.log(`local-edge listening on ${edge.url}`);

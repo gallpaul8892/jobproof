@@ -1,5 +1,6 @@
 """Request dependencies: settings, the signed-in user and role checks."""
 
+import threading
 import uuid
 from collections.abc import Callable
 from typing import Annotated
@@ -13,7 +14,8 @@ from app.db import get_session
 from app.errors import ProblemError
 from app.models import AuthSession, User
 from app.models.enums import UserRole
-from app.photos.store import PhotoStore, PlaceholderPhotoStore
+from app.photos.object_store import ObjectStore, S3ObjectStore
+from app.photos.store import DispatchingPhotoStore, PlaceholderPhotoStore
 from app.security import InvalidTokenError, decode_access_token
 from app.services.sessions import account_inactive, session_ended
 
@@ -28,16 +30,47 @@ def get_app_settings(request: Request) -> Settings:
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 
 
-def get_photo_store(settings: SettingsDep) -> PhotoStore:
-    return PlaceholderPhotoStore(
-        secret=settings.photo_url_secret,
-        base_url=settings.public_api_base_url,
-        ttl_seconds=settings.photo_url_ttl_seconds,
-        now=now,
+_OBJECT_STORE_LOCK = threading.Lock()
+
+
+def get_object_store(request: Request) -> ObjectStore:
+    """The app's object store, created on first use (tests may put a substitute on app.state)."""
+    state = request.app.state
+    store: ObjectStore | None = getattr(state, "object_store", None)
+    if store is None:
+        with _OBJECT_STORE_LOCK:
+            store = getattr(state, "object_store", None)
+            if store is None:
+                settings: Settings = state.settings
+                assert settings.photo_bucket is not None  # noqa: S101 - set by Settings
+                store = S3ObjectStore(
+                    bucket=settings.photo_bucket,
+                    region=settings.aws_region,
+                    endpoint_url=settings.photo_s3_endpoint_url,
+                    public_endpoint_url=settings.photo_s3_public_endpoint_url,
+                    addressing_style=settings.photo_s3_addressing_style,
+                )
+                state.object_store = store
+    return store
+
+
+ObjectStoreDep = Annotated[ObjectStore, Depends(get_object_store)]
+
+
+def get_photo_store(settings: SettingsDep, objects: ObjectStoreDep) -> DispatchingPhotoStore:
+    return DispatchingPhotoStore(
+        PlaceholderPhotoStore(
+            secret=settings.photo_url_secret,
+            base_url=settings.public_api_base_url,
+            ttl_seconds=settings.photo_url_ttl_seconds,
+            now=now,
+        ),
+        objects,
+        settings.photo_url_ttl_seconds,
     )
 
 
-PhotoStoreDep = Annotated[PhotoStore, Depends(get_photo_store)]
+PhotoStoreDep = Annotated[DispatchingPhotoStore, Depends(get_photo_store)]
 
 # One message for every authentication failure: the client learns nothing about why.
 _UNAUTHENTICATED = "Authentication required."

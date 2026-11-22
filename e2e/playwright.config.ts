@@ -4,7 +4,7 @@ import { defineConfig } from "@playwright/test";
 // Playwright's own Chromium (`npx playwright install chromium`).
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
 
-const WRITES = /(settings-writes|review|edit-report|history|customer-edit|edit-conflict-merge)\.spec\.ts/;
+const WRITES = /(settings-writes|review|edit-report|history|customer-edit|edit-conflict-merge|uploaded-photo)\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./tests",
@@ -38,6 +38,14 @@ export default defineConfig({
       testMatch: /settings-writes\.spec\.ts/,
       fullyParallel: false,
       dependencies: ["merges"],
+    },
+    // Submits a report through the operative API (new data for every other test): runs last, then reseeds.
+    {
+      name: "uploads",
+      use: { browserName: "chromium" },
+      testMatch: /uploaded-photo\.spec\.ts/,
+      fullyParallel: false,
+      dependencies: ["settings-writes"],
     },
   ],
 });

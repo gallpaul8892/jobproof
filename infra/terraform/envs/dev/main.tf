@@ -137,6 +137,7 @@ module "web_static" {
   price_class          = var.cloudfront_price_class
   web_acl_arn          = var.enable_waf ? module.waf[0].web_acl_arn : null
   force_destroy        = var.force_destroy_buckets
+  photos_origin        = module.photos_bucket.regional_origin
 }
 
 module "ecs_service" {
@@ -169,6 +170,8 @@ module "ecs_service" {
   public_origin               = module.web_static.origin
   default_company_name        = var.default_company_name
   demo_seed_allowed           = var.demo_seed_allowed
+  photos_bucket_name          = module.photos_bucket.bucket_name
+  photos_bucket_arn           = module.photos_bucket.bucket_arn
 }
 
 module "monitoring" {

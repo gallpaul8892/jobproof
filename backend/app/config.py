@@ -18,6 +18,7 @@ from sqlalchemy.exc import ArgumentError
 _DEV_JWT_SECRET = "dev-only-jwt-secret-change-me-0123456789abcdef"  # noqa: S105
 _DEV_PHOTO_URL_SECRET = "dev-only-photo-secret-change-me-0123456789ab"  # noqa: S105
 _DEV_SECRETS = frozenset({_DEV_JWT_SECRET.lower(), _DEV_PHOTO_URL_SECRET.lower()})
+DEV_PHOTO_BUCKET = "jobproof-local-photos"
 _APP_ENVS = ("local", "test", "staging", "production")
 # The RDS CA bundle (a public certificate), committed so no network is needed (INFRA spec 5.2).
 DEFAULT_DB_SSLROOTCERT = Path(__file__).resolve().parents[1] / "certs" / "rds-global-bundle.pem"
@@ -84,6 +85,16 @@ class Settings(BaseSettings):
     mobile_min_version_android: str = "0.0.0"
     photo_url_secret: str = Field(default=_DEV_PHOTO_URL_SECRET, min_length=32)
     photo_url_ttl_seconds: int = Field(default=900, ge=30)
+    # Private object storage for uploaded photos (T-003g). Local and test use a dev bucket on a
+    # moto or SeaweedFS endpoint; staging and production need a bucket and use the task role.
+    photo_bucket: str | None = None
+    photo_s3_endpoint_url: str | None = None
+    photo_s3_public_endpoint_url: str | None = None
+    photo_s3_addressing_style: Literal["virtual", "path"] = "virtual"
+    aws_region: str = "eu-west-2"
+    aws_access_key_id: SecretStr | None = None  # only read by the production guard
+    photo_upload_concurrency: int = Field(default=4, ge=1, le=64)
+    photo_max_bytes: int = Field(default=10_485_760, ge=1024, le=10_485_760)
     public_api_base_url: str = "http://localhost:8000"
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:8080"]
     demo_accounts_enabled: bool = False
@@ -199,6 +210,24 @@ class Settings(BaseSettings):
             database=self.db_name,
             query=query,
         ).render_as_string(hide_password=False)
+        return self
+
+    @model_validator(mode="after")
+    def _photo_storage(self) -> Self:
+        if self.app_env in ("local", "test"):
+            if self.photo_bucket is None:
+                self.photo_bucket = DEV_PHOTO_BUCKET
+            return self
+        if self.photo_bucket is None:
+            raise ValueError(f"PHOTO_BUCKET must be set when APP_ENV={self.app_env}")
+        # Real AWS only: the task role supplies credentials and the regional endpoint is implied.
+        for name, value in (
+            ("PHOTO_S3_ENDPOINT_URL", self.photo_s3_endpoint_url),
+            ("PHOTO_S3_PUBLIC_ENDPOINT_URL", self.photo_s3_public_endpoint_url),
+            ("AWS_ACCESS_KEY_ID", self.aws_access_key_id),
+        ):
+            if value is not None:
+                raise ValueError(f"{name} must not be set when APP_ENV={self.app_env}")
         return self
 
     @model_validator(mode="after")

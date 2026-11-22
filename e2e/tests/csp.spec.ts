@@ -3,16 +3,22 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test, API_URL, ManagerApi, signInViaApi } from "./support";
+import { expect, test, API_URL, PHOTOS_URL, ManagerApi, signInViaApi } from "./support";
 
 // The real nginx entrypoint writes the CSP; the app is loaded under exactly that policy.
 const script = fileURLToPath(new URL("../../web/nginx/40-jobproof-config.sh", import.meta.url));
 
-function generatedCsp(apiBaseUrl: string): string {
+function generatedCsp(apiBaseUrl: string, photoOrigin: string = PHOTOS_URL): string {
   const dir = mkdtempSync(join(tmpdir(), "jobproof-csp-"));
   try {
     execFileSync("sh", [script], {
-      env: { PATH: process.env.PATH ?? "", API_BASE_URL: apiBaseUrl, DIST_DIR: dir, HEADERS_FILE: join(dir, "h.conf") },
+      env: {
+        PATH: process.env.PATH ?? "",
+        API_BASE_URL: apiBaseUrl,
+        PHOTO_ORIGIN: photoOrigin,
+        DIST_DIR: dir,
+        HEADERS_FILE: join(dir, "h.conf"),
+      },
     });
     const line = readFileSync(join(dir, "h.conf"), "utf8")
       .split("\n")
@@ -24,6 +30,7 @@ function generatedCsp(apiBaseUrl: string): string {
 }
 
 const apiOrigin = new URL(API_URL).origin;
+const photosOrigin = new URL(PHOTOS_URL).origin;
 
 // Playwright serves a route-fulfilled document without a network address space, and Chrome then
 // treats the page as public and blocks its requests to localhost (Local Network Access). The
@@ -35,7 +42,7 @@ test.use({
   },
 });
 
-test("the generated CSP allows only self and the configured API origin", () => {
+test("the generated CSP allows only self, the configured API origin and the photos origin (images only)", () => {
   const csp = generatedCsp(API_URL);
   const directives = Object.fromEntries(
     csp.split(";").map((d) => {
@@ -45,16 +52,16 @@ test("the generated CSP allows only self and the configured API origin", () => {
   );
   expect(directives["default-src"]).toEqual(["'self'"]);
   expect(directives["connect-src"]).toEqual(["'self'", apiOrigin]);
-  // images: the API's photos; data: is allowed for images only
-  expect(directives["img-src"]).toEqual(["'self'", "data:", apiOrigin]);
+  // images: the API's placeholder photos and the object store's uploaded ones; data: for images only
+  expect(directives["img-src"]).toEqual(["'self'", "data:", apiOrigin, photosOrigin]);
   expect(directives["object-src"]).toEqual(["'none'"]);
   expect(directives["frame-ancestors"]).toEqual(["'none'"]);
   for (const [name, sources] of Object.entries(directives)) {
     for (const source of sources) {
-      expect(["'self'", "'none'", "data:", apiOrigin], `${name} source ${source}`).toContain(source);
+      expect(["'self'", "'none'", "data:", apiOrigin, photosOrigin], `${name} source ${source}`).toContain(source);
     }
   }
-  expect(csp).not.toMatch(/\*|unsafe-|https?:\/\/(?!localhost:8000)/);
+  expect(csp).not.toMatch(/\*|unsafe-|https?:\/\/(?!localhost:(8000|8333))/);
   // a different API origin is the only thing that changes
   expect(generatedCsp("https://api.example.com")).toContain("connect-src 'self' https://api.example.com;");
 });

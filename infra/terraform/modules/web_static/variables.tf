@@ -43,3 +43,13 @@ variable "force_destroy" {
   type        = bool
   default     = false
 }
+
+variable "photos_origin" {
+  description = "Origin the app loads uploaded photos from (presigned GET), added to the CSP img-src: https://<photos bucket>.s3.<region>.amazonaws.com."
+  type        = string
+
+  validation {
+    condition     = can(regex("^https://[a-z0-9][a-z0-9.-]*[a-z0-9]$", var.photos_origin))
+    error_message = "photos_origin must be an https origin without a path, for example https://bucket.s3.eu-west-2.amazonaws.com."
+  }
+}

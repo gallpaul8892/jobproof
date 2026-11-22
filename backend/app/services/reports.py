@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import Select, and_, case, func, or_, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, joinedload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.errors import ProblemError
@@ -39,6 +39,7 @@ from app.models.enums import (
 from app.photos.store import PhotoStore
 from app.schemas import manager as schemas
 from app.schemas.common import Address, PersonRef
+from app.schemas.operative import PhotoLocation
 from app.services.billing import (
     BillingStatus,
     InvoiceStatus,
@@ -55,6 +56,7 @@ from app.services.billing_sql import (
 )
 
 Painter = aliased(User)
+SubmittedBy = aliased(User)
 Reviewer = aliased(User)
 ChangedBy = aliased(User)
 LiveInvoice = aliased(Invoice)
@@ -90,6 +92,15 @@ def submitted_reports(*columns: Any) -> Select[Any]:
         .select_from(JobReport)
         .where(JobReport.state == ReportState.submitted)
     )
+
+
+def _arrived() -> ColumnElement[bool]:
+    """A photo the manager can see: a seeded placeholder, or an uploaded file that has arrived.
+
+    A photo registered by the app whose file has not arrived is only a promise (shown as
+    "still to arrive"), not evidence.
+    """
+    return or_(ReportPhoto.registered_at.is_(None), ReportPhoto.received_at.is_not(None))
 
 
 def _summary_from(stmt: Select[Any]) -> Select[Any]:
@@ -152,7 +163,7 @@ def _summary_columns() -> list[Any]:
     photo_count = (
         select(func.count())
         .select_from(ReportPhoto)
-        .where(ReportPhoto.report_id == JobReport.id)
+        .where(ReportPhoto.report_id == JobReport.id, _arrived())
         .scalar_subquery()
     )
     return [
@@ -331,6 +342,7 @@ def get_report_detail(
             Job,
             Customer,
             Painter,
+            SubmittedBy,
             Reviewer,
             ChangedBy,
             InvoiceAlias,
@@ -340,6 +352,7 @@ def get_report_detail(
         .join(Job, Job.id == JobReport.job_id)
         .join(Customer, Customer.id == Job.customer_id)
         .join(Painter, Painter.id == JobReport.painter_id)
+        .join(SubmittedBy, SubmittedBy.id == JobReport.submitted_by_id)
         .outerjoin(Reviewer, Reviewer.id == JobReport.reviewed_by_id)
         .outerjoin(ChangedBy, ChangedBy.id == JobReport.last_changed_by_id)
         .outerjoin(InvoiceAlias, InvoiceAlias.id == _chosen_invoice_id())
@@ -349,20 +362,41 @@ def get_report_detail(
     row = session.execute(stmt).one_or_none()
     if row is None:
         raise ProblemError(404, "not_found", "Report not found.")
-    report, job, customer, painter, reviewer, changed_by, invoice, quote, customers_jobs = row
+    (
+        report,
+        job,
+        customer,
+        painter,
+        submitted_by,
+        reviewer,
+        changed_by,
+        invoice,
+        quote,
+        customers_jobs,
+    ) = row
     # submitted_reports() guarantees these (check constraint submitted_fields_match_state)
     assert report.submitted_at is not None and report.review_status is not None  # noqa: S101
 
     checklist = session.scalars(
         select(ReportChecklistItem)
         .where(ReportChecklistItem.report_id == report.id)
+        .options(joinedload(ReportChecklistItem.job_item))
         .order_by(ReportChecklistItem.position)
     ).all()
     photos = session.scalars(
         select(ReportPhoto)
-        .where(ReportPhoto.report_id == report.id)
+        .where(ReportPhoto.report_id == report.id, _arrived())
         .order_by(_STAGE_ORDER, ReportPhoto.taken_at, ReportPhoto.position, ReportPhoto.id)
     ).all()
+    pending_photos = (
+        session.scalar(
+            select(func.count())
+            .select_from(ReportPhoto)
+            .where(ReportPhoto.report_id == report.id, ReportPhoto.received_at.is_(None))
+            .where(ReportPhoto.registered_at.is_not(None))
+        )
+        or 0
+    )
 
     payments: Sequence[Payment] = []
     targets: list[ColumnElement[bool]] = []
@@ -415,6 +449,10 @@ def get_report_detail(
         id=report.id,
         review_status=report.review_status,
         submitted_at=report.submitted_at,
+        submitted_by=PersonRef(id=submitted_by.id, name=submitted_by.full_name),
+        pending_photo_count=pending_photos,
+        device_submitted_at=report.device_submitted_at,
+        submit_clock_offset_seconds=report.submit_clock_offset_seconds,
         reviewed_at=report.reviewed_at,
         reviewed_by=PersonRef(id=reviewer.id, name=reviewer.full_name) if reviewer else None,
         version=report.version,
@@ -448,7 +486,14 @@ def get_report_detail(
         ),
         painter=PersonRef(id=painter.id, name=painter.full_name),
         checklist=[
-            schemas.ChecklistItem(id=i.id, label=i.label, done=i.done, note=i.note)
+            schemas.ChecklistItem(
+                id=i.id,
+                label=i.label,
+                done=i.done,
+                note=i.note,
+                cannot_do=i.cannot_do,
+                removed=i.job_item.removed_at is not None,
+            )
             for i in checklist
         ],
         photos=[
@@ -461,6 +506,23 @@ def get_report_detail(
                 height=p.height,
                 url=photo_store.url_for(p, "full"),
                 thumb_url=photo_store.url_for(p, "thumb"),
+                checklist_item_id=p.checklist_item_id,
+                source=p.source,
+                taken_at_source=p.taken_at_source,
+                received_at=p.received_at,
+                clock_offset_seconds=p.clock_offset_seconds,
+                location=(
+                    PhotoLocation(
+                        latitude=p.latitude,
+                        longitude=p.longitude,
+                        accuracy_m=p.location_accuracy_m,
+                        source=p.location_source,
+                    )
+                    if p.latitude is not None
+                    and p.longitude is not None
+                    and p.location_source is not None
+                    else None
+                ),
             )
             for p in photos
         ],

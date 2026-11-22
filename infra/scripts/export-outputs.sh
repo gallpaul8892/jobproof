@@ -51,6 +51,7 @@ scalar ECR_REPOSITORY_URL ecr_repository_url 1
 scalar ECR_REPOSITORY_NAME ecr_repository_name 1
 scalar RELEASE_PARAMETER release_parameter 1
 scalar DB_INSTANCE_ID db_instance_identifier 0
+scalar PHOTOS_ORIGIN photos_origin 0  # absent from outputs stored before T-003g; the smoke test says so
 
 json OPS_NETWORK ops_network \
   '(.subnets | type == "array" and length > 0 and all(type == "string" and test("^[A-Za-z0-9-]+$")))

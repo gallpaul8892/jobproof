@@ -44,7 +44,8 @@ def get_photo_image(
     ):
         raise _invalid_signature()
     photo = get_photo(session, photo_id)
-    if photo is None:
+    # Uploaded photos are served from object storage by presigned URL, never from here.
+    if photo is None or photo.registered_at is not None:
         raise ProblemError(404, "not_found", "Photo not found.")
     body, content_type = photo_store.render(photo, variant)
     return Response(content=body, media_type=content_type, headers=_SVG_HEADERS)

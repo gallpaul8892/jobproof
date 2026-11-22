@@ -197,7 +197,7 @@ def test_the_list_uses_a_bounded_number_of_queries(
             with count_queries(client) as many:
                 response = client.get(LIST, headers=painter_headers)
             assert response.status_code == 200
-    assert len(many) == len(few) <= 9
+    assert len(many) == len(few) <= 11  # photos load with the reports (T-003g)
 
 
 # ---- detail (T-003d) --------------------------------------------------------------------------

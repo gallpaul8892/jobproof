@@ -55,6 +55,22 @@ class PhotoStage(StrEnum):
     after = "after"
 
 
+class PhotoSource(StrEnum):
+    camera = "camera"
+    gallery = "gallery"
+
+
+class TakenAtSource(StrEnum):
+    device_clock = "device_clock"
+    file_metadata = "file_metadata"
+    added_time = "added_time"
+
+
+class LocationSource(StrEnum):
+    device = "device"
+    file = "file"
+
+
 class InvoiceState(StrEnum):
     draft = "draft"
     issued = "issued"
@@ -83,6 +99,8 @@ class AuditAction(StrEnum):
     report_edited = "report.edited"
     settings_changed = "settings.changed"
     customer_edited = "customer.edited"
+    report_submitted = "report.submitted"
+    report_photo_received = "report.photo_received"
 
 
 class AuditEntity(StrEnum):
