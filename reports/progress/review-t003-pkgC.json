@@ -1,0 +1,88 @@
+{
+  "id": "review-t003-pkgC",
+  "title": "Code review report: T-003 Package C (T-003e capture photos; T-003f checklist progress, notes and draft sync)",
+  "agent": "code-reviewer",
+  "model": "opus",
+  "status": "done",
+  "date": "2026-11-22",
+  "summary": "Round 1 for Package C (dd56e3c T-003f backend, dd84121 T-003e mobile, ea1d93d T-003f mobile, plus the app-facing parts of the Pages demo commits): CHANGES REQUESTED, with 0 blockers, 2 majors and 6 minors (plus 2 for the architect). The backend drafts API is sound: painter-only, the job row is locked and owner-filtered, another operative's job is 404, the order of 409/422 checks matches the contract, managers see no drafts, and validation matches the shared twin. Mobile local storage is durable, isolated per owner and never deletes evidence. The engine's rev/synced_rev, single-flight and backoff logic is correct and well tested. MAJOR 1: a transient refresh failure after a 401 pauses sync with 'Please sign in again' while the operative is still signed in, with no retry scheduled. MAJOR 2: once a field is synced the phone shows the query cache's server value, which a late GET or a kill within the 1 s persist throttle can leave stale. The notes field never re-syncs, so typing over a stale note silently replaces the note on the server. Tests: mobile 534 passed, shared 522 passed, web 335 passed (2 skipped), backend 2008 passed (1 skipped and 1 xfailed, both environment-dependent); lint, tsc and npm audit clean.",
+  "blocks": [
+    {
+      "heading": "Round 1 (0 BLOCKER, 2 MAJOR, 8 MINOR)",
+      "type": "table",
+      "columns": [
+        "Severity",
+        "Finding",
+        "Resolution"
+      ],
+      "rows": [
+        [
+          "MAJOR",
+          "mobile/src/sync/engine.ts:276-278 with mobile/api/sessionManager.ts doRefresh and shared/src/api/client.ts attempt(): when the access token has expired and the refresh fails for a transient reason (no signal, timeout, 5xx, 429), the session manager deliberately stays signed in (transientFailure) but callApi rethrows the original 401. classify() maps it to session_ended and the engine sets paused = 'sign_in': no retry timer is set, onLocalChange (engine.ts:156) stops scheduling sends, and the header reads 'Please sign in again to finish sending' to an operative who is still signed in. SyncStatusLine renders only while signed_in, so this message is in practice only ever shown in this wrong case. Sync stalls until the app is next foregrounded or Sync now is tapped. The token refresh that succeeds later does not trigger the engine. engine.test.ts:319 covers only the real sign-out case. Owner: mobile",
+          "Open. In handle() for session_ended: if this.deps.currentUserId() === owner (still signed in, so the refresh failed transiently), treat it as { kind: 'retry', offline: false } with backoff. Pause with 'sign_in' only when the user is really gone. Alternatively the SyncProvider can trigger a pass on the manager's next successful refresh. Add an engine test: 401 while the user stays signed in leads to a retry timer, no 'Please sign in again' text, and a send once the next attempt succeeds"
+        ],
+        [
+          "MAJOR",
+          "mobile/src/sync/SyncProvider.tsx:12-21, mobile/src/sync/engine.ts:255-257, mobile/src/features/checklist/useAutosave.ts:24, mobile/src/api/queryPersister.ts:42: once markSynced runs, the phone shows the query cache's server value (design 3.4 display rule). That cache can lag behind what the server has. (a) A GET for the job or the list that was in flight before the PATCH and resolves after onSaved overwrites the cache with pre-PATCH data. cacheSavedJob does not cancel in-flight operative queries. (b) The PATCH response reaches the persisted snapshot only after the 1 s throttle, but synced_rev is committed to SQLite at once. A kill in that window means the next launch restores pre-PATCH ticks and notes. Ticks fix themselves on the next refetch. The notes fields do not: useAutosave initialises its text from `stored` once and never re-syncs. The operative sees the old or empty note and anything typed is sent as notes=<new text>, silently replacing the note already on the server (lost update). The window is narrow but this is evidence text, and no test covers it. Owner: mobile",
+          "Open. (1) In cacheSavedJob, call client.cancelQueries for queryKeys.operativeJob(id) and queryKeys.operativeJobs before setQueryData. (2) Make the acknowledged values durable together with synced_rev: either flush the user's persister synchronously in onSaved, called before markSynced, or (architect's choice, see questions) keep showing the local row's value until a server copy fetched after the sync is in the cache. (3) Have useAutosave adopt a changed `stored` value while the field has no pending or unsaved edit. Tests: an older GET resolving after the PATCH does not revert the display, and a reopen with a pre-PATCH persisted snapshot shows the synced note in the notes field"
+        ],
+        [
+          "MINOR",
+          "mobile/src/files/orphans.ts:43,64-79 with mobile/src/capture/captureService.ts:168-200: the capture intent is written only by CameraScreen. A gallery copy orphaned by a kill between the .part rename and the row insert is recovered under the job the camera was last opened for, which may be a different job (scenario 14), with source 'camera', even for .png/.heic files that can only come from the gallery. The window is tiny (the rename and the insert run in the same tick), but the evidence would be mislabelled. Owner: mobile",
+          "Open. In importOne, set the capture intent (job and item) before copying. On recovery, record source = 'gallery' when the extension is not jpg. Better: copy gallery files to a name that recovery may discard, such as a `.gallery` suffix renamed only after the insert. The gallery still holds the original, so a half-imported copy can be deleted safely. Add a Jest case"
+        ],
+        [
+          "MINOR",
+          "mobile/src/capture/captureService.ts:101-104 and mobile/src/capture/expoGalleryPicker.ts: when saveShot refuses a photo after the shutter (two quick shots at 59 photos, or space falling under 100 MB), the camera's cache file is never moved or deleted. The image picker's cache copies of every picked photo are also never removed. These are app-private but are full-size photos of customers' homes, kept until Android clears the cache. Owner: mobile",
+          "Open. On a refusal in saveShot, delete shot.uri. After importAssets, delete each asset.uri that lies inside the app cache directory (never a content:// source). Add a fake-files test for both"
+        ],
+        [
+          "MINOR",
+          "mobile/src/features/job/JobDetailScreen.tsx:235-247 (and ItemScreen): GET detail answering 409 draft_owned_by_other, with nothing cached, shows 'Couldn't load this job. Check your signal.', which tells the operative to fix their signal. The engine already has VERDICT_MSG.ownedByOther. Owner: mobile",
+          "Open. When the error is an ApiError with code draft_owned_by_other, show VERDICT_MSG.ownedByOther ('Another operative started this job's report. Contact the office.') with no retry button. Add an RNTL case"
+        ],
+        [
+          "MINOR",
+          "mobile/src/sync/classify.ts:47: any non-ApiError, such as a TypeError in the client, is classified as offline. The job then retries every 15 minutes forever under 'Waiting for signal', which hides a bug as a signal problem. Owner: mobile",
+          "Open. Classify an unknown error as { kind: 'retry', offline: false } so it shows 'Will try again shortly', or as needs_attention 'unexpected_response' after N consecutive occurrences. Add a classify table row"
+        ],
+        [
+          "MINOR",
+          "mobile/src/sync/SyncProvider.tsx:26-28: the spec's 'reconnect' trigger for T-003f is not wired (there is no expo-network yet). After a long outage the next send can be up to 15 min ± 20% away unless the app is foregrounded or Sync now is tapped. The comment cites 'the T-003f report', but there is no engineers' T-003f report in reports/progress. Owner: architect",
+          "Decision needed: accept deferral to T-003i (which adds expo-network) and record it in the T-003f spec and the engineers' report, or require the listener now"
+        ],
+        [
+          "MINOR",
+          "Dependencies and documentation drift (grouped). The new Expo modules are current except expo-file-system: 58.0.13 is installed and 58.0.14 is available. Pages-demo devDependencies react-native-web 0.21.4 and @expo/metro-runtime 58.0.17 were added. ARCHITECTURE.md lines 62, 116, 257 and 258 still mark drafts.py, the Expo modules, the LocalDb/PhotoFiles adapters and the sync engine as planned, and do not record draft_owned_by_other. npm audit: 0 vulnerabilities. Owner: architect",
+          "Open. Bump expo-file-system in the next ticket. Record the exact versions of expo-camera 58.0.14, expo-image-picker 58.0.10, expo-image-manipulator 58.0.16 and expo-file-system, plus the two demo devDependencies. Mark the T-003e/f items as built, and add draft_owned_by_other and the 30-day/50-row earlier_unfinished bound to the authorisation and API notes"
+        ]
+      ]
+    },
+    {
+      "heading": "What the reviewer found sound",
+      "type": "list",
+      "items": [
+        "Backend drafts API: the router is painter-only, with the role taken from the database. lock_own_job takes FOR UPDATE filtered on painter_id, so another operative's job or an unknown job is 404 with no hint. The check order matches the contract: 422 body, 404, 409 draft_owned_by_other, job_cancelled/job_closed, report_submitted (with submitted_at), then item ids 422 with loc [body, checklist, i, item_id]. ensure_draft creates the report once with items for non-removed job items and moves scheduled to in_progress. Removed items are accepted, and the row is created when missing. No audit event is written and version does not move. A failed request rolls back (tested). Two PATCHes are serialised by the row lock.",
+        "Backend reassignment and visibility: draft_owned_by_other on GET and PATCH, and such jobs are left out of both lists. The original author gets 404 once the job is no longer theirs (tested). Managers see no drafts (test_saving_leaves_other_jobs_and_the_managers_view_alone). The manager's done=true already clears cannot_do (report_edit.py:125, new test). earlier_unfinished is bounded at 30 days and 50 rows, oldest first, with SQL-side filters. The Package B scope test now asserts exactly 403 forbidden and includes saveOperativeDraft. Migration 0010 has SET LOCAL lock_timeout and the extra downgrade refusal.",
+        "Validation parity between shared/src/operative/validation.ts and the backend: both enforce 500 and 2,000 code points. The phone sends the trimmed value, so both sides count the same string. The u-mode regex [\\u0000\\ud800-\\udfff] matches exactly what reject_unstorable refuses (NUL and lone surrogates). Blank becomes null on both sides. At most 200 checklist entries on both sides. The phone always sends a non-null status and never an empty checklist array.",
+        "Local SQLite durability: WAL, synchronous=FULL and foreign_keys. BEGIN IMMEDIATE with savepoints for nesting. Each migration step commits with its user_version, and a newer schema is refused rather than downgraded. Every work query filters owner_user_id, and sync_meta keys are per user. A photo row and its draft row are inserted in one transaction. A delete commits its flag before any file is touched, and interrupted deletes are finished at start. Gallery copies go through .part and a rename. Orphan cleanup never deletes an original. Path segments are validated (SAFE_SEGMENT). Kill and reopen tests use a new NodeSqliteDb on the same file.",
+        "Sync engine: rev/synced_rev, with markSynced guarded by synced_rev < sent rev, so an edit made during a PATCH stays dirty and goes next (tested). Single flight with a rerun flag, so a retry racing Sync now cannot double-send (tested). Backoff of 5 s, 15 s, 1 min, 5 min, then 15 min with ±20% jitter, and Retry-After wins when longer. Edits respect backoff, while start, foreground, timers and Sync now do not. If the user changes mid-request, a failure is recorded for nobody and onSaved is skipped. Jobs are batched at 200 items. Permanent 409/404/403/422 answers keep the work and mark the job. The engine never throws into the UI. The 409 table, including draft_owned_by_other, is unit tested row by row.",
+        "Sign-out and involuntary end: the unsent count reads SQLite for the one user (dirty notes, items, sign-off, queued submits, unsent live photos). An involuntary end clears the persisted and in-memory job cache but leaves drafts and photos. Engine work for user A is never sent or marked under user B (tested).",
+        "Privacy: the lint rule bans expo-media-library. blockedPermissions include READ_MEDIA_*, READ/WRITE_EXTERNAL_STORAGE, ACCESS_MEDIA_LOCATION and RECORD_AUDIO. The camera plugin has recordAudioAndroid false, the picker plugin has microphonePermission false, and allowBackup is false. Gallery import uses the system photo picker. EXIF is read only for the taken_at date. There is no console logging in mobile/src or mobile/app, and drafts.py logs nothing.",
+        "Accessibility basics: checklist rows and item choices are at least 56 dp and the shutter is 80 dp. Rows have labels in the form 'Item n of m. label. state.'. The summary and counters use live regions. Note fields are labelled, and refused text is kept with its message.",
+        "Pages demo touch points are inert for the app. Every metro redirect requires JOBPROOF_DEMO=1 and platform 'web'. Nothing in mobile/app or mobile/src imports mobile/demo. SignInScreen's optional footer prop renders nothing when absent.",
+        "Runs by the reviewer: mobile jest 52 suites / 534 tests passed. Shared vitest 522 passed. Web 335 passed with 2 skipped. Mobile eslint and tsc clean. Backend via scripts/dev.sh test: 2008 passed, with 1 skipped and 1 xfailed, both environment-dependent and existing. npm audit: 0 vulnerabilities."
+      ]
+    },
+    {
+      "heading": "Questions for the architect",
+      "type": "list",
+      "items": [
+        "Display rule after sync (MAJOR 2): should the phone keep showing its own last-sent values until a server copy fetched after the sync arrives? That is more robust than 'server value once synced'. Or is the narrower fix of cancelling queries, flushing the persister and making autosave re-sync enough?",
+        "Reconnect trigger: accept the deferral to T-003i (expo-network) and note it in the T-003f spec?",
+        "'Needs attention (N)' currently names no job and gives no reason. The per-job text is specified for T-003n. Is a header count with no explanation acceptable until then?",
+        "Rename durability: File.move followed by the SQLite FULL commit does not fsync the photos directory. Confirm that the T-003p power-cut device test is the accepted check for a row whose file rename was lost."
+      ]
+    }
+  ]
+}
