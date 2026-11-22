@@ -44,7 +44,8 @@ export const VERDICT_MSG = {
 } as const;
 
 export function classify(error: unknown): Verdict {
-  if (!(error instanceof ApiError)) return { kind: "retry", offline: true };
+  // Not an ApiError: the client itself failed (a bug), which must not pose as a signal problem.
+  if (!(error instanceof ApiError)) return { kind: "retry", offline: false };
   const { status, code } = error;
   const retryAfter = error.retryAfterSeconds !== undefined ? { retryAfterSeconds: error.retryAfterSeconds } : {};
 

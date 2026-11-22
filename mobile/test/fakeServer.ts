@@ -36,6 +36,8 @@ export function fakeServer() {
     jobs: new Map<string, OperativeJob>(),
     /** When set, the list and detail answer with this status instead. */
     failWith: undefined as number | undefined,
+    /** When set, the job detail answers 409 with this code (e.g. draft_owned_by_other). */
+    detailConflict: undefined as string | undefined,
     /** Resolves when the list is allowed to answer (to hold a request in flight). */
     hold: undefined as Promise<void> | undefined,
     /** When set, saving a draft (PATCH .../report) answers with this problem instead of saving. */
@@ -120,6 +122,7 @@ export function fakeServer() {
         if (operative.hold) await operative.hold;
         if (operative.failWith) return problemResponse(operative.failWith, operative.failWith === 404 ? "not_found" : "server_error");
         if (path === "/operative/jobs") return json(operative.list);
+        if (operative.detailConflict) return problemResponse(409, operative.detailConflict);
         const job = operative.jobs.get(path.slice("/operative/jobs/".length));
         return job ? json(job) : problemResponse(404, "not_found");
       }

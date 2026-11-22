@@ -7,7 +7,7 @@ const err = (status: number, code: string, extra: Partial<ConstructorParameters<
 const TABLE: [string, unknown, Verdict][] = [
   ["a network error", err(0, "network_error"), { kind: "retry", offline: true }],
   ["a timeout", err(0, "timeout"), { kind: "retry", offline: true }],
-  ["something that is not an API error", new TypeError("boom"), { kind: "retry", offline: true }],
+  ["something that is not an API error", new TypeError("boom"), { kind: "retry", offline: false }],
   ["500", err(500, "internal_error"), { kind: "retry", offline: false }],
   ["502", err(502, "http_error"), { kind: "retry", offline: false }],
   ["429 with Retry-After", err(429, "http_error", { retryAfterSeconds: 30 }), { kind: "retry", offline: false, retryAfterSeconds: 30 }],

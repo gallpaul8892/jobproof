@@ -25,6 +25,8 @@ export function useAutosave({
   const [error, setError] = useState<string | undefined>();
   const pending = useRef<string | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** The stored value this field last showed or committed; a different one arriving is news from outside (a refetch, a restore). */
+  const known = useRef<string | null>(stored);
   const latest = useRef({ validate, commit });
   useEffect(() => {
     latest.current = { validate, commit };
@@ -40,6 +42,7 @@ export function useAutosave({
     if (!result.ok) return;
     try {
       latest.current.commit(result.value);
+      known.current = result.value;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save that. Try again.");
     }
@@ -62,6 +65,15 @@ export function useAutosave({
     },
     [delayMs, flush],
   );
+
+  // A changed stored value (the server's copy after a sync, a restored snapshot) is adopted when the
+  // operative has nothing pending or refused on screen; otherwise typing would replace it unseen.
+  useEffect(() => {
+    if (stored === known.current) return;
+    if (pending.current !== undefined || timer.current !== undefined || error !== undefined) return;
+    known.current = stored;
+    setText(stored ?? "");
+  }, [stored, error]);
 
   // Leaving the screen (or the app being torn down) saves what is waiting.
   useEffect(() => flush, [flush]);

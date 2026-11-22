@@ -64,6 +64,9 @@ export class MemoryDemoFiles implements PhotoFiles {
   remove(rel: string) {
     this.entries.delete(rel);
   }
+  discardCached(): void {
+    // The demo has no cache folder: sample photos are bundled assets.
+  }
   uri(rel: string) {
     return this.entries.get(rel)?.dataUrl ?? "";
   }

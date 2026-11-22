@@ -6,6 +6,7 @@ import { cleanupLaunched } from "../../../test/harness";
 import { fakeServer } from "../../../test/fakeServer";
 import { EXTERIOR, LOUNGE, WALL, checklist, list, makeJob } from "../../../test/jobFixtures";
 import { launchSignedIn } from "../../../test/signedIn";
+import { VERDICT_MSG } from "../../sync/classify";
 import { MSG } from "./JobDetailScreen";
 import { mapsUrl, notesNeedToggle, telUrl } from "./links";
 
@@ -264,6 +265,20 @@ describe("T-003d scenario 9: offline", () => {
       router.push("/jobs/never-seen");
     });
     expect(await screen.findByText(MSG.loadFailed)).toBeTruthy();
+  });
+
+  it("a job whose report another operative started says so, with no signal advice and no Retry", async () => {
+    const server = serverWith(LOUNGE);
+    await launchSignedIn(server);
+    await screen.findByTestId("jobs-today");
+    server.operative.detailConflict = "draft_owned_by_other";
+    await act(async () => {
+      router.push("/jobs/never-seen");
+    });
+    expect(await screen.findByText(VERDICT_MSG.ownedByOther)).toBeTruthy();
+    expect(screen.queryByText(MSG.loadFailed)).toBeNull();
+    expect(screen.queryByTestId("job-error-retry")).toBeNull();
+    expect(screen.getByTestId("job-back")).toBeTruthy();
   });
 });
 

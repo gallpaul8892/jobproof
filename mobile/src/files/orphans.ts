@@ -41,6 +41,7 @@ export function cleanUpPhotoStorage(deps: { repo: PhotoRepo; files: PhotoFiles; 
   // 2. Originals.
   const known = repo.knownIds(ownerUserId);
   const job = repo.captureIntent(ownerUserId);
+  const galleryId = repo.galleryImport(ownerUserId);
   for (const name of files.list(dir)) {
     const rel = `${dir}/${name}`;
     if (name.endsWith(PART_SUFFIX)) {
@@ -65,7 +66,8 @@ export function cleanUpPhotoStorage(deps: { repo: PhotoRepo; files: PhotoFiles; 
       ownerUserId,
       jobId: job,
       stage: repo.lastStage(ownerUserId),
-      source: "camera",
+      // Only the gallery produces other formats, and a gallery copy in progress was noted before it began.
+      source: parsed.ext !== "jpg" || galleryId === parsed.id ? "gallery" : "camera",
       takenAt: new Date(modified ?? now().getTime()).toISOString(),
       takenAtSource: "added_time",
       originalPath: rel,

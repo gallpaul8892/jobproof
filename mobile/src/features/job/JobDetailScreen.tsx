@@ -15,6 +15,7 @@ import { PhotoSection } from "../capture/PhotoSection";
 import { CHECKLIST_MSG } from "../checklist/messages";
 import { ChecklistSection } from "../checklist/ChecklistSection";
 import { useLocalView } from "../checklist/localView";
+import { VERDICT_MSG } from "../../sync/classify";
 import { useAppBranding } from "../../theme/BrandingProvider";
 import { ERROR_COLOUR, MUTED_TEXT, SKELETON } from "../../ui/colours";
 import { Button } from "../../ui/Button";
@@ -236,6 +237,14 @@ export function JobDetailScreen({ jobId }: { jobId: string }) {
 
   const job = query.data;
   if (!job) {
+    if (error instanceof ApiError && error.status === 409 && error.code === "draft_owned_by_other") {
+      // Another operative's report: retrying cannot help, and it is not a signal problem.
+      return (
+        <Frame>
+          <Notice kind="error" message={VERDICT_MSG.ownedByOther} testID="job-error" />
+        </Frame>
+      );
+    }
     if (query.isError) {
       const network = error instanceof ApiError && error.status === 0;
       return (

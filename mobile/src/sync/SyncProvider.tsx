@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, ty
 import { AppState } from "react-native";
 import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys, type OperativeJob, type OperativeJobList } from "@jobproof/shared";
+import { flushPersistedQueries } from "../api/queryPersister";
 import type { LocalStore } from "../db/localStore";
 import { useSession } from "../features/session/SessionProvider";
 import { SyncEngine, httpDraftApi, type DraftApi, type SyncSnapshot } from "./engine";
@@ -9,7 +10,9 @@ import { SyncEngine, httpDraftApi, type DraftApi, type SyncSnapshot } from "./en
 const SyncContext = createContext<SyncEngine | undefined>(undefined);
 
 /** Puts the server's answer to a save into the query cache (detail and list), which the phone persists for offline use. */
-export function cacheSavedJob(client: QueryClient, job: OperativeJob): void {
+export async function cacheSavedJob(client: QueryClient, job: OperativeJob): Promise<void> {
+  // A GET that started before the save would otherwise land after it and put pre-save data back.
+  await Promise.all([client.cancelQueries({ queryKey: queryKeys.operativeJob(job.id) }), client.cancelQueries({ queryKey: queryKeys.operativeJobs })]);
   client.setQueryData(queryKeys.operativeJob(job.id), job);
   client.setQueryData<OperativeJobList | undefined>(queryKeys.operativeJobs, (list) =>
     list && {
@@ -40,7 +43,11 @@ export function SyncProvider({ store, client, api = httpDraftApi, children }: { 
               return s.status === "signed_in" ? s.user?.id : undefined;
             },
             subscribeLocal: store.subscribe,
-            onSaved: (job) => cacheSavedJob(client, job),
+            onSaved: async (job, owner) => {
+              await cacheSavedJob(client, job);
+              // Durable before the engine commits synced_rev: a kill must not restore pre-save values.
+              flushPersistedQueries(owner);
+            },
           })
         : undefined,
     [store, manager, client, api],

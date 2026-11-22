@@ -196,3 +196,23 @@ describe("deleting (scenario 9)", () => {
     expect([...files.entries.keys()].filter((k) => k.includes("/photos/"))).toEqual([]);
   });
 });
+
+describe("a refused shot leaves no cache file (review T-003e minor)", () => {
+  it("deletes the camera's cache file when the space is gone after the shutter", async () => {
+    const { store, files } = makeTestStore();
+    const s = shot(files);
+    files.free = 50 * MB;
+    const r = await store.capture.saveShot(DAN, s);
+    expect(r).toMatchObject({ ok: false, reason: "no_space" });
+    expect(files.entries.has(s.uri)).toBe(false);
+    expect(store.photos.countForJob("dan", "job-a")).toBe(0);
+  });
+
+  it("deletes it when the report is already full (the second of two quick shots at 59 photos)", async () => {
+    const { store, files } = makeTestStore();
+    for (let i = 0; i < 60; i++) expect((await store.capture.saveShot(DAN, shot(files))).ok).toBe(true);
+    const extra = shot(files);
+    expect(await store.capture.saveShot(DAN, extra)).toMatchObject({ ok: false, reason: "report_full" });
+    expect(files.entries.has(extra.uri)).toBe(false);
+  });
+});

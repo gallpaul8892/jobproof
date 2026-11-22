@@ -97,3 +97,30 @@ describe("gallery import (scenarios 5, 6, 12)", () => {
     expect(store.capture.room(T)).toMatchObject({ ok: true, remaining: 48 });
   });
 });
+
+describe("the picker's cache copies are deleted (review T-003e minor)", () => {
+  it("removes each picked file under the app cache after the import, and never touches a content:// source", async () => {
+    const { store, files } = makeTestStore();
+    const a = asset(files, "c1", { uri: files.seed("file:///cache/ImagePicker/c1.jpg", "c1") });
+    const b = asset(files, "c2", { uri: files.seed("file:///cache/ImagePicker/c2.jpg", "c2") });
+    const content = asset(files, "c3", { uri: files.seed("content://media/external/images/3", "c3") });
+    const summary = await store.capture.importAssets(T, [a, b, content]);
+    expect(summary.added).toBe(3);
+    expect(files.entries.has(a.uri)).toBe(false);
+    expect(files.entries.has(b.uri)).toBe(false);
+    expect(files.entries.has(content.uri)).toBe(true);
+    expect(store.photos.listForJob("dan", "job-a")).toHaveLength(3); // the copies in the store are the evidence
+  });
+
+  it("also removes cache copies of files that were skipped or refused for room", async () => {
+    const { store, files } = makeTestStore();
+    const bad = asset(files, "x", { uri: files.seed("file:///cache/ImagePicker/x.mp4", "x"), type: "video", mimeType: "video/mp4" });
+    const summary = await store.capture.importAssets(T, [bad]);
+    expect(summary.skipped).toBe(1);
+    expect(files.entries.has(bad.uri)).toBe(false);
+    files.free = 10 * 1024 * 1024; // under the 100 MB floor: refused up front
+    const late = asset(files, "y", { uri: files.seed("file:///cache/ImagePicker/y.jpg", "y") });
+    expect((await store.capture.importAssets(T, [late])).added).toBe(0);
+    expect(files.entries.has(late.uri)).toBe(false);
+  });
+});

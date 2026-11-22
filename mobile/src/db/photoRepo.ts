@@ -210,4 +210,13 @@ export class PhotoRepo {
   setCaptureIntent(ownerUserId: string, jobId: string): void {
     this.setMeta(`capture_job:${ownerUserId}`, jobId);
   }
+
+  /** The photo id of the gallery copy being made, written before the copy so a recovered orphan is known to be a gallery import. */
+  setGalleryImport(ownerUserId: string, photoId: string): void {
+    this.setMeta(`gallery_import:${ownerUserId}`, photoId);
+  }
+
+  galleryImport(ownerUserId: string): string | undefined {
+    return this.getMeta(`gallery_import:${ownerUserId}`);
+  }
 }

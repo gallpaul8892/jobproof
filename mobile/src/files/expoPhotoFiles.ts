@@ -42,6 +42,16 @@ export class ExpoPhotoFiles implements PhotoFiles {
     const f = doc(rel);
     if (f.exists) f.delete();
   }
+  discardCached(uri: string): void {
+    try {
+      const cache = Paths.cache.uri.endsWith("/") ? Paths.cache.uri : `${Paths.cache.uri}/`;
+      if (!uri.startsWith(cache)) return;
+      const f = new File(uri);
+      if (f.exists) f.delete();
+    } catch {
+      /* a leftover cache file is not worth failing for; Android clears the cache itself */
+    }
+  }
   uri(rel: string): string {
     return doc(rel).uri;
   }

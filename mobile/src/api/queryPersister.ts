@@ -99,6 +99,11 @@ export function createUserPersister(userId: string, options: { storage?: KvLike;
   return persister;
 }
 
+/** Writes this user's pending cache snapshot now (before the sync engine commits `synced_rev`). */
+export function flushPersistedQueries(userId: string): void {
+  active.get(userId)?.flush();
+}
+
 /** Sign-out: the stored copy of this user's server data goes. */
 export function clearPersistedQueries(userId: string, storage: KvLike = Storage): void {
   active.get(userId)?.discard();

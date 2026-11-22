@@ -101,7 +101,11 @@ export class PhotoCapture {
   /** Saves one camera shot. The target is read when the shutter is pressed, so switching jobs afterwards cannot move the photo. */
   async saveShot(target: CaptureTarget, shot: Shot): Promise<SaveResult> {
     const room = this.room(target);
-    if (!room.ok) return room;
+    if (!room.ok) {
+      // Refused after the shutter: the shot is not kept, so its full-size cache file must not linger.
+      this.files.discardCached(shot.uri);
+      return room;
+    }
     const id = this.newId();
     const rel = originalPath(target.ownerUserId, id, "jpg");
     try {
@@ -137,6 +141,15 @@ export class PhotoCapture {
    * is not a readable image is skipped and counted; the rest are added.
    */
   async importAssets(target: CaptureTarget, assets: readonly PickedAsset[]): Promise<ImportSummary> {
+    try {
+      return await this.importAll(target, assets);
+    } finally {
+      // The picker leaves a full-size cache copy of every pick; ours are the copies that matter.
+      for (const asset of assets) if (asset.uri) this.files.discardCached(asset.uri);
+    }
+  }
+
+  private async importAll(target: CaptureTarget, assets: readonly PickedAsset[]): Promise<ImportSummary> {
     const room = this.room(target);
     if (!room.ok) return { added: 0, skipped: 0, limit: room.message, message: room.message };
     let remaining = room.remaining;
@@ -172,6 +185,10 @@ export class PhotoCapture {
     const ext: OriginalExtension = extensionFor(asset.mimeType, asset.uri);
     const rel = originalPath(target.ownerUserId, id, ext);
     try {
+      // Noted before the copy: a kill between the rename and the row insert is then recovered under
+      // this job, as a gallery photo.
+      this.repo.setCaptureIntent(target.ownerUserId, target.jobId);
+      this.repo.setGalleryImport(target.ownerUserId, id);
       await copyAtomically(this.files, asset.uri, rel);
     } catch {
       return false;

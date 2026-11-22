@@ -62,6 +62,10 @@ export class MemoryPhotoFiles implements PhotoFiles {
   remove(rel: string) {
     this.entries.delete(this.key(rel));
   }
+  /** Only files under file:///cache/ count as cache; a content:// source and the store are left alone. */
+  discardCached(uri: string) {
+    if (uri.startsWith("file:///cache/")) this.entries.delete(uri);
+  }
   uri(rel: string) {
     return this.key(rel);
   }

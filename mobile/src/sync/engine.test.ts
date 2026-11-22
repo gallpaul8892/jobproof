@@ -46,6 +46,7 @@ function setup(options: { user?: string; editDelayMs?: number } = {}) {
       }
     },
   };
+  const hooks: { onSaved?: () => Promise<void> } = {};
   const engine = new SyncEngine({
     drafts,
     api,
@@ -54,7 +55,10 @@ function setup(options: { user?: string; editDelayMs?: number } = {}) {
       listeners.add(l);
       return () => void listeners.delete(l);
     },
-    onSaved: (job) => saved.push(job),
+    onSaved: async (job) => {
+      saved.push(job);
+      await hooks.onSaved?.();
+    },
     now: () => clock,
     random: () => 0.5, // the middle of the jitter range: delays are exactly the schedule
     setTimer: (fn, ms) => {
@@ -77,6 +81,7 @@ function setup(options: { user?: string; editDelayMs?: number } = {}) {
     calls,
     saved,
     script,
+    hooks,
     delays,
     timers,
     maxActive: () => maxActive,
@@ -288,6 +293,32 @@ describe("draft sync: retry and backoff", () => {
   });
 });
 
+describe("draft sync: the acknowledged values are durable before synced_rev", () => {
+  it("waits for onSaved (cache and persister) before marking the work as sent", async () => {
+    const t = setup();
+    const gate = deferred<void>();
+    t.hooks.onSaved = () => gate.promise;
+    t.drafts.setNotes("dan", "job-a", "n", null);
+    const run = t.engine.trigger("start");
+    await settle();
+    expect(t.saved).toHaveLength(1);
+    expect(t.drafts.dirtyJobIds("dan")).toEqual(["job-a"]); // not committed yet: a kill now re-sends
+    gate.resolve();
+    await run;
+    expect(t.drafts.dirtyJobIds("dan")).toEqual([]);
+  });
+
+  it("an onSaved failure does not stop the sync", async () => {
+    const t = setup();
+    t.hooks.onSaved = async () => {
+      throw new Error("storage full");
+    };
+    t.drafts.setNotes("dan", "job-a", "n", null);
+    await t.engine.trigger("start");
+    expect(t.drafts.dirtyJobIds("dan")).toEqual([]);
+  });
+});
+
 describe("draft sync: sessions", () => {
   afterEach(() => configureApiClient({ baseUrl: "http://api.test", fetch: async () => json({}) }));
 
@@ -316,18 +347,34 @@ describe("draft sync: sessions", () => {
     expect(t.engine.getSnapshot().paused).toBeUndefined();
   });
 
-  it("401 the refresh cannot fix: the queue is kept, 'Please sign in again to finish sending', and sending resumes after signing in", async () => {
+  it("401 while still signed in (the refresh failed for a passing reason): retries with backoff, no sign-in message, and sends when the next attempt works", async () => {
     const t = setup();
     t.script.next = async () => {
+      throw fail(401, "unauthenticated");
+    };
+    t.drafts.setNotes("dan", "job-a", "n", null);
+    await t.engine.trigger("start");
+    expect(t.engine.getSnapshot().paused).toBeUndefined();
+    expect(syncStatusLine(t.engine.getSnapshot())).not.toContain("sign in");
+    expect(syncStatusLine(t.engine.getSnapshot())).toBe("Will try again shortly (1 report)");
+    expect(t.delays.at(-1)).toBe(5_000); // a retry timer is set
+    t.script.next = async (jobId) => ({ id: jobId }) as OperativeJob;
+    await t.advance(5_000);
+    expect(t.calls).toHaveLength(2);
+    expect(t.drafts.dirtyJobIds("dan")).toEqual([]);
+    expect(t.engine.getSnapshot()).toMatchObject({ paused: undefined, reports: 0 });
+  });
+
+  it("401 because the user was really signed out mid-request: the queue is kept, nothing is recorded, and sending resumes after signing in", async () => {
+    const t = setup();
+    t.script.next = async () => {
+      t.setUser(undefined); // the session manager has signed the user out
       throw fail(401, "session_ended");
     };
     t.drafts.setNotes("dan", "job-a", "n", null);
     await t.engine.trigger("start");
-    expect(t.engine.getSnapshot().paused).toBe("sign_in");
-    expect(syncStatusLine(t.engine.getSnapshot())).toBe("Please sign in again to finish sending");
     expect(t.drafts.dirtyJobIds("dan")).toEqual(["job-a"]);
     expect(t.delays.filter((d) => d !== 2000)).toEqual([]); // no retry timer: it needs the operative
-    t.setUser(undefined); // the session manager has signed the user out
     await t.engine.trigger("foreground");
     expect(t.calls).toHaveLength(1);
     t.script.next = async (jobId) => ({ id: jobId }) as OperativeJob;

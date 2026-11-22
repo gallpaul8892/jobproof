@@ -21,6 +21,12 @@ export interface PhotoFiles {
   rename(fromRel: string, toName: string): void;
   /** Idempotent: deleting a missing file is not an error. */
   remove(rel: string): void;
+  /**
+   * Deletes a temporary file the camera or the picker left in the app's CACHE folder (a full-size
+   * photo of a customer's home). Anything outside the cache folder (a content:// gallery source,
+   * the document store) is left alone. Never throws.
+   */
+  discardCached(uri: string): void;
   /** A URI an <Image> can show. */
   uri(rel: string): string;
   /** Free space on the phone's storage, in bytes. */

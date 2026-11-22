@@ -29,6 +29,33 @@ describe("crash safety: the app is killed between the file move and the row inse
     expect(t.store.photos.reportState("dan", "job-a")).toBe("draft");
   });
 
+  it("a gallery copy orphaned by a kill is recovered under the job being imported into, as a gallery photo", async () => {
+    const t = makeTestStore();
+    t.store.photos.setCaptureIntent("dan", "job-camera"); // the camera was last opened for another job
+    const realInsert = t.store.photos.insert.bind(t.store.photos);
+    t.store.photos.insert = () => {
+      throw new Error("process killed");
+    };
+    const uri = t.files.seed("file:///picker/p.jpg", "p");
+    await t.store.capture.importAssets({ ownerUserId: "dan", jobId: "job-gallery", stage: "after" }, [{ uri, type: "image", mimeType: "image/jpeg" }]);
+    t.store.photos.insert = realInsert;
+    // the insert failed and the importer removed its copy; recreate the "killed before cleanup" state
+    expect(t.files.list(userDir("dan"))).toHaveLength(0);
+    const id = t.store.photos.galleryImport("dan")!;
+    t.files.seed(`file:///app/${originalPath("dan", id)}`, "p");
+    expect(run(t).recovered).toBe(1);
+    expect(t.store.photos.listForJob("dan", "job-gallery")[0]).toMatchObject({ id, source: "gallery" });
+    expect(t.store.photos.countForJob("dan", "job-camera")).toBe(0);
+  });
+
+  it("a recovered png or heic file is a gallery photo even with no import note", () => {
+    const t = makeTestStore();
+    t.store.photos.setCaptureIntent("dan", "job-a");
+    t.files.seed(`file:///app/${originalPath("dan", ID, "heic")}`);
+    run(t);
+    expect(t.store.photos.listForJob("dan", "job-a")[0]).toMatchObject({ source: "gallery" });
+  });
+
   it("is simulated for real: saveShot dies after the move (insert throws); a restarted app recovers the photo", async () => {
     const t = makeTestStore();
     t.store.photos.setCaptureIntent("dan", "job-a");

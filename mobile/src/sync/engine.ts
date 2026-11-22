@@ -40,8 +40,12 @@ export interface SyncDeps {
   currentUserId: () => string | undefined;
   /** Called after any local change (the store's Observer); the engine re-counts and schedules a send. */
   subscribeLocal: (listener: () => void) => () => void;
-  /** The server's answer to a save: the app puts it in the query cache. */
-  onSaved?: (job: OperativeJob) => void;
+  /**
+   * The server's answer to a save: the app puts it in the query cache and makes it durable. The
+   * engine waits for this before it commits `synced_rev`, so the phone never shows a server value
+   * it could lose in a kill.
+   */
+  onSaved?: (job: OperativeJob, owner: string) => void | Promise<void>;
   now?: () => number;
   random?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -252,10 +256,16 @@ export class SyncEngine {
         if (this.deps.currentUserId() !== owner) return "stop";
         return this.handle(owner, jobId, classify(error));
       }
+      if (this.deps.currentUserId() === owner) {
+        try {
+          await this.deps.onSaved?.(saved, owner);
+        } catch {
+          // A cache or storage problem must not block the sync: the display falls back to a refetch.
+        }
+      }
       this.deps.drafts.markSynced(owner, dirty);
       this.failures = 0;
       this.nextAttemptAt = undefined;
-      if (this.deps.currentUserId() === owner) this.deps.onSaved?.(saved);
     }
   }
 
@@ -273,9 +283,15 @@ export class SyncEngine {
         }, delay);
         return "stop";
       }
-      case "session_ended":
+      case "session_ended": {
+        if (this.deps.currentUserId() === owner) {
+          // Still signed in: the refresh failed for a passing reason (the session manager keeps the
+          // session then). Back off and try again; pause only when the user is really gone.
+          return this.handle(owner, jobId, { kind: "retry", offline: false });
+        }
         this.paused = "sign_in";
         return "stop";
+      }
       case "update_required":
         this.paused = "update_required";
         return "stop";
