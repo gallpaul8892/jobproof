@@ -81,6 +81,9 @@ The mock data is painting and decorating; Arbour does tree surgery. UI wording b
 industry-neutral now (T-002l, small). A tree-surgery mock dataset (T-002m) is optional and does
 not block anything.
 
+> See also: [T-004](T-004-company-hierarchy-and-tiered-invoicing.md) (proposed) keeps D1 but amends
+> D2 (Admin gets read-only oversight of progress and invoices; roles become per-company).
+
 ## Recommended build order
 1. T-002a settings + branding endpoint (foundation, also the deployment decision)
 2. T-002b Admin role, authorisation, seed accounts, Settings page shell

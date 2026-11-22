@@ -28,6 +28,9 @@ orchestrator/Paul must update it before T-003a starts** (the product owner does 
 7. The manager reviews it on the web (already built, T-002) and trusts the photos as evidence
    (T-003k).
 
+> See also: [T-004](T-004-company-hierarchy-and-tiered-invoicing.md) (proposed). T-004h changes
+> what "my jobs" lists (allocations) and must follow T-003h.
+
 ## Slices, in build order
 Each slice is demoable on its own on an Android phone or emulator against the local stack
 (`make up`) with seeded data. "Depends on" is the strict dependency; the order is by value.
