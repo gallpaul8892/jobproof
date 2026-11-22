@@ -302,14 +302,19 @@ The web keeps today's 30-minute JWT with no refresh (unchanged, out of scope).
   refresh token `"<session_id>.<43 chars of base64url(32 random bytes)>"`. Only
   `sha256(secret)` is stored (the secret has 256 bits of entropy, so a fast hash is right here;
   argon2 is for passwords).
-- **Refresh** `POST /auth/sessions/refresh`: parse the session id, `SELECT ... FOR UPDATE`, then:
-  revoked → 401 `session_ended`; `now >= idle_expires_at` or `>= absolute_expires_at` →
-  `session_ended`; user inactive → revoke (`deactivated`), 401 `account_inactive`; hash equals
-  current → rotate (previous := current, new current, `rotated_at`, `generation + 1`,
-  `last_used_at`, `idle_expires_at = min(now + 30 d, absolute)`); hash equals previous and
-  `now - rotated_at <= 60 s` → rotate again (the client lost the last response; the unreceived
-  token dies); anything else → revoke (`reuse_detected`) and 401 `session_ended`. Constant-time
-  comparisons.
+- **Refresh** `POST /auth/sessions/refresh` (rule as built in `backend/app/services/sessions.py`
+  `refresh`, accepted in review-t003-pkgB): parse the session id, `SELECT ... FOR UPDATE`, then
+  in this order. (1) Prove possession: the hash must equal current or the immediately previous
+  hash (constant-time). Anything else (a guessed or mangled secret, or a token two or more
+  generations old) → 401 `session_ended` with **no change**, so a session id alone (it is in the
+  `sid` claim and in log lines) cannot sign a phone out. Hash equals previous and
+  `now - rotated_at > 60 s` → revoke (`reuse_detected`), 401 `session_ended`. (2) User inactive →
+  revoke (`deactivated`), 401 `account_inactive` (only a token holder learns this). (3) Revoked,
+  `now >= idle_expires_at` or `>= absolute_expires_at` → `session_ended`. Then: hash equals current →
+  rotate (previous := current, new current, `rotated_at`, `generation + 1`, `last_used_at`,
+  `idle_expires_at = min(now + 30 d, absolute)`); hash equals previous within 60 s of `rotated_at` →
+  issue another pair without moving `rotated_at` or `previous` (the client lost the last response;
+  the unreceived token dies; the window cannot be stretched).
 - **Every authenticated request**: `current_user` already reloads the user (role, `is_active`).
   When the token has `sid`, it also loads the session by primary key and answers 401
   `session_ended` if revoked or past `absolute_expires_at`, and 401 `account_inactive` for an
@@ -322,7 +327,8 @@ The web keeps today's 30-minute JWT with no refresh (unchanged, out of scope).
   server answer.
 - **Rate limiting**: the prod WAF login rule extends to `POST /api/v1/auth/sessions` (INFRA delta).
 - Settings: `DEVICE_ACCESS_TTL_SECONDS=900`, `DEVICE_SESSION_IDLE_DAYS=30`,
-  `DEVICE_SESSION_MAX_DAYS=90`, `REFRESH_REUSE_GRACE_SECONDS=60`.
+  `DEVICE_SESSION_MAX_DAYS=90`, `REFRESH_REUSE_GRACE_SECONDS=60` (bounded 0 to 300; the access
+  TTL is bounded 60 to 3600).
 
 ## 5. Photo upload and viewing: decision
 
